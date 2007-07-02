@@ -23,6 +23,10 @@ define('VERSIONCONTROL_CAPABILITY_LIST_FILES',              5);
 define('VERSIONCONTROL_ITEM_FILE',       0);
 define('VERSIONCONTROL_ITEM_DIRECTORY',  1);
 
+// VCS file types.
+define('VERSIONCONTROL_ITEM_TEXT',       0);
+define('VERSIONCONTROL_ITEM_BINARY',     1);
+
 // VCS actions for a single item (file or directory) in a commit.
 define('VERSIONCONTROL_ACTION_ADDED',    0);
 define('VERSIONCONTROL_ACTION_MODIFIED', 1);

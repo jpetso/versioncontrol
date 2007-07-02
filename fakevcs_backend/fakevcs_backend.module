@@ -25,9 +25,9 @@ fakevcs_backend_versioncontrol_backends() {
       'name' => 'FakeVCS',
 
       // A short description of the backend, if possible not longer than one or two sentences.
-      'description' => t('FakeVCS is a revision control system that is '.
+      'description' => t('FakeVCS is a version control system that is '.
                          'specifically capable in doing everything that any '.
-                         'other revision control system might ever do.'),
+                         'other version control system might ever do.'),
 
       // The prefix for function names that are used for this VCS's backend function calls.
       // I think we might not need this and call xxx_backend for the 'xxx' backend instead?
@@ -75,6 +75,7 @@ fakevcs_backend_versioncontrol_backends() {
  * Implementation of [vcs_backend]_repository_additions():
  * Return an array of FakeVCS specific repository information. In the finished
  * commit, this array will be accessible as $repository['fakevcs_specific'].
+ * If no additions are necessary, this function returns NULL.
  */
 fakevcs_backend_repository_additions($repository) {
   return array(
@@ -122,6 +123,7 @@ fakevcs_backend_filter_commits(&$commits, $branches = NULL, $tags = NULL, $paths
  * Implementation of [vcs_backend]_commit_additions():
  * Return an array of FakeVCS specific commit information. In the finished
  * commit, this array will be accessible as $commit['fakevcs_specific'].
+ * If no additions are necessary, this function returns NULL.
  */
 fakevcs_backend_commit_additions($commit) {
   return array(
@@ -374,6 +376,64 @@ fakevcs_backend_get_item_history($commit, $path) {
     array(
       'path'      => '/branches/sandbox/jpetso/versioncontrol.info',
       'revision'  => '41',
+    ),
+  );
+}
+
+/**
+ * Implementation of [vcs_backend]_get_file_contents():
+ * Retrieve the text or binary data of the given file in the specified commit.
+ *
+ * If the given path is not under revision control (or was not under revision
+ * control at the time of $commit), NULL is returned.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose history should be retrieved.
+ */
+fakevcs_backend_get_file_contents($commit, $path) {
+  // In case the file is marked as text file:
+  return array(
+    'type'     => VERSIONCONTROL_ITEM_TEXT,
+    'contents' => $file_contents,
+  );
+  // In case the file is marked as binary file:
+  return array(
+    'type'     => VERSIONCONTROL_ITEM_BINARY,
+    'contents' => $file_contents,
+  );
+}
+
+/**
+ * Implementation of [vcs_backend]_get_file_annotation():
+ * Retrieve an array where each element represents a single line of the
+ * given file in the specified commit, annotated with the committer who last
+ * modified that line.
+ *
+ * If the given path is not under revision control (or was not under revision
+ * control at the time of $commit) or the file is marked as binary,
+ * NULL is returned.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose history should be retrieved.
+ */
+fakercs_backend_get_file_annotation($commit, $path) {
+  // In case the file is marked as text file:
+  return array(
+    array(
+      'uid'      => 1,
+      'username' => 'dries',
+      'line'     => '<?php',
+    ),
+    array(
+      'uid'      => 56020,
+      'username' => 'jpetso',
+      'line'     => '// $Id$',
     ),
   );
 }
