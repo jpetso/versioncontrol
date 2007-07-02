@@ -1,0 +1,32 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Version Control API - An interface to revision control systems
+ * whose functionality is provided by pluggable back-end modules.
+ *
+ * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
+ *
+ * Distributed under the GNU General Public Licence version 2 or higher,
+ * as published by the FSF on http://www.gnu.org/copyleft/gpl.html
+ */
+
+// Optional capabilities that backend modules can provide.
+define('VERSIONCONTROL_CAPABILITY_CREATE_REPOSITORY',       0);
+define('VERSIONCONTROL_CAPABILITY_ACCOUNT_MANAGEMENT',      1);
+define('VERSIONCONTROL_CAPABILITY_DIRECTORY_RESTRICTIONS',  2);
+define('VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS', 3);
+define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          4);
+define('VERSIONCONTROL_CAPABILITY_LIST_FILES',              5);
+
+// VCS item types.
+define('VERSIONCONTROL_ITEM_FILE',       0);
+define('VERSIONCONTROL_ITEM_DIRECTORY',  1);
+
+// VCS actions for a single item (file or directory) in a commit.
+define('VERSIONCONTROL_ACTION_ADDED',    0);
+define('VERSIONCONTROL_ACTION_MODIFIED', 1);
+define('VERSIONCONTROL_ACTION_MOVED',    2);
+define('VERSIONCONTROL_ACTION_COPIED',   3);
+define('VERSIONCONTROL_ACTION_MERGED',   4);
+define('VERSIONCONTROL_ACTION_DELETED',  5);

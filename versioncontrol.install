@@ -21,8 +21,8 @@ function versioncontrol_install() {
     case 'mysqli':
     case 'mysql':
       db_query("CREATE TABLE {versioncontrol_commits} (
-        cid int unsigned NOT NULL default '0',
-        repoid int unsigned NOT NULL default '0',
+        commit_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default '0',
         date bigint NOT NULL default '0',
         uid int unsigned NOT NULL default '0',
         username varchar(64) NOT NULL default '',
@@ -35,9 +35,9 @@ function versioncontrol_install() {
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
-        repoid int unsigned NOT NULL auto_increment,
+        repo_id int unsigned NOT NULL auto_increment,
         name varchar(255) NOT NULL default '',
-        rcs varchar(8) NOT NULL default '',
+        vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
         PRIMARY KEY (repoid),
         UNIQUE KEY name (name)

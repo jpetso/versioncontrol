@@ -1,0 +1,294 @@
+<?php
+// $Id$
+/**
+ * @file
+ * FakeVCS backend -
+ * An example module illustrating how to write a VCS backend.
+ *
+ * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
+ *
+ * Distributed under the GNU General Public Licence version 2 or higher,
+ * as published by the FSF on http://www.gnu.org/copyleft/gpl.html
+ */
+
+/**
+ * Implementation of hook_versioncontrol_backends().
+ */
+fakevcs_backend_versioncontrol_backends() {
+  // Our example VCS is called FakeVCS, and supports all possible capabilities.
+
+  return array(
+    // The array key is up to 8 characters long, and used as unique identifier
+    // for this VCS, in functions, URLs and in the database.
+    'fakevcs' => array(
+      // The user-visible name of the VCS.
+      'name' => 'FakeVCS',
+
+      // A short description of the backend, if possible not longer than one or two sentences.
+      'description' => t('FakeVCS is a revision control system that is '.
+                         'specifically capable in doing everything that any '.
+                         'other revision control system might ever do.'),
+
+      // The prefix for function names that are used for this VCS's backend function calls.
+      // I think we might not need this and call xxx_backend for the 'xxx' backend instead?
+      // TODO: Look into how fago accomplished this in pageroute.
+      // 'prefix' => 'fakevcs_backend',
+
+      // A list of optional capabilities, in addition to the required retrieval
+      // of detailed commit information. All allowed values are listed below.
+      'capabilities' => array(
+        // Able to programmatically create a new repository at a specified
+        // location in the file system.
+        VERSIONCONTROL_CAPABILITY_CREATE_REPOSITORY,
+
+        // Able to programmatically create and delete user accounts for the
+        // specific VCS, and assign or deny them access permission for certain
+        // directories in a repository.
+        VERSIONCONTROL_CAPABILITY_ACCOUNT_MANAGEMENT,
+
+        // Able to cancel commits if the committer lacks permissions to commit
+        // to specific directories.
+        VERSIONCONTROL_CAPABILITY_DIRECTORY_RESTRICTIONS,
+
+        // Able to cancel commits if the committer lacks permissions to commit
+        // to specific branches or tags.
+        VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS,
+
+        // Able to retrieve a file or its revision number based on a global
+        // revision identifier.
+        VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS,
+
+        // Able to get the list of all current files and directories in a given
+        // revision controlled directory, along with revision identifiers for
+        // each of the files. Comes in handy for repository browsing.
+        VERSIONCONTROL_CAPABILITY_LIST_FILES,
+      );
+    ),
+
+    // More backend entries are possible - most modules won't need this,
+    // but let's still provide the opportunity to do so, for consistency
+    // with similar hooks from other modules and easier merging of the arrays.
+  );
+}
+
+/**
+ * Implementation of [versioncontrol_backend]_add_commit_actions():
+ * Retrieves information about what happened in a set of commits.
+ */
+fakevcs_backend_add_commit_actions(&$commits) {
+  // Assuming $commits is an array of commits, like the one that is returned,
+  // only without the yet-to-be-added 'actions' element.
+
+   // example implementation
+  foreach ($commits as $commit_id => $plain_commit_info) {
+    // Add an 'actions' array to each commit.
+    $commits[$commit_id]['actions'] = array('...');
+  };
+
+  // The returned array looks approximately like this:
+  $commits = array(
+    2345 => array(
+      // The commit id, a simple running number. Doesn't have any specific
+      // meaning, but is necessary for indexing and joining tables.
+      'commit_id' => 2345,
+      // The repository that was affected by this commit.
+      'repo_id' => $affected_repository->repo_id,
+      // The time when the commit was executed, in Unix timestamp format.
+      'date' => time(),
+      // User id of the committer's Drupal user account.
+      // 0 if no corresponding account exists.
+      'uid' => $user->uid,
+      // The committer's username known to the repository itself. In most cases
+      // this will probably be the name of the committer's Unix user account.
+      'username' => 'jpetso',
+      // The commit message, which is expected to span one or more lines.
+      'message' => 'All kinds of demonstrative changes.',
+      // The revision identifier of the commit, in the VCS's proprietary format -
+      // running number, SHA-1 hash, or whatever. If there is no single revision
+      // identifier for the whole commit (which should only be the case for CVS)
+      // then the value for this key is set to NULL.
+      'revision' => '404', // for this commit, let's assume this is an SVN repository
+
+      // TODO: branches and tags
+
+      // An array containing the exact details of what happened to each file
+      // in this commit. Array keys are the current/new filepaths, also for
+      // 'delete' actions even if the file actually doesn't exist anymore.
+      'actions' => array(
+        // VERSIONCONTROL_ACTION_ADDED action: contains 'type', 'action' and 'revision'
+        '/trunk/modules/versioncontrol/versioncontrol.module' => array(
+          'type'     => VERSIONCONTROL_ITEM_FILE,
+          'action'   => VERSIONCONTROL_ACTION_ADDED,
+          'revision' => '404',
+        ),
+        // 'modified' action: contains 'type', 'action', 'revision' and 'previous revision'
+        '/trunk/modules/versioncontrol/versioncontrol.install' => array(
+          'type'              => VERSIONCONTROL_ITEM_FILE,
+          'action'            => VERSIONCONTROL_ACTION_MODIFIED,
+          'revision'          => '404',
+          'previous revision' => '354',
+        ),
+        // 'deleted' action: contains 'type', 'action', 'revision' and 'previous revision'
+        '/branches/sandbox/jpetso/versioncontrol-notes.txt' => array(
+          'type'              => VERSIONCONTROL_ITEM_FILE,
+          'action'            => VERSIONCONTROL_ACTION_DELETED,
+          'revision'          => '404',
+          'previous revision' => '43',
+        ),
+        // 'moved' action: contains 'type', 'action', 'revision', 'previous revision',
+        // 'source path', and optionally 'modified' (if the file was also
+        // modified in addition to being moved)
+        '/trunk/modules/versioncontrol/versioncontrol.info' => array(
+          'type'              => VERSIONCONTROL_ITEM_FILE,
+          'action'            => VERSIONCONTROL_ACTION_MOVED,
+          'modified'          => TRUE, // optional, default is FALSE
+          'revision'          => '404',
+          'previous revision' => '43',
+          'source path'       => '/branches/sandbox/jpetso/versioncontrol.info',
+        ),
+        // 'moved' action: contains 'type', 'action', 'revision', 'previous revision',
+        // 'source path', and optionally 'modified'
+        '/trunk/modules/versioncontrol/README.txt' => array(
+          'type'              => VERSIONCONTROL_ITEM_FILE,
+          'action'            => VERSIONCONTROL_ACTION_COPIED,
+          'modified'          => TRUE, // optional, default is FALSE
+          'revision'          => '404',
+          'previous revision' => '220',
+          'source path'       => '/branches/sandbox/jpetso/README-template.txt',
+        ),
+        // VERSIONCONTROL_ITEM_DIRECTORY type actions can occur with 'action' being one of
+        // VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED and VERSIONCONTROL_ACTION_DELETED.
+        // Other than that, same style as VERSIONCONTROL_ITEM_FILE actions.
+        '/tags/5.x/1.1/modules/cvslog' => array(
+          'type'              => VERSIONCONTROL_ITEM_DIRECTORY,
+          'action'            => VERSIONCONTROL_ACTION_COPIED,
+          'revision'          => '404',
+          'previous revision' => '397',
+          'source path'       => '/trunk/modules/cvslog',
+        ),
+        '/trunk/modules/versioncontrol/fakebackend' => array(
+          'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+          'action'   => VERSIONCONTROL_ACTION_ADDED,
+          'revision' => '404',
+        ),
+        // 'merged' action: contains 'type', 'action', 'revision', 'previous revision',
+        // 'source path' and 'source revision', and optionally 'modified'
+        '/trunk/modules/versioncontrol/fakebackend/fakevcs_backend.module' => array(
+          'type'              => VERSIONCONTROL_ITEM_FILE,
+          'action'            => 'merged',
+          //'modified'          => TRUE, // you already saw this one, so let's keep it out this time
+          'revision'          => '404',
+          'previous revision' => '403',
+          'source path'       => '/branches/work/versioncontrol-improve-data-structures/data-structures.php',
+          'source revision'   => '198',
+        ),
+      ), // end of 'actions'
+    ), // end of example commit 2345
+
+    // ...more commits...
+  );
+}
+
+/**
+ * Implementation of [versioncontrol_backend]_add_commit_files():
+ * Retrieve the set of files that exist at a specified revision in the given
+ * path inside the repository.
+ */
+fakevcs_backend_add_commit_files(&$commit, $paths, $recursive = FALSE) {
+  // Assuming $commit is a single commit array with $commit['commit_id'] == 3456,
+  // and $path == '/trunk/modules/versioncontrol/'.
+
+  // example implementation
+  foreach($paths as $path)
+    $files = _fakevcs_backend_files_for_commit($path, $commit['revision']);
+    $commit['files'] = $files;
+  }
+
+  // The returned array looks approximately like this:
+  $commit = array(
+    // The plain, given part looks just like in _get_commit_actions(),
+    // you can look up the descriptions there.
+    'commit_id' => 3456,
+    'repo_id' => $affected_repository->repo_id,
+    'date' => time() + 41,
+    'uid' => $user->uid,
+    'username' => 'jpetso',
+    'message' => 'Diabolic commit to anywhere else, but not the versioncontrol module.',
+    'revision' => '666', // for this commit, let's assume this is an SVN repository
+
+    // TODO: branches and tags
+
+    'files' => array(
+      '/trunk/modules/versioncontrol' => array( // == rtrim($path, '/')
+        'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+        'revision'  => '502',
+      ),
+      '/trunk/modules/versioncontrol/versioncontrol.module' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '502',
+      ),
+      '/trunk/modules/versioncontrol/versioncontrol.info' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '404',
+      ),
+      '/trunk/modules/versioncontrol/versioncontrol.install' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '404',
+      ),
+      '/trunk/modules/versioncontrol/README.txt' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '404',
+      ),
+      '/trunk/modules/versioncontrol/fakevcs_backend' => array(
+        'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+        'revision'  => '497',
+      ),
+    ), // end of example commit 3456
+  );
+
+  // Or the same thing in CVS - note the 'revision' elements.
+  // CVS doesn't do repository-wide revisions, so in addition to the branch
+  // or tag, the CVS backend would use the 'date' value to determine
+  // the then-current file list. Or the commit id if all the querying is done
+  // from the database.
+  $commit = array(
+    // The plain, given part looks just like in _get_commit_actions(),
+    // you can look up the descriptions there.
+    'commit_id' => 3456,
+    'repo_id' => $affected_repository->repo_id,
+    'date' => time() + 41,
+    'uid' => $user->uid,
+    'username' => 'jpetso',
+    'message' => 'Diabolic commit to anywhere else, but not the versioncontrol module.',
+    'revision' => NULL, // for this commit, let's assume this is a CVS repository
+
+    // TODO: branches and tags
+
+    'files' => array(
+      '/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
+        'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+        'revision'  => NULL, // CVS doesn't track directory-level revisions
+      ),
+      '/contributions/modules/versioncontrol/versioncontrol.module' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '1.2.2.13',
+      ),
+      '/contributions/modules/versioncontrol/versioncontrol.info' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '1.2.2.5',
+      ),
+      '/contributions/modules/versioncontrol/versioncontrol.install' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '1.2.2.5',
+      ),
+      '/contributions/modules/versioncontrol/README.txt' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'revision'  => '1.2.2.5',
+      ),
+      '/contributions/modules/versioncontrol/fakevcs_backend' => array(
+        'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+        'revision'  => NULL,
+      ),
+    ), // end of example commit 3456
+  );
+}
