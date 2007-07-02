@@ -1,0 +1,4 @@
+; $Id$
+name = "Version Control API"
+description = "An interface to version control systems whose functionality is provided by pluggable back-end modules."
+package = Version Control

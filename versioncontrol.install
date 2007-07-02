@@ -1,0 +1,51 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Version Control API - An interface to version control systems
+ * whose functionality is provided by pluggable back-end modules.
+ *
+ * Copyright 2006 by Karthik ("Zen", http://drupal.org/user/21209)
+ * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
+ * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
+ *
+ * Distributed under the GNU General Public Licence version 2 or higher,
+ * as published by the FSF on http://www.gnu.org/copyleft/gpl.html
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function versioncontrol_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      db_query("CREATE TABLE {versioncontrol_commits} (
+        cid int unsigned NOT NULL default '0',
+        repoid int unsigned NOT NULL default '0',
+        date bigint NOT NULL default '0',
+        uid int unsigned NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        message text,
+        revision varchar(255) default NULL,
+        PRIMARY KEY (cid),
+        KEY repoid (repoid),
+        KEY uid (uid),
+        KEY created (created)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_repositories} (
+        repoid int unsigned NOT NULL auto_increment,
+        name varchar(255) NOT NULL default '',
+        rcs varchar(8) NOT NULL default '',
+        root varchar(255) NOT NULL default '',
+        PRIMARY KEY (repoid),
+        UNIQUE KEY name (name)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      break;
+
+    case 'pgsql':
+      break;
+  }
+}
