@@ -2,7 +2,7 @@
 // $Id$
 /**
  * @file
- * Version Control API - An interface to revision control systems
+ * Version Control API - An interface to version control systems
  * whose functionality is provided by pluggable back-end modules.
  *
  * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
@@ -34,6 +34,7 @@ define('VERSIONCONTROL_ACTION_MOVED',    2);
 define('VERSIONCONTROL_ACTION_COPIED',   3);
 define('VERSIONCONTROL_ACTION_MERGED',   4);
 define('VERSIONCONTROL_ACTION_DELETED',  5);
+
 
 /**
  * Retrieve a set of commits for the specified repository if they match the
