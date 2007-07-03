@@ -105,8 +105,8 @@ versioncontrol_get_commits($constraints = array()) {
  * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
  *
  * @param $repository
- *   An array containing repository information, like a single element
- *   of what versioncontrol_get_repositories() returns.
+ *   A structured array containing repository information, like a single
+ *   element of what versioncontrol_get_repositories() returns.
  * @param $uid_list
  *   An array containing Drupal user ids.
  *
@@ -121,8 +121,8 @@ versioncontrol_get_authors_by_uid($repository, $uid_list) {
  * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of usernames.
  *
  * @param $repository
- *   An array containing repository information, like a single element
- *   of what versioncontrol_get_repositories() returns.
+ *   A structured array containing repository information, like a single
+ *   element of what versioncontrol_get_repositories() returns.
  * @param $username_list
  *   An array containing system specific VCS usernames.
  *
@@ -131,4 +131,44 @@ versioncontrol_get_authors_by_uid($repository, $uid_list) {
  *   VCS username as value.
  */
 versioncontrol_get_authors_by_username($repository, $username_list) {
+}
+
+
+/**
+ * Retrieve the URL of the repository viewer that displays the given item
+ * in the given repository at the time of the given commit.
+ *
+ * @param $repository
+ *   A structured array containing repository information, like a single
+ *   element of what versioncontrol_get_repositories() returns.
+ * @param $commit
+ *   The point in time when the item had the name $filepath. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item for which the view URL should actually be retrieved.
+ *
+ * @return
+ *   The item view URL corresponding to the given arguments.
+ */
+versioncontrol_get_url_view($repository, $commit, $path) {
+}
+
+/**
+ * Retrieve the URL of the repository viewer that displays the diff of the
+ * given file in the given repository, showing the diff between the given
+ * commit and the commit which preceded that one.
+ *
+ * @param $repository
+ *   A structured array containing repository information, like a single
+ *   element of what versioncontrol_get_repositories() returns.
+ * @param $commit
+ *   The newer commit of the two that should be diffed, and the point in time
+ *   when the item had the name $filepath.
+ * @param $filepath
+ *   The file for which the diff URL should actually be retrieved.
+ *
+ * @return
+ *   The diff URL corresponding to the given arguments.
+ */
+versioncontrol_get_url_diff($repository, $commit, $filepath) {
 }
