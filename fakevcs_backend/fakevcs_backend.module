@@ -506,3 +506,52 @@ fakevcs_backend_get_file_annotation($commit, $path) {
   );
 }
 
+
+/**
+ * Implementation of [vcs_backend]_get_authors_by_uid():
+ * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
+ *
+ * @param $repository
+ *   An array containing repository information, like a single element
+ *   of what versioncontrol_get_repositories() returns.
+ * @param $uid_list
+ *   An array containing Drupal user ids.
+ *
+ * @return
+ *   A structured array with the Drupal user id as key and the system specific
+ *   VCS username as value.
+ */
+fakevcs_backend_get_authors_by_uid($repository, $uid_list) {
+  // Let's say $uid_list would be array(1, 56020):
+  return array(
+    array(
+      1 => 'dries',
+      56020 => 'jpetso',
+    ),
+  );
+}
+
+/**
+ * Implementation of [vcs_backend]_get_authors_by_username():
+ * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
+ *
+ * @param $repository
+ *   An array containing repository information, like a single element
+ *   of what versioncontrol_get_repositories() returns.
+ * @param $username_list
+ *   An array containing system specific VCS usernames.
+ *
+ * @return
+ *   A structured array with the Drupal user id as key and the system specific
+ *   VCS username as value.
+ */
+fakevcs_backend_get_authors_by_username($repository, $username_list) {
+  // Let's say $username_list would be array(1, 56020):
+  return array(
+    array(
+      1 => 'dries',
+      56020 => 'jpetso',
+    ),
+  );
+}
+

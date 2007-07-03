@@ -41,8 +41,6 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
  * given constraints. If no single commit matches these constraints,
  * an empty array is returned.
  *
- * @param $repository
- *   The repository whose commits should be retrieved.
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
  *
@@ -55,7 +53,7 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
  *   'tags': An array of strings, like array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3').
  *           If given, only commits captured by these tags will be returned.
  *   'paths': An array of strings (item locations),
- *            like array('/trunk/modules/versioncontrol').
+ *            like array('/trunk/contributions/modules/versioncontrol').
  *            If given, only commits that affected this item (or its children,
  *            in case the item is a directory) will be returned.
  *   'commit_id_lower': A commit id. If given, the result set will not contain
@@ -81,6 +79,56 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
  *                     module ([xxx]_backend). Other backend modules won't
  *                     get to see this constraint, so in theory you can provide
  *                     one of those for each backend in one single query.
+ *
+ * @return
+ *   An array of commits, reversely sorted by the time of the commit.
+ *   Each element contains a structured array with the following keys:
+ *
+ *   'commit_id': The Drupal-specific commit identifier (a simple integer)
+ *                which is unique among all commits in all repositories.
+ *   'repo_id': The Drupal-specific repository identifier.
+ *   'date': The time when the revision was committed, given as Unix timestamp.
+ *   'uid': The Drupal user id of the committer.
+ *   'username': The system specific VCS username of the committer.
+ *   'message': The commit message.
+ *   'revision': The VCS specific commit identifier, like "1.2.2.4" in CVS,
+ *               "27491" in Subversion or an SHA-1 key in various distributed
+ *               version control systems.
+ *
+ *   Additional elements may be added by specific version control system backends.
  */
-versioncontrol_get_commits($repository, $constraints = array()) {
+versioncontrol_get_commits($constraints = array()) {
+}
+
+
+/**
+ * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
+ *
+ * @param $repository
+ *   An array containing repository information, like a single element
+ *   of what versioncontrol_get_repositories() returns.
+ * @param $uid_list
+ *   An array containing Drupal user ids.
+ *
+ * @return
+ *   A structured array with the Drupal user id as key and the system specific
+ *   VCS username as value.
+ */
+versioncontrol_get_authors_by_uid($repository, $uid_list) {
+}
+
+/**
+ * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of usernames.
+ *
+ * @param $repository
+ *   An array containing repository information, like a single element
+ *   of what versioncontrol_get_repositories() returns.
+ * @param $username_list
+ *   An array containing system specific VCS usernames.
+ *
+ * @return
+ *   A structured array with the Drupal user id as key and the system specific
+ *   VCS username as value.
+ */
+versioncontrol_get_authors_by_username($repository, $username_list) {
 }
