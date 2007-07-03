@@ -37,6 +37,41 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
 
 
 /**
+ * Retrieve a set of repositories if they match the given constraints. If no
+ * single repository matches these constraints, an empty array is returned.
+ *
+ * @param $constraints
+ *   An optional array of constraints. Possible array elements are:
+ *
+ *   'vcs': An array of strings, like array('cvs', 'svn', 'git').
+ *          If given, only commits for these backends will be returned.
+ *   'repo_ids': An array of repository ids.
+ *               If given, only the corresponding repositories will be returned.
+ *
+ * @return
+ *   An array of repositories where the key of each element is the
+ *   repository id. The corresponding value contains a structured array
+ *   with the following keys:
+ *
+ *   'repo_id': The unique repository id.
+ *   'name': The user-visible name of the repository.
+ *   'vcs': The unique string identifier of the version control system
+ *          that powers this repository.
+ *   'root': The root directory of the repository. In most cases,
+ *           this will be a local directory (e.g. '/var/repos/drupal'),
+ *           but it may also be some specialized string for remote repository
+ *           access. How this string may look like depends on the backend.
+ *   'url_view' and 'url_diff': Not meant to be used directly, please refer
+ *       to the versioncontrol_get_url_view() and versioncontrol_get_url_diff()
+ *       functions if you need this functionality.
+ *
+ *   Additional elements may be added by specific version control system backends.
+ */
+versioncontrol_get_repositories($constraints = array()) {
+}
+
+
+/**
  * Retrieve a set of commits for the specified repository if they match the
  * given constraints. If no single commit matches these constraints,
  * an empty array is returned.
@@ -46,8 +81,8 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
  *
  *   'vcs': An array of strings, like array('cvs', 'svn', 'git').
  *          If given, only commits for these backends will be returned.
- *   'repositories': An array of repository ids. If given, only commits
- *                   for the corresponding repositories will be returned.
+ *   'repo_ids': An array of repository ids. If given, only commits
+ *               for the corresponding repositories will be returned.
  *   'branches': An array of strings, like array('HEAD', 'DRUPAL-5').
  *               If given, only commits on the given branches will be returned.
  *   'tags': An array of strings, like array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3').
@@ -86,7 +121,8 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
  *
  *   'commit_id': The Drupal-specific commit identifier (a simple integer)
  *                which is unique among all commits in all repositories.
- *   'repo_id': The Drupal-specific repository identifier.
+ *   'repository': The repository where this commit occurred.
+ *                 This is a structured array, like a single element of
  *   'date': The time when the revision was committed, given as Unix timestamp.
  *   'uid': The Drupal user id of the committer.
  *   'username': The system specific VCS username of the committer.
@@ -106,7 +142,7 @@ versioncontrol_get_commits($constraints = array()) {
  *
  * @param $repository
  *   A structured array containing repository information, like a single
- *   element of what versioncontrol_get_repositories() returns.
+ *   element of what is returned by versioncontrol_get_repositories().
  * @param $uid_list
  *   An array containing Drupal user ids.
  *
@@ -122,7 +158,7 @@ versioncontrol_get_authors_by_uid($repository, $uid_list) {
  *
  * @param $repository
  *   A structured array containing repository information, like a single
- *   element of what versioncontrol_get_repositories() returns.
+ *   element of what is returned by versioncontrol_get_repositories().
  * @param $username_list
  *   An array containing system specific VCS usernames.
  *
@@ -140,7 +176,7 @@ versioncontrol_get_authors_by_username($repository, $username_list) {
  *
  * @param $repository
  *   A structured array containing repository information, like a single
- *   element of what versioncontrol_get_repositories() returns.
+ *   element of what is returned by versioncontrol_get_repositories().
  * @param $commit
  *   The point in time when the item had the name $filepath. Remember, renaming
  *   operations can pretty much screw up unique item identification otherwise.

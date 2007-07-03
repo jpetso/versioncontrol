@@ -97,7 +97,8 @@ fakevcs_backend_repository_additions($repository) {
  *   An array of strings, like array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3').
  *   If given, only commits captured by these tags will be returned.
  * @param $paths
- *   An array of strings (item locations), like array('/trunk/contributions/modules/versioncontrol').
+ *   An array of strings (item locations),
+ *   like array('/trunk/contributions/modules/versioncontrol').
  *   If given, only commits that affected this item (or its children,
  *   in case the item is a directory) will be returned.
  * @param $fakevcs_specific
@@ -106,7 +107,7 @@ fakevcs_backend_repository_additions($repository) {
  *   for filtering by module.
  */
 fakevcs_backend_filter_commits(&$commits, $branches = NULL, $tags = NULL, $paths = NULL, $fakevcs_specific = NULL) {
-  foreach($commits as $commit_id => $commit) {
+  foreach($commits as $key => $commit) {
     if ($constraint == 'matched') {
       continue;
     }
@@ -114,7 +115,7 @@ fakevcs_backend_filter_commits(&$commits, $branches = NULL, $tags = NULL, $paths
       continue;
     }
     else {
-      unset($commits[$commit_id]);
+      unset($commits[$key]);
     }
   }
 }
@@ -145,7 +146,7 @@ fakevcs_backend_get_commit_actions($commit) {
     // meaning, but is necessary for indexing and joining tables.
     'commit_id' => 2345,
     // The repository that was affected by this commit.
-    'repo_id' => $affected_repository->repo_id,
+    'repository' => $affected_repository,
     // The time when the commit was executed, in Unix timestamp format.
     'date' => time(),
     // User id of the committer's Drupal user account.
@@ -260,7 +261,7 @@ fakevcs_backend_get_commit_items($commit, $path, $recursive = FALSE) {
     // The plain, given part looks just like in _get_commit_actions(),
     // you can look up the descriptions there.
     'commit_id' => 3456,
-    'repo_id' => $affected_repository->repo_id,
+    'repository' => $affected_repository,
     'date' => time() + 23,
     'uid' => $user->uid,
     'username' => 'jpetso',
@@ -429,7 +430,7 @@ fakevcs_backend_get_item_history($commit, $path) {
     // The plain, given part looks just like in _get_commit_actions(),
     // you can look up the descriptions there.
     'commit_id' => 3456,
-    'repo_id' => $affected_repository->repo_id,
+    'repository' => $affected_repository,
     'date' => time() + 23,
     'uid' => $user->uid,
     'username' => 'jpetso',

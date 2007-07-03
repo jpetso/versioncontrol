@@ -39,8 +39,8 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
+        url_view varchar(255) NOT NULL default '',
         url_diff varchar(255) NOT NULL default '',
-        url_file varchar(255) NOT NULL default '',
         PRIMARY KEY (repoid),
         UNIQUE KEY name (name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
