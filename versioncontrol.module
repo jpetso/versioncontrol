@@ -149,6 +149,7 @@ versioncontrol_get_authors_by_username($repository, $username_list) {
  *
  * @return
  *   The item view URL corresponding to the given arguments.
+ *   An empty string is returned if no item view URL has been defined.
  */
 versioncontrol_get_url_view($repository, $commit, $path) {
 }
@@ -169,6 +170,7 @@ versioncontrol_get_url_view($repository, $commit, $path) {
  *
  * @return
  *   The diff URL corresponding to the given arguments.
+ *   An empty string is returned if no diff URL has been defined.
  */
 versioncontrol_get_url_diff($repository, $commit, $filepath) {
 }
