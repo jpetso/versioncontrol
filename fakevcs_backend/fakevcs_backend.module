@@ -140,7 +140,7 @@ fakevcs_backend_commit_additions($commit) {
 
 /**
  * Implementation of [vcs_backend]_get_commit_actions():
- * Retrieves information about what happened in a single commit.
+ * Retrieves detailed information about what happened in a single commit.
  *
  * @param $commit
  *   The commit whose actions should be retrieved.
@@ -170,50 +170,64 @@ fakevcs_backend_get_commit_actions($commit) {
     'revision' => '404', // for this commit, let's assume this is an SVN repository
   );
 
-  // An array containing the exact details of what happened to each file
-  // in this commit. Array keys are the current/new filepaths, also for
-  // 'delete' actions even if the file actually doesn't exist anymore.
+  // A structured array containing the exact details of what happened to
+  // each item in this commit. Array keys are the current/new paths, also for
+  // VERSIONCONTROL_ACTION_DELETED actions even if the file actually doesn't
+  // exist anymore.
   return array(
-    // VERSIONCONTROL_ACTION_ADDED action: contains 'type', 'action' and 'revision'
+    // VERSIONCONTROL_ACTION_ADDED action:
+    // contains 'type', 'action' and 'revision'
     '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'action'   => VERSIONCONTROL_ACTION_ADDED,
       'revision' => '404',
     ),
-    // 'modified' action: contains 'type', 'action', 'revision' and 'previous revision'
+    // VERSIONCONTROL_ACTION_MODIFIED action:
+    // contains 'type', 'action', 'revision' and 'previous revision'
     '/trunk/contributions/modules/versioncontrol/versioncontrol.install' => array(
       'type'              => VERSIONCONTROL_ITEM_FILE,
       'action'            => VERSIONCONTROL_ACTION_MODIFIED,
       'revision'          => '404',
       'previous revision' => '354',
     ),
-    // 'deleted' action: contains 'type', 'action', 'revision' and 'previous revision'
+    // VERSIONCONTROL_ACTION_DELETED action:
+    // contains 'type', 'action' and 'previous revision'
     '/branches/sandbox/jpetso/versioncontrol-notes.txt' => array(
       'type'              => VERSIONCONTROL_ITEM_FILE,
       'action'            => VERSIONCONTROL_ACTION_DELETED,
-      'revision'          => '404',
       'previous revision' => '41',
     ),
-    // 'moved' action: contains 'type', 'action', 'revision', 'previous revision',
-    // 'source path', and optionally 'modified' (if the file was also
-    // modified in addition to being moved)
+    // VERSIONCONTROL_ACTION_MOVED action: contains 'type', 'action',
+    // 'revision', 'previous revision', 'source path' and 'modified'
+    // (if the file was also modified in addition to being moved)
     '/trunk/contributions/modules/versioncontrol/versioncontrol.info' => array(
       'type'              => VERSIONCONTROL_ITEM_FILE,
       'action'            => VERSIONCONTROL_ACTION_MOVED,
-      'modified'          => TRUE, // optional, default is FALSE
+      'modified'          => TRUE,
       'revision'          => '404',
       'previous revision' => '41',
       'source path'       => '/branches/sandbox/jpetso/versioncontrol.info',
     ),
-    // 'moved' action: contains 'type', 'action', 'revision', 'previous revision',
-    // 'source path', and optionally 'modified'
+    // VERSIONCONTROL_ACTION_COPIED action: contains 'type', 'action',
+    // 'revision', 'previous revision', 'source path' and 'modified'
     '/trunk/contributions/modules/versioncontrol/README.txt' => array(
       'type'              => VERSIONCONTROL_ITEM_FILE,
       'action'            => VERSIONCONTROL_ACTION_COPIED,
-      'modified'          => TRUE, // optional, default is FALSE
+      'modified'          => FALSE,
       'revision'          => '404',
       'previous revision' => '220',
       'source path'       => '/branches/sandbox/jpetso/README-template.txt',
+    ),
+    // VERSIONCONTROL_ACTION_MERGED action: 
+    // contains 'type', 'action', 'revision', 'previous revision',
+    // 'source path' and 'source revision'
+    '/trunk/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module' => array(
+      'type'              => VERSIONCONTROL_ITEM_FILE,
+      'action'            => VERSIONCONTROL_ACTION_MERGED,
+      'revision'          => '404',
+      'previous revision' => '403',
+      'source path'       => '/branches/work/versioncontrol-improve-data-structures/data-structures.php',
+      'source revision'   => '198',
     ),
     // VERSIONCONTROL_ITEM_DIRECTORY type actions can occur with 'action' being
     // one of VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED
@@ -230,17 +244,6 @@ fakevcs_backend_get_commit_actions($commit) {
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'action'   => VERSIONCONTROL_ACTION_ADDED,
       'revision' => '404',
-    ),
-    // 'merged' action: contains 'type', 'action', 'revision', 'previous revision',
-    // 'source path' and 'source revision', and optionally 'modified'
-    '/trunk/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module' => array(
-      'type'              => VERSIONCONTROL_ITEM_FILE,
-      'action'            => 'merged',
-      //'modified'          => TRUE, // you already saw this one, so let's keep it out this time
-      'revision'          => '404',
-      'previous revision' => '403',
-      'source path'       => '/branches/work/versioncontrol-improve-data-structures/data-structures.php',
-      'source revision'   => '198',
     ),
   );
 }
