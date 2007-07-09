@@ -259,6 +259,9 @@ versioncontrol_get_url_diff($repository, $commit, $filepath) {
  *               to the other action in the 'action' element of the array.
  *               Only exists for the VERSIONCONTROL_ACTION_MOVED
  *               and VERSIONCONTROL_ACTION_COPIED actions.
+ *
+ *  A real-life example of such a return array can be found
+ *  in the FakeVCS example module.
  */
 versioncontrol_get_commit_actions($commit) {
   return versioncontrol_call_backend(

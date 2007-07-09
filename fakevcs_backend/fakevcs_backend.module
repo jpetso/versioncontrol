@@ -144,6 +144,34 @@ fakevcs_backend_commit_additions($commit) {
  *
  * @param $commit
  *   The commit whose actions should be retrieved.
+ *
+ * @return
+ *   A structured array containing the exact details of what happened to
+ *   each item in this commit. Array keys are the current/new paths, also for
+ *   VERSIONCONTROL_ACTION_DELETED actions even if the file actually doesn't
+ *   exist anymore. The corresponding array values are again structured arrays
+ *   and consist of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'action': Specifies how the item was modified.
+ *             One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   'revision': The current/new (file-level) revision of the item.
+ *               Given as a string, exists for all actions
+ *               except VERSIONCONTROL_ACTION_DELETED.
+ *   'previous revision': The (file-level) revision when this item last changed.
+ *                        Given as a string, exists for all actions
+ *                        except VERSIONCONTROL_ACTION_ADDED.
+ *   'source path': The previous location of the item. Only exists for the
+ *                  VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED
+ *                  and VERSIONCONTROL_ACTION_MERGED actions.
+ *   'source revision': Only exists for the VERSIONCONTROL_ACTION_MERGED action,
+ *                      and specifies the last (file-level) revision of the
+ *                      file that was merged into the current/new path.
+ *   'modified': Boolean value, specifies if a file was modified in addition
+ *               to the other action in the 'action' element of the array.
+ *               Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *               and VERSIONCONTROL_ACTION_COPIED actions.
  */
 fakevcs_backend_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
