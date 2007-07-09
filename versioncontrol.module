@@ -305,3 +305,44 @@ versioncontrol_get_commit_items($commit, $path, $recursive = FALSE) {
     array($commit, $path, $recursive)
   );
 }
+
+/**
+ * Implementation of [vcs_backend]_get_commit_branches():
+ * Retrieve the branches that have been affected by the given commit.
+ *
+ * @return
+ *   An array of strings that identify a branch in the respective repository,
+ *   like for example array('DRUPAL-5') or array('trunk', '5.x').
+ */
+versioncontrol_get_commit_branches($commit) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_commit_branches', array($commit)
+  );
+}
+
+/**
+ * Retrieve all branches that exist for the given item $path, and how this item
+ * is named there.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose branches should be retrieved.
+ *
+ * @return
+ *   A structured array that looks like
+ *     array(
+ *       $branch1_name => $branch1_path,
+ *       $branch2_name => $branch2_path,
+ *       ...
+ *     ).
+ *   An empty array is returned if there are no branches for this item.
+ *   NULL is returned if the given path is not under revision control,
+ *   or was not under revision control at the time of $commit.
+ */
+versioncontrol_get_item_branches($commit, $path) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_item_branches', array($commit, $path)
+  );
+}
