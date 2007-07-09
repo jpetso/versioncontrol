@@ -91,14 +91,20 @@ fakevcs_backend_repository_additions($repository) {
  *   The original array of commits retrieved by versioncontrol_get_commits().
  *   The filtered version will naturally be a subset of those.
  * @param $branches
- *   An array of strings, like array('HEAD', 'DRUPAL-5').
+ *   An array of strings, specified separately for each repository,
+ *   like array($repo_id => array('HEAD', 'DRUPAL-5')).
  *   If given, only commits on the given branches will be returned.
  * @param $tags
- *   An array of strings, like array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3').
+ *   An array of strings, specified separately for each repository,
+ *   like array($repo_id => array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3')).
  *   If given, only commits captured by these tags will be returned.
- * @param $paths
- *   An array of strings (item locations),
- *   like array('/trunk/contributions/modules/versioncontrol').
+ * @param paths
+ *   An array of strings (item locations), specified separately for
+ *   each repository, like
+ *     array($repo_id => array(
+ *       '/trunk/contributions/modules/versioncontrol',
+ *       '/trunk/contributions/themes/b2',
+ *     )).
  *   If given, only commits that affected this item (or its children,
  *   in case the item is a directory) will be returned.
  * @param $fakevcs_specific
@@ -510,48 +516,62 @@ fakevcs_backend_get_file_annotation($commit, $path) {
 
 /**
  * Implementation of [vcs_backend]_get_authors_by_uid():
- * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
+ * Retrieve a Drupal uid / VCS username mapping given a set of user ids.
+ * Non-existing uids are discarded and don't appear in the result value.
  *
- * @param $repository
- *   An array containing repository information, like a single element
- *   of what versioncontrol_get_repositories() returns.
  * @param $uid_list
  *   An array containing Drupal user ids.
+ * @param $repositories
+ *   An array of structured arrays containing repository information,
+ *   presumably a subset of what is returned by versioncontrol_get_repositories().
+ *   If given, only usernames of this specific repository are retrieved.
  *
  * @return
- *   A structured array with the Drupal user id as key and the system specific
- *   VCS username as value.
+ *   A structured array that looks like
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   If no system specific VCS usernames correlate to the given uids,
+ *   an empty array is returned.
  */
-fakevcs_backend_get_authors_by_uid($repository, $uid_list) {
-  // Let's say $uid_list would be array(1, 56020):
+fakevcs_backend_get_authors_by_uid($uid_list, $repositories = NULL) {
+  // Let's say $uid_list == array(1, 56020, -328) and $repositories == NULL:
   return array(
-    array(
-      1 => 'dries',
-      56020 => 'jpetso',
+    1 => array(
+      $core_repo    => 'dries',
+      $contrib_repo => 'dries',
+    ),
+    56020 => array(
+      $contrib_repo => 'jpetso',
     ),
   );
 }
 
 /**
  * Implementation of [vcs_backend]_get_authors_by_username():
- * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
+ * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
+ * Non-existing usernames are discarded and don't appear in the result value.
  *
- * @param $repository
- *   An array containing repository information, like a single element
- *   of what versioncontrol_get_repositories() returns.
- * @param $username_list
- *   An array containing system specific VCS usernames.
+ * @param $usernames
+ *   An array containing system specific VCS usernames. Specified separately
+ *   for each repository, like array($repo_id => array('dww', 'jpetso')).
  *
  * @return
- *   A structured array with the Drupal user id as key and the system specific
- *   VCS username as value.
+ *   A structured array that looks like
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   If no Drupal uids correlate to the given usernames,
+ *   an empty array is returned.
  */
-fakevcs_backend_get_authors_by_username($repository, $username_list) {
-  // Let's say $username_list would be array(1, 56020):
+fakevcs_backend_get_authors_by_username($usernames) {
+  // Let's say $usernames == array(
+  //   $core_repo => array('dries', 'jpetso', 'doesntexist'),
+  //   $contrib_repo => array('dries', 'jpetso', 'doesntexist'),
+  // ):
   return array(
-    array(
-      1 => 'dries',
-      56020 => 'jpetso',
+    1 => array(
+      $core_repo    => 'dries',
+      $contrib_repo => 'dries',
+    ),
+    56020 => array(
+      $contrib_repo => 'jpetso',
     ),
   );
 }

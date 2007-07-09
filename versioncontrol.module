@@ -83,12 +83,18 @@ versioncontrol_get_repositories($constraints = array()) {
  *          If given, only commits for these backends will be returned.
  *   'repo_ids': An array of repository ids. If given, only commits
  *               for the corresponding repositories will be returned.
- *   'branches': An array of strings, like array('HEAD', 'DRUPAL-5').
+ *   'branches': An array of strings, specified separately for each repository,
+ *               like array($repo_id => array('HEAD', 'DRUPAL-5')).
  *               If given, only commits on the given branches will be returned.
- *   'tags': An array of strings, like array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3').
+ *   'tags': An array of strings, specified separately for each repository,
+ *           like array($repo_id => array('DRUPAL-4-7--1-1', 'DRUPAL-5--1-3')).
  *           If given, only commits captured by these tags will be returned.
- *   'paths': An array of strings (item locations),
- *            like array('/trunk/contributions/modules/versioncontrol').
+ *   'paths': An array of strings (item locations), specified separately
+ *            for each repository, like
+ *              array($repo_id => array(
+ *                '/trunk/contributions/modules/versioncontrol',
+ *                '/trunk/contributions/themes/b2',
+ *              )).
  *            If given, only commits that affected this item (or its children,
  *            in case the item is a directory) will be returned.
  *   'commit_id_lower': A commit id. If given, the result set will not contain
@@ -106,9 +112,11 @@ versioncontrol_get_repositories($constraints = array()) {
  *   'uids': An array of Drupal user ids. If given, the result set will not
  *           contain commits that don't correspond to one of the specified users.
  *   'usernames': An array of system-specific usernames (the ones that the
- *                revision control systems themselves get to see). If given,
- *                the result set will not contain commits that don't correspond
- *                to one of the specified users.
+ *                revision control systems themselves get to see).
+ *                Specified separately for each repository, like
+ *                array($repo_id => array('dww', 'jpetso')).
+ *                If given, the result set will not contain commits that don't
+ *                correspond to one of the specified users.
  *   '[xxx]_specific': An array of VCS specific constraints. How this array
  *                     looks like is defined by the corresponding backend
  *                     module ([xxx]_backend). Other backend modules won't
@@ -138,35 +146,40 @@ versioncontrol_get_commits($constraints = array()) {
 
 
 /**
- * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of user ids.
+ * Retrieve a Drupal uid / VCS username mapping given a set of user ids.
+ * Non-existing uids are discarded and don't appear in the result value.
  *
- * @param $repository
- *   A structured array containing repository information, like a single
- *   element of what is returned by versioncontrol_get_repositories().
  * @param $uid_list
  *   An array containing Drupal user ids.
+ * @param $repositories
+ *   An array of structured arrays containing repository information,
+ *   presumably a subset of what is returned by versioncontrol_get_repositories().
+ *   If given, only usernames of this specific repository are retrieved.
  *
  * @return
- *   A structured array with the Drupal user id as key and the system specific
- *   VCS username as value.
+ *   A structured array that looks like
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   If no system specific VCS usernames correlate to the given uids,
+ *   an empty array is returned.
  */
-versioncontrol_get_authors_by_uid($repository, $uid_list) {
+versioncontrol_get_authors_by_uid($uid_list, $repositories = NULL) {
 }
 
 /**
- * Retrieve a 'Drupal uid' => 'VCS username' mapping given a set of usernames.
+ * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
+ * Non-existing usernames are discarded and don't appear in the result value.
  *
- * @param $repository
- *   A structured array containing repository information, like a single
- *   element of what is returned by versioncontrol_get_repositories().
- * @param $username_list
- *   An array containing system specific VCS usernames.
+ * @param $usernames
+ *   An array containing system specific VCS usernames. Specified separately
+ *   for each repository, like array($repo_id => array('dww', 'jpetso')).
  *
  * @return
- *   A structured array with the Drupal user id as key and the system specific
- *   VCS username as value.
+ *   A structured array that looks like
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   If no Drupal uids correlate to the given usernames,
+ *   an empty array is returned.
  */
-versioncontrol_get_authors_by_username($repository, $username_list) {
+versioncontrol_get_authors_by_username($usernames) {
 }
 
 
