@@ -109,14 +109,14 @@ versioncontrol_get_repositories($constraints = array()) {
  *                 commits earlier than this lower bound.
  *   'date_upper': A Unix timestamp. If given, the result set will not contain
  *                 commits later than this upper bound.
- *   'uids': An array of Drupal user ids. If given, the result set will not
- *           contain commits that don't correspond to one of the specified users.
+ *   'uids': An array of Drupal user ids. If given, the result set will only
+ *           contain commits that correspond to any of the specified users.
  *   'usernames': An array of system-specific usernames (the ones that the
  *                revision control systems themselves get to see).
  *                Specified separately for each repository, like
  *                array($repo_id => array('dww', 'jpetso')).
- *                If given, the result set will not contain commits that don't
- *                correspond to one of the specified users.
+ *                If given, the result set will only contain commits that
+ *                correspond to any of the specified users.
  *   '[xxx]_specific': An array of VCS specific constraints. How this array
  *                     looks like is defined by the corresponding backend
  *                     module ([xxx]_backend). Other backend modules won't
@@ -131,6 +131,7 @@ versioncontrol_get_repositories($constraints = array()) {
  *                which is unique among all commits in all repositories.
  *   'repository': The repository where this commit occurred.
  *                 This is a structured array, like a single element of
+ *                 what is returned by versioncontrol_get_repositories().
  *   'date': The time when the revision was committed, given as Unix timestamp.
  *   'uid': The Drupal user id of the committer.
  *   'username': The system specific VCS username of the committer.
