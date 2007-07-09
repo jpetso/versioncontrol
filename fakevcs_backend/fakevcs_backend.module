@@ -291,6 +291,16 @@ fakevcs_backend_get_commit_actions($commit) {
  * @param $recursive
  *   If FALSE, only the direct children of $path will be retrieved.
  *   If TRUE, you'll get every single descendant of $path.
+ *
+ * @return
+ *   A structured array containing the exact details of which items exist(ed)
+ *   at the time of the commit. Array keys are the current/new paths.
+ *   The corresponding array values are again structured arrays and consist
+ *   of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'revision': The (file-level) revision when the item was last changed.
  */
 fakevcs_backend_get_commit_items($commit, $path, $recursive = FALSE) {
   // Assuming $commit is a single commit array that looks like this:
