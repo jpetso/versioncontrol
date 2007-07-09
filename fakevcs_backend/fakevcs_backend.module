@@ -301,6 +301,8 @@ fakevcs_backend_get_commit_actions($commit) {
  *   'type': Specifies the item type, which is either
  *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
  *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
  */
 fakevcs_backend_get_commit_items($commit, $path, $recursive = FALSE) {
   // Assuming $commit is a single commit array that looks like this:
