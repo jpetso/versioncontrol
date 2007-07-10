@@ -59,7 +59,7 @@ fakevcs_backend_versioncontrol_backends() {
         VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS,
 
         // Able to get the list of all current files and directories in a given
-        // revision controlled directory, along with revision identifiers for
+        // version controlled directory, along with revision identifiers for
         // each of the files. Comes in handy for repository browsing.
         VERSIONCONTROL_CAPABILITY_LIST_FILES,
       );
@@ -138,6 +138,70 @@ fakevcs_backend_commit_additions($commit) {
   );
 }
 
+
+/**
+ * Implementation of [vcs_backend]_get_authors_by_uid():
+ * Retrieve a Drupal uid / VCS username mapping given a set of user ids.
+ * Non-existing uids are discarded and don't appear in the result value.
+ *
+ * @param $uid_list
+ *   An array containing Drupal user ids.
+ * @param $repositories
+ *   An array of structured arrays containing repository information,
+ *   presumably a subset of what is returned by versioncontrol_get_repositories().
+ *   If given, only usernames of this specific repository are retrieved.
+ *
+ * @return
+ *   A structured array that looks like
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   If no system specific VCS usernames correlate to the given uids,
+ *   an empty array is returned.
+ */
+fakevcs_backend_get_authors_by_uid($uid_list, $repositories = NULL) {
+  // Let's say $uid_list == array(1, 56020, -328) and $repositories == NULL:
+  return array(
+    1 => array(
+      $core_repo    => 'dries',
+      $contrib_repo => 'dries',
+    ),
+    56020 => array(
+      $contrib_repo => 'jpetso',
+    ),
+  );
+}
+
+/**
+ * Implementation of [vcs_backend]_get_authors_by_username():
+ * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
+ * Non-existing usernames are discarded and don't appear in the result value.
+ *
+ * @param $usernames
+ *   An array containing system specific VCS usernames. Specified separately
+ *   for each repository, like array($repo_id => array('dww', 'jpetso')).
+ *
+ * @return
+ *   A structured array that looks like
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   If no Drupal uids correlate to the given usernames,
+ *   an empty array is returned.
+ */
+fakevcs_backend_get_authors_by_username($usernames) {
+  // Let's say $usernames == array(
+  //   $core_repo => array('dries', 'jpetso', 'doesntexist'),
+  //   $contrib_repo => array('dries', 'jpetso', 'doesntexist'),
+  // ):
+  return array(
+    1 => array(
+      $core_repo    => 'dries',
+      $contrib_repo => 'dries',
+    ),
+    56020 => array(
+      $contrib_repo => 'jpetso',
+    ),
+  );
+}
+
+
 /**
  * Implementation of [vcs_backend]_get_commit_actions():
  * Retrieves detailed information about what happened in a single commit.
@@ -198,10 +262,6 @@ fakevcs_backend_get_commit_actions($commit) {
     'revision' => '404', // for this commit, let's assume this is an SVN repository
   );
 
-  // A structured array containing the exact details of what happened to
-  // each item in this commit. Array keys are the current/new paths, also for
-  // VERSIONCONTROL_ACTION_DELETED actions even if the file actually doesn't
-  // exist anymore.
   return array(
     // VERSIONCONTROL_ACTION_ADDED action:
     // contains 'type', 'action' and 'revision'
@@ -423,8 +483,8 @@ fakevcs_backend_get_commit_branches($commit) {
  *       ...
  *     ).
  *   An empty array is returned if there are no branches for this item.
- *   NULL is returned if the given path is not under revision control,
- *   or was not under revision control at the time of $commit.
+ *   NULL is returned if the given path is not under version control,
+ *   or was not under version control at the time of $commit.
  */
 fakevcs_backend_get_item_branches($commit, $path) {
   // How CVS would probably do it
@@ -445,7 +505,7 @@ fakevcs_backend_get_item_branches($commit, $path) {
  * Retrieve all tags that exist for the given item $path, and how this item
  * is named there.
  *
- * If the given path is not under revision control (or was not under revision
+ * If the given path is not under version control (or was not under version
  * control at the time of $commit), NULL is returned.
  * An empty array is returned if there are no tags for this item.
  *
@@ -454,6 +514,17 @@ fakevcs_backend_get_item_branches($commit, $path) {
  *   operations can pretty much screw up unique item identification otherwise.
  * @param $path
  *   The item whose tags should be retrieved.
+ *
+ * @return
+ *   A structured array that looks like
+ *     array(
+ *       $tag1_name => $tag1_path,
+ *       $tag2_name => $tag2_path,
+ *       ...
+ *     ).
+ *   An empty array is returned if there are no tags for this item.
+ *   NULL is returned if the given path is not under version control,
+ *   or was not under version control at the time of $commit.
  */
 fakevcs_backend_get_item_tags($commit, $path) {
   // How CVS would probably do it
@@ -470,11 +541,12 @@ fakevcs_backend_get_item_tags($commit, $path) {
 }
 
 /**
+ * TODO: item history for only one branch?
  * Implementation of [vcs_backend]_get_item_history():
  * Retrieve the revisions where the given item $path has been changed, in
  * reverse chronological order.
  *
- * If the given path is not under revision control (or was not under revision
+ * If the given path is not under version control (or was not under version
  * control at the time of $commit), NULL is returned.
  *
  * @param $commit
@@ -482,6 +554,31 @@ fakevcs_backend_get_item_tags($commit, $path) {
  *   operations can pretty much screw up unique item identification otherwise.
  * @param $path
  *   The item whose history should be retrieved.
+ *
+ * @return
+ *   An array containing the exact details of all item changes. Each element
+ *   of the array is a structured array consisting of elements with the
+ *   following keys:
+ *
+ *   'path': The path of the item name at the specific revision.
+ *   'action': Specifies how the item was modified.
+ *             One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   'revision': The current/new (file-level) revision of the item.
+ *               Given as a string, exists for all actions
+ *               except VERSIONCONTROL_ACTION_DELETED.
+ *   'previous revision': The (file-level) revision when this item last changed.
+ *                        Given as a string, exists for all actions
+ *                        except VERSIONCONTROL_ACTION_ADDED.
+ *   'source path': The previous location of the item. Only exists for the
+ *                  VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED
+ *                  and VERSIONCONTROL_ACTION_MERGED actions.
+ *   'source revision': Only exists for the VERSIONCONTROL_ACTION_MERGED action,
+ *                      and specifies the last (file-level) revision of the
+ *                      file that was merged into the current/new path.
+ *   'modified': Boolean value, specifies if a file was modified in addition
+ *               to the other action in the 'action' element of the array.
+ *               Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *               and VERSIONCONTROL_ACTION_COPIED actions.
  */
 fakevcs_backend_get_item_history($commit, $path) {
   // Assuming $commit is a single commit array that looks like this:
@@ -500,49 +597,66 @@ fakevcs_backend_get_item_history($commit, $path) {
 
   return array(
     array(
-      'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
-      'revision'  => '404',
+      'path'              => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
+      'action'            => VERSIONCONTROL_ACTION_MOVED,
+      'revision'          => '404',
+      'previous revision' => '41',
+      'source path'       => '/branches/sandbox/jpetso/versioncontrol.info',
     ),
     array(
-      'path'      => '/branches/sandbox/jpetso/versioncontrol.info',
-      'revision'  => '41',
+      'path'     => '/branches/sandbox/jpetso/versioncontrol.info',
+      'action'   => VERSIONCONTROL_ACTION_ADDED,
+      'revision' => '41',
     ),
   );
 }
 
 /**
+ * TODO: contents of the file for a specific branch or tag?
  * Implementation of [vcs_backend]_get_file_contents():
  * Retrieve the text or binary data of the given file in the specified commit.
  *
- * If the given path is not under revision control (or was not under revision
- * control at the time of $commit), NULL is returned.
+ * This function is optional for VCS backends to implement; if a backend
+ * doesn't implement this function, its return value will be NULL.
  *
  * @param $commit
  *   The point in time when the item had the name $path. Remember, renaming
  *   operations can pretty much screw up unique item identification otherwise.
  * @param $path
  *   The item whose history should be retrieved.
+ *
+ * @return
+ *   A structured array containing the type and contents of the desired file
+ *   at the time of the commit, consisting of elements with the following keys:
+ *
+ *   'type': Specifies the file type, which is either
+ *           VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
+ *   'contents': The raw contents of the file.
  */
 fakevcs_backend_get_file_contents($commit, $path) {
   // In case the file is marked as text file:
   return array(
-    'type'     => VERSIONCONTROL_ITEM_TEXT,
+    'type'     => VERSIONCONTROL_FILE_TEXT,
     'contents' => $file_contents,
   );
   // In case the file is marked as binary file:
   return array(
-    'type'     => VERSIONCONTROL_ITEM_BINARY,
+    'type'     => VERSIONCONTROL_FILE_BINARY,
     'contents' => $file_contents,
   );
 }
 
 /**
+ * TODO: annotation of the file for a specific branch or tag?
  * Implementation of [vcs_backend]_get_file_annotation():
  * Retrieve an array where each element represents a single line of the
  * given file in the specified commit, annotated with the committer who last
  * modified that line.
  *
- * If the given path is not under revision control (or was not under revision
+ * This function is optional for VCS backends to implement; if a backend
+ * doesn't implement this function, its return value will be NULL.
+ *
+ * If the given path is not under version control (or was not under revision
  * control at the time of $commit) or the file is marked as binary,
  * NULL is returned.
  *
@@ -551,81 +665,29 @@ fakevcs_backend_get_file_contents($commit, $path) {
  *   operations can pretty much screw up unique item identification otherwise.
  * @param $path
  *   The item whose history should be retrieved.
+ *
+ * @return
+ *   A structured array that consists of one element per line, with
+ *   line numbers as keys (starting from 1) and a structured array as values,
+ *   where each of them consists of elements with the following keys:
+ *
+ *   'username': The system specific VCS username of the last committer.
+ *   'line': The contents of the line, without linebreak characters.
+ *
+ *   NULL is returned if the given file is not under revision control,
+ *   or was not under version control at the time of $commit,
+ *   or if it is marked as binary file.
  */
 fakevcs_backend_get_file_annotation($commit, $path) {
   // In case the file is marked as text file:
   return array(
-    array(
+    1 => array(
       'username' => 'dries',
       'line'     => '<?php',
     ),
-    array(
+    2 => array(
       'username' => 'jpetso',
       'line'     => '// $Id$',
     ),
   );
 }
-
-
-/**
- * Implementation of [vcs_backend]_get_authors_by_uid():
- * Retrieve a Drupal uid / VCS username mapping given a set of user ids.
- * Non-existing uids are discarded and don't appear in the result value.
- *
- * @param $uid_list
- *   An array containing Drupal user ids.
- * @param $repositories
- *   An array of structured arrays containing repository information,
- *   presumably a subset of what is returned by versioncontrol_get_repositories().
- *   If given, only usernames of this specific repository are retrieved.
- *
- * @return
- *   A structured array that looks like
- *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
- *   If no system specific VCS usernames correlate to the given uids,
- *   an empty array is returned.
- */
-fakevcs_backend_get_authors_by_uid($uid_list, $repositories = NULL) {
-  // Let's say $uid_list == array(1, 56020, -328) and $repositories == NULL:
-  return array(
-    1 => array(
-      $core_repo    => 'dries',
-      $contrib_repo => 'dries',
-    ),
-    56020 => array(
-      $contrib_repo => 'jpetso',
-    ),
-  );
-}
-
-/**
- * Implementation of [vcs_backend]_get_authors_by_username():
- * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
- * Non-existing usernames are discarded and don't appear in the result value.
- *
- * @param $usernames
- *   An array containing system specific VCS usernames. Specified separately
- *   for each repository, like array($repo_id => array('dww', 'jpetso')).
- *
- * @return
- *   A structured array that looks like
- *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
- *   If no Drupal uids correlate to the given usernames,
- *   an empty array is returned.
- */
-fakevcs_backend_get_authors_by_username($usernames) {
-  // Let's say $usernames == array(
-  //   $core_repo => array('dries', 'jpetso', 'doesntexist'),
-  //   $contrib_repo => array('dries', 'jpetso', 'doesntexist'),
-  // ):
-  return array(
-    1 => array(
-      $core_repo    => 'dries',
-      $contrib_repo => 'dries',
-    ),
-    56020 => array(
-      $contrib_repo => 'jpetso',
-    ),
-  );
-}
-

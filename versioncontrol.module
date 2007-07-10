@@ -24,8 +24,8 @@ define('VERSIONCONTROL_ITEM_FILE',       0);
 define('VERSIONCONTROL_ITEM_DIRECTORY',  1);
 
 // VCS file types.
-define('VERSIONCONTROL_ITEM_TEXT',       0);
-define('VERSIONCONTROL_ITEM_BINARY',     1);
+define('VERSIONCONTROL_FILE_TEXT',       0);
+define('VERSIONCONTROL_FILE_BINARY',     1);
 
 // VCS actions for a single item (file or directory) in a commit.
 define('VERSIONCONTROL_ACTION_ADDED',    0);
@@ -112,7 +112,7 @@ versioncontrol_get_repositories($constraints = array()) {
  *   'uids': An array of Drupal user ids. If given, the result set will only
  *           contain commits that correspond to any of the specified users.
  *   'usernames': An array of system-specific usernames (the ones that the
- *                revision control systems themselves get to see).
+ *                version control systems themselves get to see).
  *                Specified separately for each repository, like
  *                array($repo_id => array('dww', 'jpetso')).
  *                If given, the result set will only contain commits that
@@ -185,6 +185,7 @@ versioncontrol_get_authors_by_username($usernames) {
 
 
 /**
+ * TODO: viewing the file for a specific branch or tag?
  * Retrieve the URL of the repository viewer that displays the given item
  * in the given repository at the time of the given commit.
  *
@@ -205,6 +206,7 @@ versioncontrol_get_url_view($repository, $commit, $path) {
 }
 
 /**
+ * TODO: diffing the file for a specific branch or tag?
  * Retrieve the URL of the repository viewer that displays the diff of the
  * given file in the given repository, showing the diff between the given
  * commit and the commit which preceded that one.
@@ -223,6 +225,25 @@ versioncontrol_get_url_view($repository, $commit, $path) {
  *   An empty string is returned if no diff URL has been defined.
  */
 versioncontrol_get_url_diff($repository, $commit, $filepath) {
+}
+
+/**
+ * Retrieve the URL of the issue tracker that displays the issue/case/bug page
+ * of an issue id which presumably has been mentioned in a commit message.
+ * As issue tracker urls are specific to each repository, this also needs
+ * to be given as argument.
+ *
+ * @param $repository
+ *   A structured array containing repository information, like a single
+ *   element of what versioncontrol_get_repositories() returns.
+ * @param $issue_id
+ *   A number that uniquely identifies the mentioned issue/case/bug.
+ *
+ * @return
+ *   The issue tracker URL corresponding to the given arguments.
+ *   An empty string is returned if no diff URL has been defined.
+ */
+versioncontrol_get_url_tracker($repository, $issue_id) {
 }
 
 
@@ -307,7 +328,6 @@ versioncontrol_get_commit_items($commit, $path, $recursive = FALSE) {
 }
 
 /**
- * Implementation of [vcs_backend]_get_commit_branches():
  * Retrieve the branches that have been affected by the given commit.
  *
  * @return
@@ -338,11 +358,162 @@ versioncontrol_get_commit_branches($commit) {
  *       ...
  *     ).
  *   An empty array is returned if there are no branches for this item.
- *   NULL is returned if the given path is not under revision control,
- *   or was not under revision control at the time of $commit.
+ *   NULL is returned if the given path is not under version control,
+ *   or was not under version control at the time of $commit.
  */
 versioncontrol_get_item_branches($commit, $path) {
   return versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_item_branches', array($commit, $path)
+  );
+}
+
+/**
+ * Retrieve all tags that exist for the given item $path, and how this item
+ * is named there.
+ *
+ * If the given path is not under version control (or was not under revision
+ * control at the time of $commit), NULL is returned.
+ * An empty array is returned if there are no tags for this item.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose tags should be retrieved.
+ *
+ * @return
+ *   A structured array that looks like
+ *     array(
+ *       $tag1_name => $tag1_path,
+ *       $tag2_name => $tag2_path,
+ *       ...
+ *     ).
+ *   An empty array is returned if there are no tags for this item.
+ *   NULL is returned if the given path is not under version control,
+ *   or was not under version control at the time of $commit.
+ */
+versioncontrol_get_item_tags($commit, $path) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_item_tags', array($commit, $path)
+  );
+}
+
+/**
+ * TODO: item history for only one branch?
+ * Retrieve the revisions where the given item $path has been changed, in
+ * reverse chronological order.
+ *
+ * If the given path is not under version control (or was not under version
+ * control at the time of $commit), NULL is returned.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose history should be retrieved.
+ *
+ * @return
+ *   An array containing the exact details of all item changes. Each element
+ *   of the array is a structured array consisting of elements with the
+ *   following keys:
+ *
+ *   'path': The path of the item name at the specific revision.
+ *   'action': Specifies how the item was modified.
+ *             One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   'revision': The current/new (file-level) revision of the item.
+ *               Given as a string, exists for all actions
+ *               except VERSIONCONTROL_ACTION_DELETED.
+ *   'previous revision': The (file-level) revision when this item last changed.
+ *                        Given as a string, exists for all actions
+ *                        except VERSIONCONTROL_ACTION_ADDED.
+ *   'source path': The previous location of the item. Only exists for the
+ *                  VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED
+ *                  and VERSIONCONTROL_ACTION_MERGED actions.
+ *   'source revision': Only exists for the VERSIONCONTROL_ACTION_MERGED action,
+ *                      and specifies the last (file-level) revision of the
+ *                      file that was merged into the current/new path.
+ *   'modified': Boolean value, specifies if a file was modified in addition
+ *               to the other action in the 'action' element of the array.
+ *               Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *               and VERSIONCONTROL_ACTION_COPIED actions.
+ *
+ *   A real-life example of such a return array can be found
+ *   in the FakeVCS example module.
+ */
+versioncontrol_get_item_history($commit, $path) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_item_history', array($commit, $path)
+  );
+}
+
+
+/**
+ * TODO: contents of the file for a specific branch or tag?
+ * Retrieve the text or binary data of the given file in the specified commit.
+ *
+ * This function is optional for VCS backends to implement; if a backend
+ * doesn't implement this function, its return value will be NULL.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose history should be retrieved.
+ *
+ * @return
+ *   A structured array containing the type and contents of the desired file
+ *   at the time of the commit, consisting of elements with the following keys:
+ *
+ *   'type': Specifies the file type, which is either
+ *           VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
+ *   'contents': The raw contents of the file.
+ *
+ *   NULL is returned if the given path is not under version control,
+ *   or was not under version control at the time of $commit, or if the
+ *   specific backend module does not implement retrieving file contents.
+ *
+ *   A real-life example of such a return array can be found
+ *   in the FakeVCS example module.
+ */
+versioncontrol_get_file_contents($commit, $path) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_file_contents', array($commit, $path)
+  );
+}
+
+/**
+ * TODO: annotation of the file for a specific branch or tag?
+ * Retrieve an array where each element represents a single line of the
+ * given file in the specified commit, annotated with the committer who last
+ * modified that line.
+ *
+ * This function is optional for VCS backends to implement; if a backend
+ * doesn't implement this function, its return value will be NULL.
+ *
+ * @param $commit
+ *   The point in time when the item had the name $path. Remember, renaming
+ *   operations can pretty much screw up unique item identification otherwise.
+ * @param $path
+ *   The item whose history should be retrieved.
+ *
+ * @return
+ *   A structured array that consists of one element per line, with
+ *   line numbers as keys (starting from 1) and a structured array as values,
+ *   where each of them consists of elements with the following keys:
+ *
+ *   'username': The system specific VCS username of the last committer.
+ *   'line': The contents of the line, without linebreak characters.
+ *
+ *   NULL is returned if the given path is not under version control,
+ *   or was not under version control at the time of $commit, or if it is
+ *   marked as binary file, or if the specific backend module does not
+ *   implement annotations.
+ *
+ *   A real-life example of such a return array can be found
+ *   in the FakeVCS example module.
+ */
+versioncontrol_get_file_annotation($commit, $path) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_file_annotation', array($commit, $path)
   );
 }
