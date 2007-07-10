@@ -14,7 +14,7 @@
 /**
  * Implementation of hook_versioncontrol_backends().
  */
-fakevcs_backend_versioncontrol_backends() {
+versioncontrol_fakevcs_versioncontrol_backends() {
   // Our example VCS is called FakeVCS, and supports all possible capabilities.
 
   return array(
@@ -32,7 +32,7 @@ fakevcs_backend_versioncontrol_backends() {
       // The prefix for function names that are used for this VCS's backend function calls.
       // I think we might not need this and call xxx_backend for the 'xxx' backend instead?
       // TODO: Look into how fago accomplished this in pageroute.
-      // 'prefix' => 'fakevcs_backend',
+      // 'prefix' => 'versioncontrol_fakevcs',
 
       // A list of optional capabilities, in addition to the required retrieval
       // of detailed commit information. All allowed values are listed below.
@@ -72,19 +72,19 @@ fakevcs_backend_versioncontrol_backends() {
 }
 
 /**
- * Implementation of [vcs_backend]_repository_additions():
+ * Implementation of [versioncontrol_backend]_repository_additions():
  * Return an array of FakeVCS specific repository information. In the finished
  * commit, this array will be accessible as $repository['fakevcs_specific'].
  * If no additions are necessary, this function returns NULL.
  */
-fakevcs_backend_repository_additions($repository) {
+versioncontrol_fakevcs_repository_additions($repository) {
   return array(
     'modules' => array('drupal', 'contributions');
   );
 }
 
 /**
- * Implementation of [vcs_backend]_filter_commits():
+ * Implementation of [versioncontrol_backend]_filter_commits():
  * Unset commits that don't match any of the given constraints.
  *
  * @param $commits
@@ -112,7 +112,7 @@ fakevcs_backend_repository_additions($repository) {
  *   modules like the CVS ones, the array would contain a 'modules' element
  *   for filtering by module.
  */
-fakevcs_backend_filter_commits(&$commits, $branches = NULL, $tags = NULL, $paths = NULL, $fakevcs_specific = NULL) {
+versioncontrol_fakevcs_filter_commits(&$commits, $branches = NULL, $tags = NULL, $paths = NULL, $fakevcs_specific = NULL) {
   foreach($commits as $key => $commit) {
     if ($constraint == 'matched') {
       continue;
@@ -127,12 +127,12 @@ fakevcs_backend_filter_commits(&$commits, $branches = NULL, $tags = NULL, $paths
 }
 
 /**
- * Implementation of [vcs_backend]_commit_additions():
+ * Implementation of [versioncontrol_backend]_commit_additions():
  * Return an array of FakeVCS specific commit information. In the finished
  * commit, this array will be accessible as $commit['fakevcs_specific'].
  * If no additions are necessary, this function returns NULL.
  */
-fakevcs_backend_commit_additions($commit) {
+versioncontrol_fakevcs_commit_additions($commit) {
   return array(
     'module' => 'contributions';
   );
@@ -140,7 +140,7 @@ fakevcs_backend_commit_additions($commit) {
 
 
 /**
- * Implementation of [vcs_backend]_get_authors_by_uid():
+ * Implementation of [versioncontrol_backend]_get_authors_by_uid():
  * Retrieve a Drupal uid / VCS username mapping given a set of user ids.
  * Non-existing uids are discarded and don't appear in the result value.
  *
@@ -157,7 +157,7 @@ fakevcs_backend_commit_additions($commit) {
  *   If no system specific VCS usernames correlate to the given uids,
  *   an empty array is returned.
  */
-fakevcs_backend_get_authors_by_uid($uid_list, $repositories = NULL) {
+versioncontrol_fakevcs_get_authors_by_uid($uid_list, $repositories = NULL) {
   // Let's say $uid_list == array(1, 56020, -328) and $repositories == NULL:
   return array(
     1 => array(
@@ -171,7 +171,7 @@ fakevcs_backend_get_authors_by_uid($uid_list, $repositories = NULL) {
 }
 
 /**
- * Implementation of [vcs_backend]_get_authors_by_username():
+ * Implementation of [versioncontrol_backend]_get_authors_by_username():
  * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
  * Non-existing usernames are discarded and don't appear in the result value.
  *
@@ -185,7 +185,7 @@ fakevcs_backend_get_authors_by_uid($uid_list, $repositories = NULL) {
  *   If no Drupal uids correlate to the given usernames,
  *   an empty array is returned.
  */
-fakevcs_backend_get_authors_by_username($usernames) {
+versioncontrol_fakevcs_get_authors_by_username($usernames) {
   // Let's say $usernames == array(
   //   $core_repo => array('dries', 'jpetso', 'doesntexist'),
   //   $contrib_repo => array('dries', 'jpetso', 'doesntexist'),
@@ -203,7 +203,7 @@ fakevcs_backend_get_authors_by_username($usernames) {
 
 
 /**
- * Implementation of [vcs_backend]_get_commit_actions():
+ * Implementation of [versioncontrol_backend]_get_commit_actions():
  * Retrieves detailed information about what happened in a single commit.
  *
  * @param $commit
@@ -237,7 +237,7 @@ fakevcs_backend_get_authors_by_username($usernames) {
  *               Only exists for the VERSIONCONTROL_ACTION_MOVED
  *               and VERSIONCONTROL_ACTION_COPIED actions.
  */
-fakevcs_backend_get_commit_actions($commit) {
+versioncontrol_fakevcs_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
   $commit = array(
     // The commit id, a simple running number. Doesn't have any specific
@@ -309,7 +309,7 @@ fakevcs_backend_get_commit_actions($commit) {
     // VERSIONCONTROL_ACTION_MERGED action: 
     // contains 'type', 'action', 'revision', 'previous revision',
     // 'source path' and 'source revision'
-    '/trunk/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module' => array(
+    '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
       'type'              => VERSIONCONTROL_ITEM_FILE,
       'action'            => VERSIONCONTROL_ACTION_MERGED,
       'revision'          => '404',
@@ -328,7 +328,7 @@ fakevcs_backend_get_commit_actions($commit) {
       'previous revision' => '397',
       'source path'       => '/trunk/contributions/modules/cvslog',
     ),
-    '/trunk/contributions/modules/versioncontrol/fakevcs_backend' => array(
+    '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'action'   => VERSIONCONTROL_ACTION_ADDED,
       'revision' => '404',
@@ -337,13 +337,13 @@ fakevcs_backend_get_commit_actions($commit) {
 }
 
 /**
- * Implementation of [vcs_backend]_get_commit_branches():
+ * Implementation of [versioncontrol_backend]_get_commit_branches():
  * Retrieve the branches that have been affected by the given commit.
  *
  * @return
  *   An array of strings that identify a branch in the respective repository.
  */
-fakevcs_backend_get_commit_branches($commit) {
+versioncontrol_fakevcs_get_commit_branches($commit) {
   // How CVS would probably do it
   return array('DRUPAL-5');
   // How SVN could also do it
@@ -351,7 +351,7 @@ fakevcs_backend_get_commit_branches($commit) {
 }
 
 /**
- * Implementation of [vcs_backend]_get_item_branches():
+ * Implementation of [versioncontrol_backend]_get_item_branches():
  * Retrieve all branches that exist for the given item $path, and how this item
  * is named there.
  *
@@ -372,7 +372,7 @@ fakevcs_backend_get_commit_branches($commit) {
  *   NULL is returned if the given path is not under version control,
  *   or was not under version control at the time of $commit.
  */
-fakevcs_backend_get_item_branches($commit, $path) {
+versioncontrol_fakevcs_get_item_branches($commit, $path) {
   // How CVS would probably do it
   return array(
     'HEAD' => $path,
@@ -387,7 +387,7 @@ fakevcs_backend_get_item_branches($commit, $path) {
 }
 
 /**
- * Implementation of [vcs_backend]_get_item_tags():
+ * Implementation of [versioncontrol_backend]_get_item_tags():
  * Retrieve all tags that exist for the given item $path, and how this item
  * is named there.
  *
@@ -412,7 +412,7 @@ fakevcs_backend_get_item_branches($commit, $path) {
  *   NULL is returned if the given path is not under version control,
  *   or was not under version control at the time of $commit.
  */
-fakevcs_backend_get_item_tags($commit, $path) {
+versioncontrol_fakevcs_get_item_tags($commit, $path) {
   // How CVS would probably do it
   return array(
     'DRUPAL-5--1-1' => $path,
@@ -428,7 +428,7 @@ fakevcs_backend_get_item_tags($commit, $path) {
 
 /**
  * TODO: items for only one branch?
- * Implementation of [vcs_backend]_get_items():
+ * Implementation of [versioncontrol_backend]_get_items():
  * Retrieve the set of files and directories that exist at a specified revision
  * in the given path inside the repository.
  *
@@ -455,7 +455,7 @@ fakevcs_backend_get_item_tags($commit, $path) {
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
  */
-fakevcs_backend_get_items($commit, $path, $recursive = FALSE) {
+versioncontrol_fakevcs_get_items($commit, $path, $recursive = FALSE) {
   // Assuming $commit is a single commit array that looks like this:
   $commit = array(
     // The plain, given part looks just like in _get_commit_actions(),
@@ -491,7 +491,7 @@ fakevcs_backend_get_items($commit, $path, $recursive = FALSE) {
       'type'      => VERSIONCONTROL_ITEM_FILE,
       'revision'  => '404',
     ),
-    '/trunk/contributions/modules/versioncontrol/fakevcs_backend' => array(
+    '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
       'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
       'revision'  => '497',
     ),
@@ -525,7 +525,7 @@ fakevcs_backend_get_items($commit, $path, $recursive = FALSE) {
       'type'      => VERSIONCONTROL_ITEM_FILE,
       'revision'  => '1.2.2.5',
     ),
-    '/contributions/modules/versioncontrol/fakevcs_backend' => array(
+    '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
       'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
       'revision'  => NULL,
     ),
@@ -543,7 +543,7 @@ fakevcs_backend_get_items($commit, $path, $recursive = FALSE) {
 
 /**
  * TODO: item history for only one branch?
- * Implementation of [vcs_backend]_get_item_history():
+ * Implementation of [versioncontrol_backend]_get_item_history():
  * Retrieve the revisions where the given item $path has been changed, in
  * reverse chronological order.
  *
@@ -581,7 +581,7 @@ fakevcs_backend_get_items($commit, $path, $recursive = FALSE) {
  *               Only exists for the VERSIONCONTROL_ACTION_MOVED
  *               and VERSIONCONTROL_ACTION_COPIED actions.
  */
-fakevcs_backend_get_item_history($commit, $path) {
+versioncontrol_fakevcs_get_item_history($commit, $path) {
   // Assuming $commit is a single commit array that looks like this:
   $commit = array(
     // The plain, given part looks just like in _get_commit_actions(),
@@ -614,7 +614,7 @@ fakevcs_backend_get_item_history($commit, $path) {
 
 /**
  * TODO: contents of the file for a specific branch or tag?
- * Implementation of [vcs_backend]_get_file_contents():
+ * Implementation of [versioncontrol_backend]_get_file_contents():
  * Retrieve the text or binary data of the given file in the specified commit.
  *
  * This function is optional for VCS backends to implement; if a backend
@@ -634,7 +634,7 @@ fakevcs_backend_get_item_history($commit, $path) {
  *           VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
  *   'contents': The raw contents of the file.
  */
-fakevcs_backend_get_file_contents($commit, $path) {
+versioncontrol_fakevcs_get_file_contents($commit, $path) {
   // In case the file is marked as text file:
   return array(
     'type'     => VERSIONCONTROL_FILE_TEXT,
@@ -649,7 +649,7 @@ fakevcs_backend_get_file_contents($commit, $path) {
 
 /**
  * TODO: annotation of the file for a specific branch or tag?
- * Implementation of [vcs_backend]_get_file_annotation():
+ * Implementation of [versioncontrol_backend]_get_file_annotation():
  * Retrieve an array where each element represents a single line of the
  * given file in the specified commit, annotated with the committer who last
  * modified that line.
@@ -679,7 +679,7 @@ fakevcs_backend_get_file_contents($commit, $path) {
  *   or was not under version control at the time of $commit,
  *   or if it is marked as binary file.
  */
-fakevcs_backend_get_file_annotation($commit, $path) {
+versioncontrol_fakevcs_get_file_annotation($commit, $path) {
   // In case the file is marked as text file:
   return array(
     1 => array(

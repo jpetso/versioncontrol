@@ -37,6 +37,49 @@ define('VERSIONCONTROL_ACTION_DELETED',  5);
 
 
 /**
+ * Call a function from the desired VCS backend and return its result value.
+ *
+ * @param $vcs
+ *   The unique string identifier of the version control system.
+ * @param $function
+ *   The function name without module prefix.
+ * @param $args
+ *   An array of argument that will be passed to the backend function.
+ *
+ * @return
+ *   Returns the result of the backend function. The result value of calls
+ *   where the backend function has no implementation is undefined, as functions
+ *   called by this function are considered mandatory for the backend.
+ */
+function _versioncontrol_call_backend($vcs, $function, $args) {
+  return call_user_func_array('versioncontrol_'. $vcs .'_'. $function, $args);
+}
+
+/**
+ * Call an optional function from the desired VCS backend and return
+ * its return value, or NULL if the backend doesn't implement this function.
+ *
+ * @param $vcs
+ *   The unique string identifier of the version control system.
+ * @param $function
+ *   The function name without module prefix.
+ * @param $args
+ *   An array of argument that will be passed to the backend function.
+ *
+ * @return
+ *   Returns the result of the backend function. The result value of calls
+ *   where the backend function has no implementation is NULL.
+ */
+function _versioncontrol_call_backend_optional($vcs, $function, $args) {
+  $full_function_name = 'versioncontrol_'. $vcs .'_'. $function;
+  if (function_exists($full_function_name)) {
+    return call_user_func_array($full_function_name, $args);
+  }
+  return NULL;
+}
+
+
+/**
  * Retrieve a set of repositories if they match the given constraints. If no
  * single repository matches these constraints, an empty array is returned.
  *
@@ -285,7 +328,7 @@ versioncontrol_get_url_tracker($repository, $issue_id) {
  *   in the FakeVCS example module.
  */
 versioncontrol_get_commit_actions($commit) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_commit_actions', array($commit)
   );
 }
@@ -298,7 +341,7 @@ versioncontrol_get_commit_actions($commit) {
  *   like for example array('DRUPAL-5') or array('trunk', '5.x').
  */
 versioncontrol_get_commit_branches($commit) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_commit_branches', array($commit)
   );
 }
@@ -325,7 +368,7 @@ versioncontrol_get_commit_branches($commit) {
  *   or was not under version control at the time of $commit.
  */
 versioncontrol_get_item_branches($commit, $path) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_item_branches', array($commit, $path)
   );
 }
@@ -356,7 +399,7 @@ versioncontrol_get_item_branches($commit, $path) {
  *   or was not under version control at the time of $commit.
  */
 versioncontrol_get_item_tags($commit, $path) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_item_tags', array($commit, $path)
   );
 }
@@ -393,7 +436,7 @@ versioncontrol_get_item_tags($commit, $path) {
  *   in the FakeVCS example module.
  */
 versioncontrol_get_items($commit, $path, $recursive = FALSE) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_items',
     array($commit, $path, $recursive)
   );
@@ -442,7 +485,7 @@ versioncontrol_get_items($commit, $path, $recursive = FALSE) {
  *   in the FakeVCS example module.
  */
 versioncontrol_get_item_history($commit, $path) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_item_history', array($commit, $path)
   );
 }
@@ -477,7 +520,7 @@ versioncontrol_get_item_history($commit, $path) {
  *   in the FakeVCS example module.
  */
 versioncontrol_get_file_contents($commit, $path) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend_optional(
     $commit['repository']['vcs'], 'get_file_contents', array($commit, $path)
   );
 }
@@ -514,7 +557,7 @@ versioncontrol_get_file_contents($commit, $path) {
  *   in the FakeVCS example module.
  */
 versioncontrol_get_file_annotation($commit, $path) {
-  return versioncontrol_call_backend(
+  return _versioncontrol_call_backend_optional(
     $commit['repository']['vcs'], 'get_file_annotation', array($commit, $path)
   );
 }
