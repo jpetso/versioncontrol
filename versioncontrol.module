@@ -35,6 +35,38 @@ define('VERSIONCONTROL_ACTION_COPIED',   3);
 define('VERSIONCONTROL_ACTION_MERGED',   4);
 define('VERSIONCONTROL_ACTION_DELETED',  5);
 
+/**
+ * Get a list of all backends and more detailed information about each of them.
+ *
+ * @return
+ *   A structured array containing information about all known backends.
+ *   Array keys are the unique string identifier of the version control system.
+ *   The corresponding array values are again structured arrays and consist
+ *   of elements with the following keys:
+ *
+ *   'name': The user-visible name of the VCS.
+ *   'description': A short description of the backend, if possible not longer
+ *                  than one or two sentences.
+ *   'capabilities': An array listing optional capabilities, in addition to the
+ *                   required functionality like retrieval of detailed
+ *                   commit information. Array values can be an arbitrary
+ *                   combination of VERSIONCONTROL_CAPABILITY_* values. If no
+ *                   additional capabilities are supported by the backend,
+ *                   this array will be empty.
+ *
+ *   If no single backends can be found, an empty array is returned.
+ *
+ *   A real-life example of such a result array can be found
+ *   in the FakeVCS example module.
+ */
+function versioncontrol_get_backends() {
+  static $backends;
+
+  if (!isset($backends)) {
+    $backends = module_invoke_all('versioncontrol_backends');
+  }
+  return $backends;
+}
 
 /**
  * Call a function from the desired VCS backend and return its result value.
@@ -80,8 +112,7 @@ function _versioncontrol_call_backend_optional($vcs, $function, $args) {
 
 
 /**
- * Retrieve a set of repositories if they match the given constraints. If no
- * single repository matches these constraints, an empty array is returned.
+ * Retrieve a set of repositories if they match the given constraints.
  *
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
@@ -108,16 +139,17 @@ function _versioncontrol_call_backend_optional($vcs, $function, $args) {
  *       to the versioncontrol_get_url_view() and versioncontrol_get_url_diff()
  *       functions if you need this functionality.
  *
- *   Additional elements may be added by specific version control system backends.
+ *   Additional elements may be added by specific version control system
+ *   backends. If no single repository matches these constraints,
+ *   an empty array is returned.
  */
 versioncontrol_get_repositories($constraints = array()) {
 }
 
 
 /**
- * Retrieve a set of commits for the specified repository if they match the
- * given constraints. If no single commit matches these constraints,
- * an empty array is returned.
+ * Retrieve a set of commits for the specified repository if they match
+ * the given constraints.
  *
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
@@ -183,7 +215,9 @@ versioncontrol_get_repositories($constraints = array()) {
  *               "27491" in Subversion or an SHA-1 key in various distributed
  *               version control systems.
  *
- *   Additional elements may be added by specific version control system backends.
+ *   Additional elements may be added by specific version control system
+ *   backends. If no single commit matches these constraints,
+ *   an empty array is returned.
  */
 versioncontrol_get_commits($constraints = array()) {
 }
@@ -324,7 +358,7 @@ versioncontrol_get_url_tracker($repository, $issue_id) {
  *               Only exists for the VERSIONCONTROL_ACTION_MOVED
  *               and VERSIONCONTROL_ACTION_COPIED actions.
  *
- *   A real-life example of such a return array can be found
+ *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
 versioncontrol_get_commit_actions($commit) {
@@ -432,7 +466,7 @@ versioncontrol_get_item_tags($commit, $path) {
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
  *
- *   A real-life example of such a return array can be found
+ *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
 versioncontrol_get_items($commit, $path, $recursive = FALSE) {
@@ -481,7 +515,7 @@ versioncontrol_get_items($commit, $path, $recursive = FALSE) {
  *               Only exists for the VERSIONCONTROL_ACTION_MOVED
  *               and VERSIONCONTROL_ACTION_COPIED actions.
  *
- *   A real-life example of such a return array can be found
+ *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
 versioncontrol_get_item_history($commit, $path) {
@@ -516,7 +550,7 @@ versioncontrol_get_item_history($commit, $path) {
  *   or was not under version control at the time of $commit, or if the
  *   specific backend module does not implement retrieving file contents.
  *
- *   A real-life example of such a return array can be found
+ *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
 versioncontrol_get_file_contents($commit, $path) {
@@ -553,11 +587,54 @@ versioncontrol_get_file_contents($commit, $path) {
  *   marked as binary file, or if the specific backend module does not
  *   implement annotations.
  *
- *   A real-life example of such a return array can be found
+ *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
 versioncontrol_get_file_annotation($commit, $path) {
   return _versioncontrol_call_backend_optional(
     $commit['repository']['vcs'], 'get_file_annotation', array($commit, $path)
   );
+}
+
+
+/**
+ * Call a function from the desired VCS backend and return its result value.
+ *
+ * @param $vcs
+ *   The unique string identifier of the version control system.
+ * @param $function
+ *   The function name without module prefix.
+ * @param $args
+ *   An array of argument that will be passed to the backend function.
+ *
+ * @return
+ *   Returns the result of the backend function. The result value of calls
+ *   where the backend function has no implementation is undefined, as functions
+ *   called by this function are considered mandatory for the backend.
+ */
+function _versioncontrol_call_backend($vcs, $function, $args) {
+  return call_user_func_array('versioncontrol_'. $vcs .'_'. $function, $args);
+}
+
+/**
+ * Call an optional function from the desired VCS backend and return
+ * its return value, or NULL if the backend doesn't implement this function.
+ *
+ * @param $vcs
+ *   The unique string identifier of the version control system.
+ * @param $function
+ *   The function name without module prefix.
+ * @param $args
+ *   An array of argument that will be passed to the backend function.
+ *
+ * @return
+ *   Returns the result of the backend function. The result value of calls
+ *   where the backend function has no implementation is NULL.
+ */
+function _versioncontrol_call_backend_optional($vcs, $function, $args) {
+  $full_function_name = 'versioncontrol_'. $vcs .'_'. $function;
+  if (function_exists($full_function_name)) {
+    return call_user_func_array($full_function_name, $args);
+  }
+  return NULL;
 }

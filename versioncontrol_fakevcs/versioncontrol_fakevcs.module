@@ -2,7 +2,7 @@
 // $Id$
 /**
  * @file
- * FakeVCS backend -
+ * FakeVCS backend for Version Control API -
  * An example module illustrating how to write a VCS backend.
  *
  * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
@@ -13,6 +13,22 @@
 
 /**
  * Implementation of hook_versioncontrol_backends().
+ *
+ * @return
+ *   A structured array containing information about this known backends.
+ *   Array key is the unique string identifier of the version control system.
+ *   The corresponding array values are again structured arrays and consist
+ *   of elements with the following keys:
+ *
+ *   'name': The user-visible name of the VCS.
+ *   'description': A short description of the backend, if possible not longer
+ *                  than one or two sentences.
+ *   'capabilities': An array listing optional capabilities, in addition to the
+ *                   required functionality like retrieval of detailed
+ *                   commit information. Array values can be an arbitrary
+ *                   combination of VERSIONCONTROL_CAPABILITY_* values. If no
+ *                   additional capabilities are supported by the backend,
+ *                   this array will be empty.
  */
 versioncontrol_fakevcs_versioncontrol_backends() {
   // Our example VCS is called FakeVCS, and supports all possible capabilities.
@@ -28,11 +44,6 @@ versioncontrol_fakevcs_versioncontrol_backends() {
       'description' => t('FakeVCS is a version control system that is '.
                          'specifically capable in doing everything that any '.
                          'other version control system might ever do.'),
-
-      // The prefix for function names that are used for this VCS's backend function calls.
-      // I think we might not need this and call xxx_backend for the 'xxx' backend instead?
-      // TODO: Look into how fago accomplished this in pageroute.
-      // 'prefix' => 'versioncontrol_fakevcs',
 
       // A list of optional capabilities, in addition to the required retrieval
       // of detailed commit information. All allowed values are listed below.
@@ -65,7 +76,7 @@ versioncontrol_fakevcs_versioncontrol_backends() {
       );
     ),
 
-    // More backend entries are possible - most modules won't need this,
+    // More backend entries are possible - modules probably won't need this,
     // but let's still provide the opportunity to do so, for consistency
     // with similar hooks from other modules and easier merging of the arrays.
   );
