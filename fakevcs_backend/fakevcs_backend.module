@@ -337,120 +337,6 @@ fakevcs_backend_get_commit_actions($commit) {
 }
 
 /**
- * Implementation of [vcs_backend]_get_commit_items():
- * Retrieve the set of files and directories that exist at a specified revision
- * in the given path inside the repository.
- *
- * @param $commit
- *   The commit whose items should be retrieved.
- * @param $path
- *   The item which holds the desired items that are to be listed.
- *   If $path is a file, the returned array only holds one single element.
- *   If $path is a directory, the returned array holds the element for $path
- *   itself, plus its child elements.
- * @param $recursive
- *   If FALSE, only the direct children of $path will be retrieved.
- *   If TRUE, you'll get every single descendant of $path.
- *
- * @return
- *   A structured array containing the exact details of which items exist(ed)
- *   at the time of the commit. Array keys are the current/new paths.
- *   The corresponding array values are again structured arrays and consist
- *   of elements with the following keys:
- *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
- */
-fakevcs_backend_get_commit_items($commit, $path, $recursive = FALSE) {
-  // Assuming $commit is a single commit array that looks like this:
-  $commit = array(
-    // The plain, given part looks just like in _get_commit_actions(),
-    // you can look up the descriptions there.
-    'commit_id' => 3456,
-    'repository' => $affected_repository,
-    'date' => time() + 23,
-    'uid' => $user->uid,
-    'username' => 'jpetso',
-    'message' => 'Diabolic commit to anywhere else, but not the versioncontrol module.',
-    'revision' => '666', // for this commit, let's assume this is an SVN repository
-  );
-  // ...and $path == '/trunk/contributions/modules/versioncontrol'.
-
-  return array(
-    '/trunk/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'revision'  => '502',
-    ),
-    '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '502',
-    ),
-    '/trunk/contributions/modules/versioncontrol/versioncontrol.info' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '404',
-    ),
-    '/trunk/contributions/modules/versioncontrol/versioncontrol.install' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '404',
-    ),
-    '/trunk/contributions/modules/versioncontrol/README.txt' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '404',
-    ),
-    '/trunk/contributions/modules/versioncontrol/fakevcs_backend' => array(
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'revision'  => '497',
-    ),
-  );
-
-  // Or the same thing in CVS - note the 'revision' elements.
-  // CVS doesn't do repository-wide revisions, so in addition to the branch
-  // or tag, the CVS backend would use the 'date' value instead of 'revision'
-  // to determine the then-current file list. Or the commit id if all of
-  // the querying is done from the database.
-  $commit['revision'] = NULL;
-
-  return array(
-    '/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'revision'  => NULL, // CVS doesn't track directory-level revisions
-    ),
-    '/contributions/modules/versioncontrol/versioncontrol.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '1.2.2.13',
-    ),
-    '/contributions/modules/versioncontrol/versioncontrol.info' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '1.1',
-    ),
-    '/contributions/modules/versioncontrol/versioncontrol.install' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '1.2.2.5',
-    ),
-    '/contributions/modules/versioncontrol/README.txt' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '1.2.2.5',
-    ),
-    '/contributions/modules/versioncontrol/fakevcs_backend' => array(
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'revision'  => NULL,
-    ),
-  );
-
-  // If $path is a file, say, '/trunk/contributions/modules/versioncontrol/versioncontrol.module',
-  // then you return just this one entry.
-  return array(
-    '/contributions/modules/versioncontrol/versioncontrol.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'revision'  => '1.2.2.13',
-    ),
-  );
-}
-
-/**
  * Implementation of [vcs_backend]_get_commit_branches():
  * Retrieve the branches that have been affected by the given commit.
  *
@@ -537,6 +423,121 @@ fakevcs_backend_get_item_tags($commit, $path) {
   return array(
     '5.x-1.1' => '/tags/5.x-1.1/contributions/modules/versioncontrol',
     '5.x-1.2' => '/tags/5.x-1.2/contributions/modules/versioncontrol',
+  );
+}
+
+/**
+ * TODO: items for only one branch?
+ * Implementation of [vcs_backend]_get_items():
+ * Retrieve the set of files and directories that exist at a specified revision
+ * in the given path inside the repository.
+ *
+ * @param $commit
+ *   The commit whose items should be retrieved.
+ * @param $path
+ *   The item which holds the desired items that are to be listed.
+ *   If $path is a file, the returned array only holds one single element.
+ *   If $path is a directory, the returned array holds the element for $path
+ *   itself, plus its child elements.
+ * @param $recursive
+ *   If FALSE, only the direct children of $path will be retrieved.
+ *   If TRUE, you'll get every single descendant of $path.
+ *
+ * @return
+ *   A structured array containing the exact details of which items exist(ed)
+ *   at the time of the commit. Array keys are the current/new paths.
+ *   The corresponding array values are again structured arrays and consist
+ *   of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ */
+fakevcs_backend_get_items($commit, $path, $recursive = FALSE) {
+  // Assuming $commit is a single commit array that looks like this:
+  $commit = array(
+    // The plain, given part looks just like in _get_commit_actions(),
+    // you can look up the descriptions there.
+    'commit_id' => 3456,
+    'repository' => $affected_repository,
+    'date' => time() + 23,
+    'uid' => $user->uid,
+    'username' => 'jpetso',
+    'message' => 'Diabolic commit to anywhere else, but not the versioncontrol module.',
+    'revision' => '666', // for this commit, let's assume this is an SVN repository
+  );
+  // ...and $path == '/trunk/contributions/modules/versioncontrol'.
+
+  return array(
+    '/trunk/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
+      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+      'revision'  => '502',
+    ),
+    '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '502',
+    ),
+    '/trunk/contributions/modules/versioncontrol/versioncontrol.info' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '404',
+    ),
+    '/trunk/contributions/modules/versioncontrol/versioncontrol.install' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '404',
+    ),
+    '/trunk/contributions/modules/versioncontrol/README.txt' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '404',
+    ),
+    '/trunk/contributions/modules/versioncontrol/fakevcs_backend' => array(
+      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+      'revision'  => '497',
+    ),
+  );
+
+  // Or the same thing in CVS - note the 'revision' elements.
+  // CVS doesn't do repository-wide revisions, so in addition to the branch
+  // or tag, the CVS backend would use the 'date' value instead of 'revision'
+  // to determine the then-current file list. Or the commit id if all of
+  // the querying is done from the database.
+  $commit['revision'] = NULL;
+
+  return array(
+    '/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
+      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+      'revision'  => NULL, // CVS doesn't track directory-level revisions
+    ),
+    '/contributions/modules/versioncontrol/versioncontrol.module' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '1.2.2.13',
+    ),
+    '/contributions/modules/versioncontrol/versioncontrol.info' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '1.1',
+    ),
+    '/contributions/modules/versioncontrol/versioncontrol.install' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '1.2.2.5',
+    ),
+    '/contributions/modules/versioncontrol/README.txt' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '1.2.2.5',
+    ),
+    '/contributions/modules/versioncontrol/fakevcs_backend' => array(
+      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+      'revision'  => NULL,
+    ),
+  );
+
+  // If $path is a file, say, '/trunk/contributions/modules/versioncontrol/versioncontrol.module',
+  // then you return just this one entry.
+  return array(
+    '/contributions/modules/versioncontrol/versioncontrol.module' => array(
+      'type'      => VERSIONCONTROL_ITEM_FILE,
+      'revision'  => '1.2.2.13',
+    ),
   );
 }
 

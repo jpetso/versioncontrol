@@ -291,43 +291,6 @@ versioncontrol_get_commit_actions($commit) {
 }
 
 /**
- * Retrieve the set of files and directories that exist at a specified revision
- * in the given path inside the repository.
- *
- * @param $commit
- *   The state of the repository for retrieving the items.
- * @param $path
- *   The item which holds the desired items that are to be listed.
- *   If $path is a file, the returned array only holds one single element.
- *   If $path is a directory, the returned array holds the element for $path
- *   itself, plus its child elements.
- * @param $recursive
- *   If FALSE, only the direct children of $path will be retrieved.
- *   If TRUE, you'll get every single descendant of $path.
- *
- * @return
- *   A structured array containing the exact details of which items exist(ed)
- *   at the time of the commit. Array keys are the current/new paths.
- *   The corresponding array values are again structured arrays and consist
- *   of elements with the following keys:
- *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
- *
- *   A real-life example of such a return array can be found
- *   in the FakeVCS example module.
- */
-versioncontrol_get_commit_items($commit, $path, $recursive = FALSE) {
-  return versioncontrol_call_backend(
-    $commit['repository']['vcs'], 'get_commit_items',
-    array($commit, $path, $recursive)
-  );
-}
-
-/**
  * Retrieve the branches that have been affected by the given commit.
  *
  * @return
@@ -395,6 +358,44 @@ versioncontrol_get_item_branches($commit, $path) {
 versioncontrol_get_item_tags($commit, $path) {
   return versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_item_tags', array($commit, $path)
+  );
+}
+
+/**
+ * TODO: items for only one branch?
+ * Retrieve the set of files and directories that exist at a specified revision
+ * in the given path inside the repository.
+ *
+ * @param $commit
+ *   The state of the repository for retrieving the items.
+ * @param $path
+ *   The item which holds the desired items that are to be listed.
+ *   If $path is a file, the returned array only holds one single element.
+ *   If $path is a directory, the returned array holds the element for $path
+ *   itself, plus its child elements.
+ * @param $recursive
+ *   If FALSE, only the direct children of $path will be retrieved.
+ *   If TRUE, you'll get every single descendant of $path.
+ *
+ * @return
+ *   A structured array containing the exact details of which items exist(ed)
+ *   at the time of the commit. Array keys are the current/new paths.
+ *   The corresponding array values are again structured arrays and consist
+ *   of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ *
+ *   A real-life example of such a return array can be found
+ *   in the FakeVCS example module.
+ */
+versioncontrol_get_items($commit, $path, $recursive = FALSE) {
+  return versioncontrol_call_backend(
+    $commit['repository']['vcs'], 'get_items',
+    array($commit, $path, $recursive)
   );
 }
 
