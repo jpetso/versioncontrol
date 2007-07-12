@@ -133,15 +133,16 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
  *           this will be a local directory (e.g. '/var/repos/drupal'),
  *           but it may also be some specialized string for remote repository
  *           access. How this string may look like depends on the backend.
- *   'url_view' and 'url_diff': Not meant to be used directly, please refer
- *       to the versioncontrol_get_url_view() and versioncontrol_get_url_diff()
+ *   'url_view', 'url_diff' and 'url_tracker': Not meant to be used directly,
+ *       please refer to the versioncontrol_get_url_view(),
+ *       versioncontrol_get_url_diff() and versioncontrol_get_url_tracker()
  *       functions if you need this functionality.
  *
  *   Additional elements may be added by specific version control system
  *   backends. If no single repository matches these constraints,
  *   an empty array is returned.
  */
-versioncontrol_get_repositories($constraints = array()) {
+function versioncontrol_get_repositories($constraints = array()) {
 }
 
 
@@ -214,7 +215,7 @@ versioncontrol_get_repositories($constraints = array()) {
  *   backends. If no single commit matches these constraints,
  *   an empty array is returned.
  */
-versioncontrol_get_commits($constraints = array()) {
+function versioncontrol_get_commits($constraints = array()) {
 }
 
 
@@ -232,33 +233,87 @@ versioncontrol_get_commits($constraints = array()) {
  *
  * @return
  *   A structured array that looks like
- *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   array(
+ *     $drupal_uid => array(
+ *       $repo_id => array(
+ *         'username'   => 'VCS username',
+ *         'repository' => $repository,
+ *       ),
+ *       ...
+ *     ),
+ *     ...
+ *   ).
  *   If no system specific VCS usernames correlate to the given uids,
  *   an empty array is returned.
  */
-versioncontrol_get_authors_by_uid($uid_list, $repositories = NULL) {
+function versioncontrol_get_authors_by_uid($uid_list, $repositories = NULL) {
+  if (!isset($repositories)) {
+    $repositories = versioncontrol_get_repositories(); // all of them.
+  }
+
+  $backends = array();
+  foreach ($repositories as $repository) {
+    if (!isset($backends[$repository['vcs']])) {
+      $backends[$repository['vcs']] = array();
+    }
+    $backends[$repository['vcs']][] = $repository;
+  }
+
+  $authors = array();
+  foreach ($backends as $vcs => $vcs_repositories) {
+    $authors = array_merge_recursive($authors, _versioncontrol_call_backend(
+      $vcs, 'get_authors_by_uid', array($uid_list, $vcs_repositories)
+    ));
+  }
+  return $authors;
 }
 
 /**
  * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
  * Non-existing usernames are discarded and don't appear in the result value.
  *
- * @param $usernames
+ * @param $usernames_by_repository
  *   An array containing system specific VCS usernames. Specified separately
- *   for each repository, like array($repo_id => array('dww', 'jpetso')).
- * @param $repositories
- *   An array of structured arrays containing repository information,
- *   presumably a subset of what is returned by versioncontrol_get_repositories().
- *   If given, only usernames of this specific repository will be considered.
- *   If NULL, usernames of all repositories will be looked up.
+ *   for each repository, like
+ *   array(
+ *     array(
+ *       'repository' => $repository,
+ *       'usernames' => array('dww', 'jpetso'),
+ *     ),
+ *     ...
+ *   ).
  *
  * @return
  *   A structured array that looks like
- *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   array(
+ *     $drupal_uid => array(
+ *       $repo_id => array(
+ *         'username'   => 'VCS username',
+ *         'repository' => $repository,
+ *       ),
+ *       ...
+ *     ),
+ *     ...
+ *   ).
  *   If no Drupal uids correlate to the given usernames,
  *   an empty array is returned.
  */
-versioncontrol_get_authors_by_username($usernames, $repositories = NULL) {
+function versioncontrol_get_authors_by_username($usernames_by_repository) {
+  $backends = array();
+  foreach ($usernames_by_repository as $mapping) {
+    if (!isset($backends[$mapping['repository']['vcs']])) {
+      $backends[$mapping['repository']['vcs']] = array();
+    }
+    $backends[$mapping['repository']['vcs']][] = $mapping;
+  }
+
+  $authors = array();
+  foreach ($backends as $vcs => $vcs_usernames) {
+    $authors = array_merge_recursive($authors, _versioncontrol_call_backend(
+      $vcs, 'get_authors_by_username', array($vcs_usernames)
+    ));
+  }
+  return $authors;
 }
 
 
@@ -289,7 +344,7 @@ versioncontrol_get_authors_by_username($usernames, $repositories = NULL) {
  *   An empty string is returned if no item view URL has been defined,
  *   or if the item cannot be viewed for any reason.
  */
-versioncontrol_get_url_view($repository, $item, $state = NULL) {
+function versioncontrol_get_url_view($repository, $item, $state = NULL) {
 }
 
 /**
@@ -309,7 +364,7 @@ versioncontrol_get_url_view($repository, $item, $state = NULL) {
  *   An empty string is returned if no diff URL has been defined,
  *   or if the two items cannot be diffed for any reason.
  */
-versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old) {
+function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old) {
 }
 
 /**
@@ -328,7 +383,7 @@ versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old) {
  *   The issue tracker URL corresponding to the given arguments.
  *   An empty string is returned if no issue tracker URL has been defined.
  */
-versioncontrol_get_url_tracker($repository, $issue_id) {
+function versioncontrol_get_url_tracker($repository, $issue_id) {
 }
 
 
@@ -375,7 +430,7 @@ versioncontrol_get_url_tracker($repository, $issue_id) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_commit_actions($commit) {
+function versioncontrol_get_commit_actions($commit) {
   return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_commit_actions', array($commit)
   );
@@ -388,7 +443,7 @@ versioncontrol_get_commit_actions($commit) {
  *   An array of strings that identify a branch in the respective repository,
  *   like for example array('DRUPAL-5') or array('trunk', '5.x').
  */
-versioncontrol_get_commit_branches($commit) {
+function versioncontrol_get_commit_branches($commit) {
   return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_commit_branches', array($commit)
   );
@@ -433,7 +488,7 @@ versioncontrol_get_commit_branches($commit) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_item_branches($repository, $item, $state = NULL) {
+function versioncontrol_get_item_branches($repository, $item, $state = NULL) {
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_item_branches', array($repository, $item, $state)
   );
@@ -479,7 +534,7 @@ versioncontrol_get_item_branches($repository, $item, $state = NULL) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_item_tags($repository, $item, $state = NULL) {
+function versioncontrol_get_item_tags($repository, $item, $state = NULL) {
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_item_tags', array($repository, $item, $state)
   );
@@ -538,7 +593,7 @@ versioncontrol_get_item_tags($repository, $item, $state = NULL) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_item_history($repository, $item) {
+function versioncontrol_get_item_history($repository, $item) {
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_item_history', array($repository, $item)
   );
@@ -593,7 +648,7 @@ versioncontrol_get_item_history($repository, $item) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_directory_contents($repository, $directory_item, $state = NULL, $recursive = FALSE) {
+function versioncontrol_get_directory_contents($repository, $directory_item, $state = NULL, $recursive = FALSE) {
   if ($directory_item['type'] != VERSIONCONTROL_ITEM_DIRECTORY) {
     return NULL;
   }
@@ -630,7 +685,7 @@ versioncontrol_get_directory_contents($repository, $directory_item, $state = NUL
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_file_contents($repository, $file_item) {
+function versioncontrol_get_file_contents($repository, $file_item) {
   if (!($file_item['type'] == VERSIONCONTROL_ITEM_FILE
         || $file_item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED)) {
     return NULL;
@@ -671,7 +726,7 @@ versioncontrol_get_file_contents($repository, $file_item) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-versioncontrol_get_file_annotation($repository, $file_item) {
+function versioncontrol_get_file_annotation($repository, $file_item) {
   if (!($file_item['type'] == VERSIONCONTROL_ITEM_FILE
         || $file_item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED)) {
     return NULL;

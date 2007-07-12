@@ -164,15 +164,24 @@ versioncontrol_fakevcs_commit_additions($commit) {
  *   If no system specific VCS usernames correlate to the given uids,
  *   an empty array is returned.
  */
-versioncontrol_fakevcs_get_authors_by_uid($uid_list, $repositories = NULL) {
+function versioncontrol_fakevcs_get_authors_by_uid($uid_list, $repositories = NULL) {
   // Let's say $uid_list == array(1, 56020, -328) and $repositories == NULL:
   return array(
     1 => array(
-      $core_repo    => 'dries',
-      $contrib_repo => 'dries',
+      $core_repo_id => array(
+        'username'   => 'dries',
+        'repository' => $core_repository,
+      ),
+      $contrib_repo_id => array(
+        'username'   => 'dries',
+        'repository' => $contrib_repository,
+      ),
     ),
     56020 => array(
-      $contrib_repo => 'jpetso',
+      $contrib_repo_id => array(
+        'username'   => 'jpetso',
+        'repository' => $contrib_repository,
+      ),
     ),
   );
 }
@@ -182,34 +191,60 @@ versioncontrol_fakevcs_get_authors_by_uid($uid_list, $repositories = NULL) {
  * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
  * Non-existing usernames are discarded and don't appear in the result value.
  *
- * @param $usernames
+ * @param $usernames_by_repository
  *   An array containing system specific VCS usernames. Specified separately
- *   for each repository, like array($repo_id => array('dww', 'jpetso')).
- * @param $repositories
- *   An array of structured arrays containing repository information,
- *   presumably a subset of what is returned by versioncontrol_get_repositories().
- *   If given, only usernames of this specific repository will be considered.
- *   If NULL, usernames of all repositories will be looked up.
+ *   for each repository, like
+ *   array(
+ *     array(
+ *       'repository' => $repository,
+ *       'usernames' => array('dww', 'jpetso'),
+ *     ),
+ *     ...
+ *   ).
  *
  * @return
  *   A structured array that looks like
- *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
+ *   array(
+ *     $drupal_uid => array(
+ *       $repo_id => array(
+ *         'username'   => 'VCS username',
+ *         'repository' => $repository,
+ *       ),
+ *       ...
+ *     ),
+ *     ...
+ *   ).
  *   If no Drupal uids correlate to the given usernames,
  *   an empty array is returned.
  */
-versioncontrol_fakevcs_get_authors_by_username($usernames, $repositories = NULL) {
-  // Let's say $usernames == array(
-  //   $core_repo => array('dries', 'jpetso', 'doesntexist'),
-  //   $contrib_repo => array('dries', 'jpetso', 'doesntexist'),
+function versioncontrol_fakevcs_get_authors_by_username($usernames_by_repository) {
+  // Let's say $repository_usernames == array(
+  //   array(
+  //     'repository' => $core_repository,
+  //     'usernames'  => array('dries', 'jpetso', 'doesntexist'),
+  //   ),
+  //   array(
+  //     'repository' => $contrib_repository,
+  //     'usernames'  => array('dries', 'jpetso', 'doesntexist'),
+  //   ),
   // )
-  // and $repositories == NULL:
+
   return array(
     1 => array(
-      $core_repo    => 'dries',
-      $contrib_repo => 'dries',
+      $core_repo_id => array(
+        'username'   => 'dries',
+        'repository' => $core_repository,
+      ),
+      $contrib_repo_id => array(
+        'username'   => 'dries',
+        'repository' => $contrib_repository,
+      ),
     ),
     56020 => array(
-      $contrib_repo => 'jpetso',
+      $contrib_repo_id => array(
+        'username'   => 'jpetso',
+        'repository' => $contrib_repository,
+      ),
     ),
   );
 }
@@ -256,7 +291,7 @@ versioncontrol_fakevcs_get_authors_by_username($usernames, $repositories = NULL)
  *   'branch': The branch in which the respective item is located. This will
  *             normally be the same value as $directory_item['branch'].
  */
-versioncontrol_fakevcs_get_commit_actions($commit) {
+function versioncontrol_fakevcs_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
   $commit = array(
     // The commit id, a simple running number. Doesn't have any specific
@@ -431,7 +466,7 @@ versioncontrol_fakevcs_get_commit_actions($commit) {
  * @return
  *   An array of strings that identify a branch in the respective repository.
  */
-versioncontrol_fakevcs_get_commit_branches($commit) {
+function versioncontrol_fakevcs_get_commit_branches($commit) {
   // How CVS would probably do it
   return array('DRUPAL-5');
   // How SVN could also do it
@@ -474,7 +509,7 @@ versioncontrol_fakevcs_get_commit_branches($commit) {
  *   NULL is returned if the given item is not inside the repository at the
  *   time of 'revision', or at the time of $state in case it is given.
  */
-versioncontrol_fakevcs_get_item_branches($repository, $item, $state = NULL) {
+function versioncontrol_fakevcs_get_item_branches($repository, $item, $state = NULL) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol/versioncontrol.module':
   return array(
@@ -547,7 +582,7 @@ versioncontrol_fakevcs_get_item_branches($repository, $item, $state = NULL) {
  *   NULL is returned if the given item is not inside the repository at the
  *   time of 'revision', or at the time of $state in case it is given.
  */
-versioncontrol_fakevcs_get_item_tags($repository, $item, $state = NULL) {
+function versioncontrol_fakevcs_get_item_tags($repository, $item, $state = NULL) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol':
   return array(
@@ -636,7 +671,7 @@ versioncontrol_fakevcs_get_item_tags($repository, $item, $state = NULL) {
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
  */
-versioncontrol_get_item_history($repository, $item) {
+function versioncontrol_get_item_history($repository, $item) {
   // Assuming $item is an item array that looks like this:
   $item = array(
     'type'     => VERSIONCONTROL_ITEM_FILE,
@@ -723,7 +758,7 @@ versioncontrol_get_item_history($repository, $item) {
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
  */
-versioncontrol_fakevcs_get_directory_contents($repository, $directory_item, $state = NULL, $recursive = FALSE) {
+function versioncontrol_fakevcs_get_directory_contents($repository, $directory_item, $state = NULL, $recursive = FALSE) {
   // Assuming $parent_item is an item array that looks like this:
   $directory_item = array(
     'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
@@ -865,7 +900,7 @@ versioncontrol_fakevcs_get_directory_contents($repository, $directory_item, $sta
  *   not a file item at all, or if the specific backend module does not
  *   implement retrieving file contents.
  */
-versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
+function versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
   // In case the file is marked as text file:
   return array(
     'file type' => VERSIONCONTROL_FILE_TEXT,
@@ -908,7 +943,7 @@ versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
  *   or if it is not a file item at all, or if it is marked as binary file, or
  *   if the specific backend module does not implement retrieving annotations.
  */
-versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
+function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
   // In case the file is marked as text file:
   return array(
     1 => array(
