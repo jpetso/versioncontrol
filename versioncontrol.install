@@ -33,6 +33,8 @@ function versioncontrol_install() {
         KEY uid (uid),
         KEY created (created)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+      // TODO: I think we also want the highest-level directory that was
+      //       affected by this commit.
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
         repo_id int unsigned NOT NULL auto_increment,
@@ -45,6 +47,7 @@ function versioncontrol_install() {
         PRIMARY KEY (repoid),
         UNIQUE KEY name (name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+      // TODO: add an url_commit to the table
 
       break;
 
