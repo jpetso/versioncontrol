@@ -133,10 +133,11 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
  *           this will be a local directory (e.g. '/var/repos/drupal'),
  *           but it may also be some specialized string for remote repository
  *           access. How this string may look like depends on the backend.
- *   'url_view', 'url_diff' and 'url_tracker': Not meant to be used directly,
- *       please refer to the versioncontrol_get_url_view(),
- *       versioncontrol_get_url_diff() and versioncontrol_get_url_tracker()
- *       functions if you need this functionality.
+ *   'url_commit_view', 'url_item_view', 'url_diff' and 'url_tracker':
+ *      Not meant to be used directly, please refer to the
+ *      versioncontrol_get_url_commit_view(), versioncontrol_get_url_item_view(),
+ *      versioncontrol_get_url_diff() and versioncontrol_get_url_tracker()
+ *      functions if you need this functionality.
  *
  *   Additional elements may be added by specific version control system
  *   backends. If no single repository matches these constraints,
@@ -318,6 +319,21 @@ function versioncontrol_get_authors_by_username($usernames_by_repository) {
 
 
 /**
+ * Retrieve the URL of the repository viewer that displays the given commit
+ * in the corresponding repository.
+ *
+ * @param $commit
+ *   The commit whose view URL should be retrieved.
+ *
+ * @return
+ *   The commit view URL corresponding to the given arguments.
+ *   An empty string is returned if no commit view URL has been defined,
+ *   or if the commit cannot be viewed for any reason.
+ */
+function versioncontrol_get_url_commit_view($commit) {
+}
+
+/**
  * Retrieve the URL of the repository viewer that displays the given item
  * in the corresponding repository.
  *
@@ -344,7 +360,7 @@ function versioncontrol_get_authors_by_username($usernames_by_repository) {
  *   An empty string is returned if no item view URL has been defined,
  *   or if the item cannot be viewed for any reason.
  */
-function versioncontrol_get_url_view($repository, $item, $state = NULL) {
+function versioncontrol_get_url_item_view($repository, $item, $state = NULL) {
 }
 
 /**
