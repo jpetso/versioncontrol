@@ -288,8 +288,7 @@ function versioncontrol_fakevcs_get_authors_by_username($usernames_by_repository
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'branch': The branch in which the respective item is located. This will
- *             normally be the same value as $directory_item['branch'].
+ *   'internal': May be set by the backend to remember additional item info.
  */
 function versioncontrol_fakevcs_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
@@ -324,7 +323,6 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_FILE,
         'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol.module',
         'revision' => '404',
-        'branch'   => 'trunk',
       ),
     ),
     // VERSIONCONTROL_ACTION_MODIFIED action:
@@ -335,14 +333,12 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_FILE,
         'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol.install',
         'revision' => '404',
-        'branch'   => 'trunk',
       ),
       'source items' => array(
         array(
           'type'     => VERSIONCONTROL_ITEM_FILE,
           'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol.install',
           'revision' => '354',
-          'branch'   => 'trunk',
         ),
       ),
     ),
@@ -355,7 +351,6 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
           'type'     => VERSIONCONTROL_ITEM_FILE,
           'path'     => '/branches/sandbox/jpetso/versioncontrol-notes.txt',
           'revision' => '41',
-          'branch'   => 'trunk',
         ),
       ),
     ),
@@ -368,14 +363,12 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_FILE,
         'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
         'revision' => '404',
-        'branch'   => 'trunk',
       ),
       'source items' => array(
         array(
           'type'     => VERSIONCONTROL_ITEM_FILE,
           'path'     => '/branches/sandbox/jpetso/versioncontrol.info',
           'revision' => '41',
-          'branch'   => NULL,
         ),
       ),
     ),
@@ -388,14 +381,12 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_FILE,
         'path'     => '/trunk/contributions/modules/versioncontrol/README.txt',
         'revision' => '404',
-        'branch'   => 'trunk',
       ),
       'source items' => array(
         array(
           'type'     => VERSIONCONTROL_ITEM_FILE,
           'path'     => '/branches/sandbox/jpetso/README-template.txt',
           'revision' => '220',
-          'branch'   => NULL,
         ),
       ),
     ),
@@ -407,20 +398,17 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_FILE,
         'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
         'revision' => '404',
-        'branch'   => 'trunk',
       ),
       'source items' => array(
         array(
           'type'     => VERSIONCONTROL_ITEM_FILE,
           'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
           'revision' => '403',
-          'branch'   => 'trunk',
         ),
         array(
           'type'     => VERSIONCONTROL_ITEM_FILE,
           'path'     => '/branches/work/versioncontrol-improve-data-structures/data-structures.php',
           'revision' => '198',
-          'branch'   => NULL,
         ),
       ),
     ),
@@ -435,14 +423,12 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
         'path'     => '/branches/5.x-1.x/contributions/modules/cvslog',
         'revision' => '404',
-        'branch'   => '5.x-1.x',
       ),
       'source items' => array(
         array(
           'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
           'path'     => '/trunk/contributions/modules/cvslog',
           'revision' => '397',
-          'branch'   => 'trunk',
         ),
       ),
     ),
@@ -453,7 +439,6 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
         'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
         'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs',
         'revision' => '404',
-        'branch'   => 'trunk',
       ),
     ),
   );
@@ -483,19 +468,6 @@ function versioncontrol_fakevcs_get_commit_branches($commit) {
  *   The repository that the item is located in.
  * @param $item
  *   The item whose set of branches should be retrieved.
- * @param $state
- *   If NULL, the (file-level) revision of the item will be used
- *   to determine at which point in time the branches should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given item tag. In addition to $directory_item['revision'],
- *     $directory_item['branch'] will then be disregarded as well.
  *
  * @return
  *   A structured array that looks like
@@ -505,11 +477,22 @@ function versioncontrol_fakevcs_get_commit_branches($commit) {
  *       ...
  *     ).
  *
+ *   The corresponding item values are again structured arrays
+ *   and consist of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the item at the specific revision.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ *   'internal': May be set by the backend to remember additional item info.
+ *
  *   An empty array is returned if there are no branches for this item.
  *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision', or at the time of $state in case it is given.
+ *   time of 'revision'.
  */
-function versioncontrol_fakevcs_get_item_branches($repository, $item, $state = NULL) {
+function versioncontrol_fakevcs_get_item_branches($repository, $item) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol/versioncontrol.module':
   return array(
@@ -517,13 +500,13 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item, $state = N
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
       'revision' => '1.23',
-      'branch'   => 'HEAD',
+      // no internal 'sticky branch' as this is on the HEAD branch
     ),
     'DRUPAL-5' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
       'revision' => '1.41',
-      'branch'   => 'DRUPAL-5',
+      'internal' => array('sticky branch' => 'DRUPAL-5'),
     ),
   );
   // How SVN could also do it, if for example
@@ -533,13 +516,11 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item, $state = N
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/trunk/contributions/modules/versioncontrol',
       'revision' => '23',
-      'branch'   => 'trunk',
     ),
     '5.x-1.x' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/branches/5.x-1.x/contributions/modules/versioncontrol',
       'revision' => '41',
-      'branch'   => '5.x-1.x',
     ),
   );
 }
@@ -553,19 +534,6 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item, $state = N
  *   The repository that the item is located in.
  * @param $item
  *   The item whose set of tags should be retrieved.
- * @param $state
- *   If NULL, the (file-level) revision of the item will be used
- *   to determine at which point in time the tags should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given item tag. In addition to $directory_item['revision'],
- *     $directory_item['branch'] will then be disregarded as well.
  *
  * @return
  *   A structured array that looks like
@@ -575,14 +543,22 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item, $state = N
  *       ...
  *     ).
  *
- *   As a tag does not correspond to any branch, the 'branch' property
- *   of all returned items will be set to NULL.
+ *   The corresponding item values are again structured arrays
+ *   and consist of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the item at the specific revision.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   An empty array is returned if there are no tags for this item.
  *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision', or at the time of $state in case it is given.
+ *   time of 'revision'.
  */
-function versioncontrol_fakevcs_get_item_tags($repository, $item, $state = NULL) {
+function versioncontrol_fakevcs_get_item_tags($repository, $item) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol':
   return array(
@@ -591,31 +567,28 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item, $state = NULL)
       'path'     => '/contributions/modules/versioncontrol',
       'revision' => NULL, // Right, it's a directory in CVS -> unversioned.
                           // Files of course would indeed get a 'revision' entry.
-      'branch'   => NULL, // 'DRUPAL-5--1-1' is a tag, not a branch.
+      'internal' => array('sticky tag' => 'DRUPAL-5--1-1'),
     ),
     'DRUPAL-5--1-2' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol',
       'revision' => NULL,
-      'branch'   => NULL,
+      'internal' => array('sticky tag' => 'DRUPAL-5--1-2'),
     ),
   );
 
   // How SVN could also do it, if for example
-  // $item['path'] == '/tags/5.x-1.2/contributions/modules/versioncontrol/versioncontrol.module'
-  // and $state == array('tag' => '5.x-1.2'):
+  // $item['path'] == '/tags/5.x-1.2/contributions/modules/versioncontrol/versioncontrol.module':
   return array(
     '5.x-1.1' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'path'     => '/tags/5.x-1.1/contributions/modules/versioncontrol/versioncontrol.module',
       'revision' => '15',
-      'branch'   => NULL,
     ),
     '5.x-1.2' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/tags/5.x-1.1/contributions/modules/versioncontrol/versioncontrol.module',
+      'path'     => '/tags/5.x-1.2/contributions/modules/versioncontrol/versioncontrol.module',
       'revision' => '16',
-      'branch'   => NULL,
     ),
   );
 }
@@ -665,8 +638,7 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item, $state = NULL)
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'branch': The branch in which the respective item is located. This will
- *             normally be the same value as $directory_item['branch'].
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -677,7 +649,6 @@ function versioncontrol_get_item_history($repository, $item) {
     'type'     => VERSIONCONTROL_ITEM_FILE,
     'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
     'revision' => '666',
-    'branch'   => 'trunk',
   );
   // and $repository is some SVN repository.
 
@@ -688,14 +659,12 @@ function versioncontrol_get_item_history($repository, $item) {
         'type'         => VERSIONCONTROL_ITEM_FILE,
         'path'         => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
         'revision'     => '404',
-        'branch'       => 'trunk',
       ),
       'source items' => array(
         array(
           'type'       => VERSIONCONTROL_ITEM_FILE,
           'revision'   => '41',
           'path'       => '/branches/sandbox/jpetso/versioncontrol.info',
-          'branch'     => NULL,
         ),
       ),
       'modified'     => FALSE,
@@ -721,20 +690,6 @@ function versioncontrol_get_item_history($repository, $item) {
  *   The repository that the directory item is located in.
  * @param $directory_item
  *   The parent item of the the items that should be listed.
- * @param $state
- *   If NULL, the (file-level) revision of the directory item will be used
- *   to determine at which point in time the items should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given directory tag. In addition to $directory_item['revision'],
- *     $directory_item['branch'] will then be disregarded as well.
- *
  * @param $recursive
  *   If FALSE, only the direct children of $path will be retrieved.
  *   If TRUE, you'll get every single descendant of $path.
@@ -752,58 +707,50 @@ function versioncontrol_get_item_history($repository, $item) {
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'branch': The branch in which the respective item is located. This will
- *             normally be the same value as $directory_item['branch'].
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
  */
-function versioncontrol_fakevcs_get_directory_contents($repository, $directory_item, $state = NULL, $recursive = FALSE) {
+function versioncontrol_fakevcs_get_directory_contents($repository, $directory_item, $recursive = FALSE) {
   // Assuming $parent_item is an item array that looks like this:
   $directory_item = array(
     'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
     'path'     => '/trunk/contributions/modules/versioncontrol',
     'revision' => '666',
-    'branch'   => 'trunk',
   );
-  // $repository is some SVN repository, and $recursive == FALSE.
+  // $repository is some SVN repository and $recursive == FALSE.
 
   return array(
     '/trunk/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
       'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'      => '/trunk/contributions/modules/versioncontrol',
       'revision'  => '502',
-      'branch'    => 'trunk',
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
       'type'      => VERSIONCONTROL_ITEM_FILE,
       'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.module',
       'revision'  => '502',
-      'branch'    => 'trunk',
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol.info' => array(
       'type'      => VERSIONCONTROL_ITEM_FILE,
       'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
       'revision'  => '404',
-      'branch'    => 'trunk',
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol.install' => array(
       'type'      => VERSIONCONTROL_ITEM_FILE,
       'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.install',
       'revision'  => '404',
-      'branch'    => 'trunk',
     ),
     '/trunk/contributions/modules/versioncontrol/README.txt' => array(
       'type'      => VERSIONCONTROL_ITEM_FILE,
       'path'      => '/trunk/contributions/modules/versioncontrol/README.txt',
       'revision'  => '404',
-      'branch'    => 'trunk',
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
       'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs.txt',
       'revision'  => '497',
-      'branch'    => 'trunk',
     ),
   );
 
@@ -813,64 +760,79 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
     'path'     => '/contributions/modules/versioncontrol',
     'revision' => NULL,
-    'branch'   => 'HEAD',
   );
-  // $repository is some CVS repository, and $recursive == TRUE.
+  // $repository is some CVS repository and $recursive == TRUE.
 
   return array(
     '/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'      => '/contributions/modules/versioncontrol',
-      'revision'  => NULL, // CVS doesn't track directory-level revisions
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+      'path'     => '/contributions/modules/versioncontrol',
+      'revision' => NULL, // CVS doesn't track directory-level revisions
     ),
     '/contributions/modules/versioncontrol/versioncontrol.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision'  => '1.19',
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_FILE,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
+      'revision' => '1.19',
     ),
     '/contributions/modules/versioncontrol/versioncontrol.info' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/contributions/modules/versioncontrol/versioncontrol.info',
-      'revision'  => '1.1',
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_FILE,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol.info',
+      'revision' => '1.1',
     ),
     '/contributions/modules/versioncontrol/versioncontrol.install' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/contributions/modules/versioncontrol/versioncontrol.install',
-      'revision'  => '1.5',
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_FILE,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol.install',
+      'revision' => '1.5',
     ),
     '/contributions/modules/versioncontrol/README.txt' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/contributions/modules/versioncontrol/README.txt',
-      'revision'  => '1.1',
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_FILE,
+      'path'     => '/contributions/modules/versioncontrol/README.txt',
+      'revision' => '1.1',
     ),
     '/contributions/modules/versioncontrol/fakevcs_backend' => array(
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'      => '/contributions/modules/versioncontrol/fakevcs_backend',
-      'revision'  => NULL,
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+      'path'     => '/contributions/modules/versioncontrol/fakevcs_backend',
+      'revision' => NULL,
     ),
     '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE_DELETED, // only for non-atomic-commit VCSs (= CVS)
-      'path'      => '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module',
-      'revision'  => '1.11', // last existing version
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_FILE_DELETED, // only for non-atomic-commit VCSs (= CVS)
+      'path'     => '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module',
+      'revision' => '1.11', // last existing version
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'      => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision'  => NULL,
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
+      'revision' => NULL,
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
-      'revision'  => '1.2',
-      'branch'    => 'HEAD',
+      'type'     => VERSIONCONTROL_ITEM_FILE,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
+      'revision' => '1.2',
+    ),
+  );
+
+  // And when an item comes in that has been marked with another branch or tag,
+  // then use that one instead of the main branch.
+  $directory_item = array(
+      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
+      'revision' => NULL,
+      'internal' => array('sticky branch' => 'DRUPAL-5'),
+    ),
+  // $repository is some CVS repository and $recursive == FALSE.
+
+  return array(
+    '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
+      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
+      'revision' => NULL,
+      'internal' => array('sticky branch' => 'DRUPAL-5'),
+    ),
+    '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
+      'type'     => VERSIONCONTROL_ITEM_FILE,
+      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
+      'revision' => '1.2',
+      'internal' => array('sticky branch' => 'DRUPAL-5'),
     ),
   );
 }

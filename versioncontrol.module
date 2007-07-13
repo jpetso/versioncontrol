@@ -341,26 +341,13 @@ function versioncontrol_get_url_commit_view($commit) {
  *   The repository that the item is located in.
  * @param $item
  *   The item whose view URL should be retrieved.
- * @param $state
- *   If NULL, the (file-level) revision of the item will be used
- *   to determine at which point in time the item should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given tag. In addition to $item['revision'],
- *     $item['branch'] will then be disregarded as well.
  *
  * @return
  *   The item view URL corresponding to the given arguments.
  *   An empty string is returned if no item view URL has been defined,
  *   or if the item cannot be viewed for any reason.
  */
-function versioncontrol_get_url_item_view($repository, $item, $state = NULL) {
+function versioncontrol_get_url_item_view($repository, $item) {
 }
 
 /**
@@ -440,8 +427,7 @@ function versioncontrol_get_url_tracker($repository, $issue_id) {
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'branch': The branch in which the respective item is located. This will
- *             normally be the same value as $directory_item['branch'].
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
@@ -475,19 +461,6 @@ function versioncontrol_get_commit_branches($commit) {
  *   The repository that the item is located in.
  * @param $item
  *   The item whose set of branches should be retrieved.
- * @param $state
- *   If NULL, the (file-level) revision of the item will be used
- *   to determine at which point in time the branches should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given item tag. In addition to $directory_item['revision'],
- *     $directory_item['branch'] will then be disregarded as well.
  *
  * @return
  *   A structured array that looks like
@@ -497,16 +470,27 @@ function versioncontrol_get_commit_branches($commit) {
  *       ...
  *     ).
  *
+ *   The corresponding item values are again structured arrays
+ *   and consist of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the item at the specific revision.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ *   'internal': May be set by the backend to remember additional item info.
+ *
  *   An empty array is returned if there are no branches for this item.
  *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision', or at the time of $state in case it is given.
+ *   time of 'revision'.
  *
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-function versioncontrol_get_item_branches($repository, $item, $state = NULL) {
+function versioncontrol_get_item_branches($repository, $item) {
   return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_item_branches', array($repository, $item, $state)
+    $repository['vcs'], 'get_item_branches', array($repository, $item)
   );
 }
 
@@ -518,19 +502,6 @@ function versioncontrol_get_item_branches($repository, $item, $state = NULL) {
  *   The repository that the item is located in.
  * @param $item
  *   The item whose history should be retrieved.
- * @param $state
- *   If NULL, the (file-level) revision of the item will be used
- *   to determine at which point in time the tags should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given item tag. In addition to $directory_item['revision'],
- *     $directory_item['branch'] will then be disregarded as well.
  *
  * @return
  *   A structured array that looks like
@@ -540,19 +511,27 @@ function versioncontrol_get_item_branches($repository, $item, $state = NULL) {
  *       ...
  *     ).
  *
- *   As a tag does not correspond to any branch, the 'branch' property
- *   of all returned items will be set to NULL.
+ *   The corresponding item values are again structured arrays
+ *   and consist of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the item at the specific revision.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   An empty array is returned if there are no tags for this item.
  *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision', or at the time of $state in case it is given.
+ *   time of 'revision'.
  *
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-function versioncontrol_get_item_tags($repository, $item, $state = NULL) {
+function versioncontrol_get_item_tags($repository, $item) {
   return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_item_tags', array($repository, $item, $state)
+    $repository['vcs'], 'get_item_tags', array($repository, $item)
   );
 }
 
@@ -600,8 +579,7 @@ function versioncontrol_get_item_tags($repository, $item, $state = NULL) {
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'branch': The branch in which the respective item is located. This will
- *             normally be the same value as $directory_item['branch'].
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -624,20 +602,6 @@ function versioncontrol_get_item_history($repository, $item) {
  *   The repository that the directory item is located in.
  * @param $directory_item
  *   The parent item of the the items that should be listed.
- * @param $state
- *   If NULL, the (file-level) revision of the directory item will be used
- *   to determine at which point in time the items should be retrieved.
- *   If given, this value will be used instead. Apart from NULL, this can be
- *   one of the following structured array variants:
- *
- *   array('revision' => $revision_string):
- *     Uses a given global revision identifier of this repository.
- *   array('date' => $timestamp):
- *     Uses a given Unix timestamp.
- *   array('tag' => $tag_name):
- *     Uses a given directory tag. In addition to $directory_item['revision'],
- *     $directory_item['branch'] will then be disregarded as well.
- *
  * @param $recursive
  *   If FALSE, only the direct children of $path will be retrieved.
  *   If TRUE, you'll get every single descendant of $path.
@@ -655,8 +619,7 @@ function versioncontrol_get_item_history($repository, $item) {
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'branch': The branch in which the respective item is located. This will
- *             normally be the same value as $directory_item['branch'].
+ *   'internal': May be set by the backend to remember additional item info.
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
@@ -664,13 +627,13 @@ function versioncontrol_get_item_history($repository, $item) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
-function versioncontrol_get_directory_contents($repository, $directory_item, $state = NULL, $recursive = FALSE) {
+function versioncontrol_get_directory_contents($repository, $directory_item, $recursive = FALSE) {
   if ($directory_item['type'] != VERSIONCONTROL_ITEM_DIRECTORY) {
     return NULL;
   }
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_directory_contents',
-    array($repository, $directory_item, $state, $recursive)
+    array($repository, $directory_item, $recursive)
   );
 }
 
