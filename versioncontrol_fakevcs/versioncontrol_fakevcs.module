@@ -675,7 +675,6 @@ function versioncontrol_get_item_history($repository, $item) {
         'type'         => VERSIONCONTROL_ITEM_FILE,
         'revision'     => '41',
         'path'         => '/branches/sandbox/jpetso/versioncontrol.info',
-        'branch'       => NULL,
       ),
     ),
   );
