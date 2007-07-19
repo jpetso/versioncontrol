@@ -29,7 +29,7 @@ function versioncontrol_bootstrap($drupal_path, $phase) {
   // bootstrap Drupal so we can use drupal functions to access the databases, etc.
   if (!file_exists('./includes/bootstrap.inc')) {
     $stderr = fopen("php://stderr", "w");
-    fwrite($stderr, "Error: failed to load Drupal's bootstrap.inc file.");
+    fwrite($stderr, "Error: failed to load Drupal's bootstrap.inc file.\n");
     exit(1);
   }
   require_once './includes/bootstrap.inc';
