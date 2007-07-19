@@ -38,7 +38,7 @@
  *                     How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
  *                     If the backend has registered itself with the
- *                     VERSIONCONTROL_AUTOADD_COMMITS option, all items
+ *                     VERSIONCONTROL_FLAG_AUTOADD_COMMITS option, all items
  *                     of this array will automatically be inserted into the
  *                     {versioncontrol_[xxx]_commits} table.
  *
@@ -105,7 +105,7 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
 
   // Auto-add commit info from $commit['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
-  $is_autoadd = in_array(VERSIONCONTROL_AUTOADD_COMMITS,
+  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_COMMITS,
                          $backends[$commit['repository']['vcs']]['flags']);
   if ($is_autoadd) {
     $table_name = 'versioncontrol_'. $commit['repository']['vcs'] .'_commits';

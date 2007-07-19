@@ -200,7 +200,7 @@ function versioncontrol_get_repositories($constraints = array()) {
   $result_repositories = array();
 
   // Fetch VCS specific repository data additions, either by ourselves (if the
-  // VERSIONCONTROL_AUTOADD_REPOSITORIES flag has been set by the backend)
+  // VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES flag has been set by the backend)
   // or by calling [vcs_backend]_alter_repositories().
   foreach ($repositories_by_backend as $vcs => $vcs_repositories) {
     $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
