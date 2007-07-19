@@ -7,10 +7,7 @@
  *
  * Copyright 2006 by Karthik ("Zen", http://drupal.org/user/21209)
  * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
- * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
- *
- * Distributed under the GNU General Public Licence version 2 or higher,
- * as published by the FSF on http://www.gnu.org/copyleft/gpl.html
+ * Copyright 2007 by Jakob Petsovits (http://drupal.org/user/56020)
  */
 
 /**
@@ -26,15 +23,14 @@ function versioncontrol_install() {
         date bigint NOT NULL default '0',
         uid int unsigned NOT NULL default '0',
         username varchar(64) NOT NULL default '',
+        directory varchar(255) NOT NULL default '',
         message text,
         revision varchar(255) default NULL,
-        PRIMARY KEY (cid),
-        KEY repoid (repoid),
+        PRIMARY KEY (commit_id),
+        KEY repoid (repo_id),
         KEY uid (uid),
-        KEY created (created)
+        KEY date (date)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-      // TODO: I think we also want the highest-level directory that was
-      //       affected by this commit.
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
         repo_id int unsigned NOT NULL auto_increment,
@@ -45,7 +41,7 @@ function versioncontrol_install() {
         url_item_view varchar(255) NOT NULL default '',
         url_diff varchar(255) NOT NULL default '',
         url_tracker varchar(255) NOT NULL default '',
-        PRIMARY KEY (repoid),
+        PRIMARY KEY (repo_id),
         UNIQUE KEY name (name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
@@ -54,4 +50,13 @@ function versioncontrol_install() {
     case 'pgsql':
       break;
   }
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function versioncontrol_uninstall() {
+  db_query("DROP TABLE {versioncontrol_commits}");
+  db_query("DROP TABLE {versioncontrol_repositories}");
 }

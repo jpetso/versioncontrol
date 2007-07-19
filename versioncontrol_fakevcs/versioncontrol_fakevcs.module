@@ -5,10 +5,7 @@
  * FakeVCS backend for Version Control API -
  * An example module illustrating how to write a VCS backend.
  *
- * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
- *
- * Distributed under the GNU General Public Licence version 2 or higher,
- * as published by the FSF on http://www.gnu.org/copyleft/gpl.html
+ * Copyright 2007 by Jakob Petsovits (http://drupal.org/user/56020)
  */
 
 /**
@@ -29,6 +26,10 @@
  *                   combination of VERSIONCONTROL_CAPABILITY_* values. If no
  *                   additional capabilities are supported by the backend,
  *                   this array will be empty.
+ *   'autoadd': An array listing which tables should be managed by
+ *              Version Control API instead of doing it manually in the backend.
+ *              If no array additions should be automatically managed,
+ *              this array will be empty.
  */
 versioncontrol_fakevcs_versioncontrol_backends() {
   // Our example VCS is called FakeVCS, and supports all possible capabilities.
@@ -40,10 +41,8 @@ versioncontrol_fakevcs_versioncontrol_backends() {
       // The user-visible name of the VCS.
       'name' => 'FakeVCS',
 
-      // A short description of the backend, if possible not longer than one or two sentences.
-      'description' => t('FakeVCS is a version control system that is '.
-                         'specifically capable in doing everything that any '.
-                         'other version control system might ever do.'),
+      // A short description of the VCS, if possible not longer than one or two sentences.
+      'description' => t('FakeVCS is a version control system that is specifically capable in doing everything that any other version control system might ever do.'),
 
       // A list of optional capabilities, in addition to the required retrieval
       // of detailed commit information. All allowed values are listed below.
@@ -73,7 +72,24 @@ versioncontrol_fakevcs_versioncontrol_backends() {
         // version controlled directory, along with revision identifiers for
         // each of the files. Comes in handy for repository browsing.
         VERSIONCONTROL_CAPABILITY_LIST_FILES,
-      );
+      ),
+
+      // An array listing which tables should be managed by Version Control API
+      // instead of doing it manually in the backend.
+      // All allowed values are listed below.
+      'flags' => array(
+        // versioncontrol_insert_repository() will automatically insert
+        // array elements from $repository['[xxx]_specific'] into
+        // {versioncontrol_[xxx]_repositories} and versioncontrol_get_repositories()
+        // will automatically fetch it from there.
+        VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
+
+        // versioncontrol_insert_commit() will automatically insert
+        // array elements from $commit['[xxx]_specific'] into
+        // {versioncontrol_[xxx]_commits} and versioncontrol_get_commits()
+        // will automatically fetch it from there.
+        VERSIONCONTROL_FLAG_AUTOADD_COMMITS,
+      ),
     ),
 
     // More backend entries are possible - modules probably won't need this,
@@ -83,15 +99,23 @@ versioncontrol_fakevcs_versioncontrol_backends() {
 }
 
 /**
- * Implementation of [versioncontrol_backend]_repository_additions():
- * Return an array of FakeVCS specific repository information. In the finished
- * commit, this array will be accessible as $repository['fakevcs_specific'].
- * If no additions are necessary, this function returns NULL.
+ * Implementation of [versioncontrol_backend]_alter_repositories():
+ * Add VCS specific repository data into a $repository['[xxx]_specific'] array.
+ * By convention, this function only adds data in this specific element
+ * and doesn't modify other parts of the repository array.
+ *
+ * Also, this function is optional for backend modules to implement. If you
+ * don't need custom additions to the repositories, just don't implement it.
+ *
+ * @param $repositories
+ *   The repositories for which this backend module needs to retrieve
+ *   additional repository data. This is an array like the one returned by
+ *   versioncontrol_get_repositories(), and even the '[xxx]_specific' array
+ *   already exists. (If the VERSIONCONTROL_AUTOADD_REPOSITORIES flag has been
+ *   set by this module, it may even be filled with values already.)
  */
-versioncontrol_fakevcs_repository_additions($repository) {
-  return array(
-    'modules' => array('drupal', 'contributions');
-  );
+versioncontrol_fakevcs_alter_repositories(&$repositories) {
+  $repositories[$repo_id]['fakevcs_specific']['modules'] = array('drupal', 'contributions');
 }
 
 /**
@@ -134,15 +158,23 @@ versioncontrol_fakevcs_filter_commits(&$commits, $branches = NULL, $paths = NULL
 }
 
 /**
- * Implementation of [versioncontrol_backend]_commit_additions():
- * Return an array of FakeVCS specific commit information. In the finished
- * commit, this array will be accessible as $commit['fakevcs_specific'].
- * If no additions are necessary, this function returns NULL.
+ * Implementation of [versioncontrol_backend]_alter_commits():
+ * Add VCS specific repository data into a $commit['[xxx]_specific'] array.
+ * By convention, this function only adds data in this specific element
+ * and doesn't modify other parts of the commit array.
+ *
+ * Also, this function is optional for backend modules to implement. If you
+ * don't need custom additions to the commits, just don't implement it.
+ *
+ * @param $commits
+ *   The commits for which this backend module needs to retrieve additional
+ *   commit data. This is an array like the one returned by
+ *   versioncontrol_get_commits(), and even the '[xxx]_specific' array
+ *   already exists. (If the VERSIONCONTROL_AUTOADD_COMMITS flag has been
+ *   set by this module, it may even be filled with values already.)
  */
-versioncontrol_fakevcs_commit_additions($commit) {
-  return array(
-    'module' => 'contributions';
-  );
+versioncontrol_fakevcs_alter_commits($commits) {
+  $repositories[$repo_id]['fakevcs_specific']['branch'] = 'HEAD';
 }
 
 
@@ -168,20 +200,11 @@ function versioncontrol_fakevcs_get_authors_by_uid($uid_list, $repositories = NU
   // Let's say $uid_list == array(1, 56020, -328) and $repositories == NULL:
   return array(
     1 => array(
-      $core_repo_id => array(
-        'username'   => 'dries',
-        'repository' => $core_repository,
-      ),
-      $contrib_repo_id => array(
-        'username'   => 'dries',
-        'repository' => $contrib_repository,
-      ),
+      $core_repo_id => 'dries',
+      $contrib_repo_id => 'dries',
     ),
     56020 => array(
-      $contrib_repo_id => array(
-        'username'   => 'jpetso',
-        'repository' => $contrib_repository,
-      ),
+      $contrib_repo_id => 'jpetso',
     ),
   );
 }
@@ -193,58 +216,34 @@ function versioncontrol_fakevcs_get_authors_by_uid($uid_list, $repositories = NU
  *
  * @param $usernames_by_repository
  *   An array containing system specific VCS usernames. Specified separately
- *   for each repository, like
- *   array(
- *     array(
- *       'repository' => $repository,
- *       'usernames' => array('dww', 'jpetso'),
- *     ),
- *     ...
- *   ).
+ *   for each repository, like array($repo_id => array('dww', 'jpetso'), ...).
+ * @param $repositories
+ *   A list of all repository arrays that the $usernames_by_repository
+ *   references with its repo_id keys.
  *
  * @return
  *   A structured array that looks like
- *   array(
- *     $drupal_uid => array(
- *       $repo_id => array(
- *         'username'   => 'VCS username',
- *         'repository' => $repository,
- *       ),
- *       ...
- *     ),
- *     ...
- *   ).
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
  *   If no Drupal uids correlate to the given usernames,
  *   an empty array is returned.
  */
-function versioncontrol_fakevcs_get_authors_by_username($usernames_by_repository) {
-  // Let's say $repository_usernames == array(
-  //   array(
-  //     'repository' => $core_repository,
-  //     'usernames'  => array('dries', 'jpetso', 'doesntexist'),
-  //   ),
-  //   array(
-  //     'repository' => $contrib_repository,
-  //     'usernames'  => array('dries', 'jpetso', 'doesntexist'),
-  //   ),
+function versioncontrol_fakevcs_get_authors_by_username($usernames_by_repository, $repositories) {
+  // Let's say $usernames_by_repository == array(
+  //   $core_repo_id => array('dries', 'jpetso', 'doesntexist'),
+  //   $contrib_repo_id => array('dries', 'jpetso', 'doesntexist'),
   // )
+  // and $repositories == array(
+  //   $core_repo_id => $core_repository,
+  //   $contrib_repo_id => $contrib_repository,
+  // ).
 
   return array(
     1 => array(
-      $core_repo_id => array(
-        'username'   => 'dries',
-        'repository' => $core_repository,
-      ),
-      $contrib_repo_id => array(
-        'username'   => 'dries',
-        'repository' => $contrib_repository,
-      ),
+      $core_repo_id => 'dries',
+      $contrib_repo_id => 'dries',
     ),
     56020 => array(
-      $contrib_repo_id => array(
-        'username'   => 'jpetso',
-        'repository' => $contrib_repository,
-      ),
+      $contrib_repo_id => 'jpetso',
     ),
   );
 }
@@ -916,4 +915,48 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
       'line'     => '// $Id$',
     ),
   );
+}
+
+
+
+/**
+ * Implementation of [versioncontrol_backend]_insert_commit():
+ * Insert additional commit data into the database.
+ *
+ * @param $commit
+ *   A single commit array, like the ones returned
+ *   by versioncontrol_get_commits().
+ * @param $commit_actions
+ *   A structured array containing the exact details of what happened to
+ *   each item in this commit. The structure of this array is the same as
+ *   the return value of versioncontrol_get_commit_actions().
+ */
+function versioncontrol_cvs_insert_commit($commit, $commit_actions) {
+  // If nothing has to be stored in addition to the commit info that
+  // versioncontrol_insert_commit() stores by itself, this function
+  // doesn't have to be implemented by the backend.
+  // If you've got stuff like file tables or whatever, it may come in handy.
+  foreach ($commit_actions as $path => $action) {
+    $revision = NULL;
+    $source_revision = NULL;
+
+    // If available, get item type and revision from the contained items.
+    if (isset($action['current item'])) {
+      $type = $action['current item']['type'];
+      $revision = $action['current item']['revision'];
+    }
+    else {
+      $type = $action['source items'][0]['type'];
+      $source_commit_id = $action['source items'][0]['fakevcs_specific']['commit_id'];
+      // of course, you need to store 'fakevcs_specific' items beforehand.
+    }
+
+    db_query(
+      "INSERT INTO {versioncontrol_fakevcs_item_revisions}
+       (commit_id, type, path, revision, action, source_revision)
+       VALUES ('%d', '%d', '%s', '%s', '%d', '%d')",
+      $commit['commit_id'], $type, $path, $revision, $action['action'],
+      $source_commit_id
+    );
+  }
 }

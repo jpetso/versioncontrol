@@ -5,10 +5,7 @@
  * Version Control API - An interface to version control systems
  * whose functionality is provided by pluggable back-end modules.
  *
- * Copyright 2007 by Jakob Petsovits <jpetso@gmx.at>
- *
- * Distributed under the GNU General Public Licence version 2 or higher,
- * as published by the FSF on http://www.gnu.org/copyleft/gpl.html
+ * Copyright 2007 by Jakob Petsovits (http://drupal.org/user/56020)
  */
 
 // Optional capabilities that backend modules can provide.
@@ -20,23 +17,31 @@ define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          4);
 define('VERSIONCONTROL_CAPABILITY_LIST_FILES',              5);
 
 // VCS item types.
-define('VERSIONCONTROL_ITEM_FILE',         0);
-define('VERSIONCONTROL_ITEM_DIRECTORY',    1);
+define('VERSIONCONTROL_ITEM_FILE',            0);
+define('VERSIONCONTROL_ITEM_DIRECTORY',       1);
 // This one is only used for item listings in version control systems that
 // don't support atomic commits. That is, for CVS only.
-define('VERSIONCONTROL_ITEM_FILE_DELETED', 2);
+define('VERSIONCONTROL_ITEM_FILE_DELETED',    2);
 
 // VCS file types.
-define('VERSIONCONTROL_FILE_TEXT',         0);
-define('VERSIONCONTROL_FILE_BINARY',       1);
+define('VERSIONCONTROL_FILE_TEXT',            0);
+define('VERSIONCONTROL_FILE_BINARY',          1);
 
 // VCS actions for a single item (file or directory) in a commit.
-define('VERSIONCONTROL_ACTION_ADDED',      0);
-define('VERSIONCONTROL_ACTION_MODIFIED',   1);
-define('VERSIONCONTROL_ACTION_MOVED',      2);
-define('VERSIONCONTROL_ACTION_COPIED',     3);
-define('VERSIONCONTROL_ACTION_MERGED',     4);
-define('VERSIONCONTROL_ACTION_DELETED',    5);
+define('VERSIONCONTROL_ACTION_ADDED',         0);
+define('VERSIONCONTROL_ACTION_MODIFIED',      1);
+define('VERSIONCONTROL_ACTION_MOVED',         2);
+define('VERSIONCONTROL_ACTION_COPIED',        3);
+define('VERSIONCONTROL_ACTION_MERGED',        4);
+define('VERSIONCONTROL_ACTION_DELETED',       5);
+
+// Flags that backends can set to specify if Version Control API should do
+// work for them.
+define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES', 0);
+define('VERSIONCONTROL_FLAG_AUTOADD_COMMITS',      1);
+
+// The backend-only part of the API.
+include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol-backend.inc');
 
 /**
  * Get a list of all backends and more detailed information about each of them.
@@ -133,17 +138,103 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
  *           this will be a local directory (e.g. '/var/repos/drupal'),
  *           but it may also be some specialized string for remote repository
  *           access. How this string may look like depends on the backend.
+ *   '[xxx]_specific': An array of VCS specific additional repository
+ *                     information. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
  *   'url_commit_view', 'url_item_view', 'url_diff' and 'url_tracker':
  *      Not meant to be used directly, please refer to the
  *      versioncontrol_get_url_commit_view(), versioncontrol_get_url_item_view(),
  *      versioncontrol_get_url_diff() and versioncontrol_get_url_tracker()
  *      functions if you need this functionality.
  *
- *   Additional elements may be added by specific version control system
- *   backends. If no single repository matches these constraints,
+ *   If no single repository matches these constraints,
  *   an empty array is returned.
  */
 function versioncontrol_get_repositories($constraints = array()) {
+  $and_constraints = array();
+  $params = array();
+
+  if (isset($constraints['vcs'])) {
+    $or_constraints = array();
+    foreach ($constraints['vcs'] as $vcs) {
+      $or_constraints[] = "vcs = '%s'";
+      $params[] = $vcs;
+    }
+    $and_constraints[] = '('. implode(" OR ", $or_constraints) .')';
+  }
+
+  if (isset($constraints['repo_ids'])) {
+    $or_constraints = array();
+    foreach ($constraints['repo_ids'] as $repo_id) {
+      $or_constraints[] = "repo_id = '%d'";
+      $params[] = $repo_id;
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  }
+
+  // All constraints have been gathered, execute the query now.
+  if (empty($and_constraints)) {
+    $result = db_query('SELECT * FROM {versioncontrol_repositories}');
+  }
+  else {
+    $result = db_query('SELECT * FROM {versioncontrol_repositories}
+                        WHERE '. implode(' AND ', $and_constraints), $params);
+  }
+
+  // Sort the retrieved repositories by backend.
+  $backends = versioncontrol_get_backends();
+  $repositories_by_backend = array();
+
+  while ($repository = db_fetch_array($result)) {
+    if (!isset($backends[$repository['vcs']])) {
+      // don't include repositories for which no backend module exists
+      continue;
+    }
+    if (!isset($repositories_by_backend[$repository['vcs']])) {
+      $repositories_by_backend[$repository['vcs']] = array();
+    }
+    $repository[$repository['vcs'] .'_specific'] = array();
+    $repositories_by_backend[$repository['vcs']][$repository['repo_id']] = $repository;
+  }
+
+  $result_repositories = array();
+
+  // Fetch VCS specific repository data additions, either by ourselves (if the
+  // VERSIONCONTROL_AUTOADD_REPOSITORIES flag has been set by the backend)
+  // or by calling [vcs_backend]_alter_repositories().
+  foreach ($repositories_by_backend as $vcs => $vcs_repositories) {
+    $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
+                           $backends[$vcs]['flags']);
+
+    if ($is_autoadd) {
+      $repo_ids = array();
+      foreach ($vcs_repositories as $repo_id => $repository) {
+        $repo_ids[] = $repo_id;
+      }
+      $additions = _versioncontrol_db_get_additions(
+        'versioncontrol_'. $vcs .'_repositories', 'repo_id', $repo_ids
+      );
+
+      foreach ($additions as $repo_id => $additions) {
+        if (isset($vcs_repositories[$repo_id])) {
+          $vcs_repositories[$repo_id][$vcs .'_specific'] = $additions;
+        }
+      }
+    }
+
+    // Provide an opportunity for the backend to add its own stuff.
+    if (versioncontrol_backend_implements($vcs, 'alter_repositories')) {
+      versioncontrol_call_backend(
+        $vcs, 'alter_repositories', array($vcs_repositories)
+      );
+    }
+
+    foreach ($vcs_repositories as $repository) {
+      $result_repositories[$repository['repo_id']] = $repository;
+    }
+  }
+
+  return $result_repositories;
 }
 
 
@@ -191,9 +282,10 @@ function versioncontrol_get_repositories($constraints = array()) {
  *                correspond to any of the specified users.
  *   '[xxx]_specific': An array of VCS specific constraints. How this array
  *                     looks like is defined by the corresponding backend
- *                     module ([xxx]_backend). Other backend modules won't
- *                     get to see this constraint, so in theory you can provide
- *                     one of those for each backend in one single query.
+ *                     module (versioncontrol_[xxx]). Other backend modules
+ *                     won't get to see this constraint, so in theory you can
+ *                     provide one of those for each backend in one
+ *                     single query.
  *
  * @return
  *   An array of commits, reversely sorted by the time of the commit.
@@ -207,14 +299,18 @@ function versioncontrol_get_repositories($constraints = array()) {
  *   'date': The time when the revision was committed, given as Unix timestamp.
  *   'uid': The Drupal user id of the committer.
  *   'username': The system specific VCS username of the committer.
+ *   'directory': The deepest-level directory in the repository that is common
+ *                to all the changed items, e.g. '/src' if the commit changed
+ *                the files '/src/subdir/code.php' and '/src/README.txt'.
  *   'message': The commit message.
- *   'revision': The VCS specific commit identifier, like "1.2.2.4" in CVS,
- *               "27491" in Subversion or an SHA-1 key in various distributed
- *               version control systems.
+ *   'revision': The VCS specific repository-wide revision identifier,
+ *               like NULL in CVS, '27491' in Subversion or some SHA-1 key
+ *               in various distributed version control systems.
+ *   '[xxx]_specific': An array of VCS specific additional commit information.
+ *                     How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
  *
- *   Additional elements may be added by specific version control system
- *   backends. If no single commit matches these constraints,
- *   an empty array is returned.
+ *   If no single commit matches these constraints, an empty array is returned.
  */
 function versioncontrol_get_commits($constraints = array()) {
 }
@@ -236,10 +332,7 @@ function versioncontrol_get_commits($constraints = array()) {
  *   A structured array that looks like
  *   array(
  *     $drupal_uid => array(
- *       $repo_id => array(
- *         'username'   => 'VCS username',
- *         'repository' => $repository,
- *       ),
+ *       $repo_id => 'VCS username',
  *       ...
  *     ),
  *     ...
@@ -275,43 +368,55 @@ function versioncontrol_get_authors_by_uid($uid_list, $repositories = NULL) {
  *
  * @param $usernames_by_repository
  *   An array containing system specific VCS usernames. Specified separately
- *   for each repository, like
- *   array(
- *     array(
- *       'repository' => $repository,
- *       'usernames' => array('dww', 'jpetso'),
- *     ),
- *     ...
- *   ).
+ *   for each repository, like array($repo_id => array('dww', 'jpetso'), ...).
+ * @param $cached_repositories
+ *   If you already have loaded some or all of the repository arrays that
+ *   correspond to the given repo_id keys, you can pass it here in order to
+ *   save a database query. If not, this function will retrieve them for you.
+ *   If you do pass a list of repository arrays, its format has to be
+ *   array($repo_id => $repository, ...).
  *
  * @return
  *   A structured array that looks like
- *   array(
- *     $drupal_uid => array(
- *       $repo_id => array(
- *         'username'   => 'VCS username',
- *         'repository' => $repository,
- *       ),
- *       ...
- *     ),
- *     ...
- *   ).
+ *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
  *   If no Drupal uids correlate to the given usernames,
  *   an empty array is returned.
  */
-function versioncontrol_get_authors_by_username($usernames_by_repository) {
-  $backends = array();
-  foreach ($usernames_by_repository as $mapping) {
-    if (!isset($backends[$mapping['repository']['vcs']])) {
-      $backends[$mapping['repository']['vcs']] = array();
+function versioncontrol_get_authors_by_username($usernames_by_repository, $cached_repositories = array()) {
+  $repos = $cached_repositories;
+  $missing_repo_ids = array();
+
+  // Fetch the full repository arrays for the list of repo ids.
+  // We need those to figure out the responsible VCS backends.
+  foreach ($usernames_by_repository as $repo_id => $username_list) {
+    if (!isset($repos[$repo_id])) {
+      $missing_repo_ids[] = $repo_id;
     }
-    $backends[$mapping['repository']['vcs']][] = $mapping;
+  }
+  if (!empty($missing_repo_ids)) {
+    $repos = array_merge($repos, versioncontrol_get_repositories(array(
+      'repo_ids' => $missing_repo_ids,
+    )));
   }
 
+  // Ok, we got the repositories, now let's split them up among backends.
+  $backends = array();
+  foreach ($repos as $repo_id => $repository) {
+    if (!isset($usernames_by_repository[$repo_id])) {
+      continue;
+    }
+    if (!isset($backends[$repository['vcs']])) {
+      $backends[$repository['vcs']] = array();
+    }
+    $backends[$repository['vcs']][$repo_id] = $usernames_by_repository[$repo_id];
+  }
+
+  // Now it's up to the backends to retrieve the results:
   $authors = array();
-  foreach ($backends as $vcs => $vcs_usernames) {
+  foreach ($backends as $vcs => $vcs_usernames_by_repository) {
     $authors = array_merge_recursive($authors, _versioncontrol_call_backend(
-      $vcs, 'get_authors_by_username', array($vcs_usernames)
+      $vcs, 'get_authors_by_username',
+      array($vcs_usernames_by_repository, $repos)
     ));
   }
   return $authors;
@@ -713,4 +818,105 @@ function versioncontrol_get_file_annotation($repository, $file_item) {
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_file_annotation', array($repository, $file_item)
   );
+}
+
+/**
+ * Retrieve the deepest-level directory in the repository that is common
+ * to all the changed items, e.g. '/src' if the commit changed the files
+ * '/src/subdir/code.php' and '/src/README.txt', or '/' if the commit
+ * changed the file '/src/README.txt' and the directory '/doc'.
+ *
+ * @param $commit_actions
+ *   A structured array containing the exact details of what happened to
+ *   each item in this commit. The structure of this array is the same as
+ *   the return value of versioncontrol_get_commit_actions().
+ *
+ * @return
+ *   The common directory path of all items in the $commit_actions array,
+ *   as mentioned above.
+ */
+function _versioncontrol_get_common_directory($commit_actions) {
+  $paths = array();
+
+  // gather the paths of all current and source items
+  foreach ($commit_actions as $path => $action) {
+    if (isset($action['current item'])) {
+      $paths[] = $action['current item']['path'];
+    }
+    // Items that were only modified have the same path, don't get it twice.
+    if ($action['type'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
+      foreach($action['source items'] as $item) {
+        $paths[] = $item['path'];
+      }
+    }
+  }
+  if (empty($paths)) {
+    return '/';
+  }
+
+  $dirparts = explode('/', dirname(array_pop($paths)));
+
+  foreach ($paths as $path) {
+    $new_dirparts = array();
+    $current_dirparts = explode('/', dirname($path));
+    $mincount = min(count($dirparts), count($current_dirparts));
+
+    for ($i = 0; $i < $mincount; $i++) {
+      if ($dirparts[$i] == $current_dirparts[$i]) {
+        $new_dirparts[] = $dirparts[$i];
+      }
+    }
+    $dirparts = $new_dirparts;
+  }
+
+  return '/'. implode('/', $dirparts);
+}
+
+
+/**
+ * Generate and execute an INSERT query for the given table based on key names,
+ * values and types of the given array elements. This function basically
+ * accomplishes the insertion part of Version Control API's 'autoadd' feature.
+ */
+function _versioncontrol_db_insert_additions($table_name, $elements) {
+  $keys = array();
+  $values = array();
+  $types = array();
+
+  foreach ($elements as $key => $value) {
+    $keys[] = $key;
+    $values[] = $value;
+    $types[] = is_numeric($value) ? "'%d'" : "'%s'";
+  }
+
+  db_query(
+    'INSERT INTO {'. $table_name .'} ('. implode(', ', $keys) .')
+     VALUES ('. implode(', ', $types) .')', $values
+  );
+}
+
+/**
+ * Generate and execute a SELECT query for the given table base on the name
+ * and given values of this table's primary key. This function basically
+ * accomplishes the retrieval part of Version Control API's 'autoadd' feature.
+ * In order to avoid unnecessary complexity, the primary key may not consist
+ * of multiple columns and has to be a numeric value.
+ */
+function _versioncontrol_db_get_additions($table_name, $primary_key_name, $keys) {
+  $or_constraints = array();
+
+  foreach ($keys as $key) {
+    $or_constraints[] = $primary_key_name ." = '%d'";
+  }
+
+  $result = db_query('SELECT * FROM {'. $table_name .'}
+                      WHERE '. implode(' OR ', $or_constraints), $keys);
+
+  $additions = array();
+  while ($addition = db_fetch_array($result)) {
+    $key = $addition[$primary_key_name];
+    unset($addition[$primary_key_name]);
+    $additions[$key] = $addition;
+  }
+  return $additions;
 }
