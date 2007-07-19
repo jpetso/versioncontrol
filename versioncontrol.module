@@ -224,7 +224,7 @@ function versioncontrol_get_repositories($constraints = array()) {
 
     // Provide an opportunity for the backend to add its own stuff.
     if (versioncontrol_backend_implements($vcs, 'alter_repositories')) {
-      versioncontrol_call_backend(
+      _versioncontrol_call_backend(
         $vcs, 'alter_repositories', array($vcs_repositories)
       );
     }
@@ -869,7 +869,7 @@ function _versioncontrol_get_common_directory($commit_actions) {
     $dirparts = $new_dirparts;
   }
 
-  return '/'. implode('/', $dirparts);
+  return implode('/', $dirparts);
 }
 
 

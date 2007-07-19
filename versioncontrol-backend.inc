@@ -64,7 +64,9 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
     if (empty($repos)) {
       return NULL;
     }
-    $commit['repository'] = $repos[0];
+    foreach ($repos as $repo_id => $repository) {
+      $commit['repository'] = $repository; // there's only one array element
+    }
   }
 
   // If not already there, retrieve the Drupal user id of the committer.
@@ -104,7 +106,7 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
   // Auto-add commit info from $commit['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
   $is_autoadd = in_array(VERSIONCONTROL_AUTOADD_COMMITS,
-                         $backends[$commit['repository']['vcs']]['autoadd']);
+                         $backends[$commit['repository']['vcs']]['flags']);
   if ($is_autoadd) {
     $table_name = 'versioncontrol_'. $commit['repository']['vcs'] .'_commits';
     $elements = $commit[$commit['repository']['vcs'] .'_specific'];
@@ -114,7 +116,7 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
 
   // Provide an opportunity for the backend to add its own stuff.
   if (versioncontrol_backend_implements($commit['repository']['vcs'], 'insert_commit')) {
-    versioncontrol_call_backend(
+    _versioncontrol_call_backend(
       $commit['repository']['vcs'], 'insert_commit',
       array($commit, $commit_actions)
     );
