@@ -5,7 +5,7 @@
  * Version Control API - An interface to version control systems
  * whose functionality is provided by pluggable back-end modules.
  *
- * Copyright 2007 by Jakob Petsovits (http://drupal.org/user/56020)
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 // Optional capabilities that backend modules can provide.
@@ -260,6 +260,8 @@ function versioncontrol_get_repositories($constraints = array()) {
  *              )).
  *            If given, only commits that affected this item (or its children,
  *            in case the item is a directory) will be returned.
+ *   'commit_ids': An array of commit ids. If given, only commits matching
+ *                 those ids will be returned.
  *   'commit_id_lower': A commit id. If given, the result set will not contain
  *                      commits earlier than this lower bound. Mind that
  *                      commit ids only correspond to chronological order

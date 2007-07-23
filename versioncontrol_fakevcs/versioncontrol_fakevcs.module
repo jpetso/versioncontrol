@@ -5,7 +5,7 @@
  * FakeVCS backend for Version Control API -
  * An example module illustrating how to write a VCS backend.
  *
- * Copyright 2007 by Jakob Petsovits (http://drupal.org/user/56020)
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 /**
@@ -287,7 +287,9 @@ function versioncontrol_fakevcs_get_authors_by_username($usernames_by_repository
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'internal': May be set by the backend to remember additional item info.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
  */
 function versioncontrol_fakevcs_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
@@ -448,7 +450,8 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
  * Retrieve the branches that have been affected by the given commit.
  *
  * @return
- *   An array of strings that identify a branch in the respective repository.
+ *   An array of strings that identify a branch in the respective repository,
+ *   or an empty array if no branches were affected at all.
  */
 function versioncontrol_fakevcs_get_commit_branches($commit) {
   // How CVS would probably do it
@@ -485,7 +488,9 @@ function versioncontrol_fakevcs_get_commit_branches($commit) {
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'internal': May be set by the backend to remember additional item info.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
  *
  *   An empty array is returned if there are no branches for this item.
  *   NULL is returned if the given item is not inside the repository at the
@@ -499,13 +504,13 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
       'revision' => '1.23',
-      // no internal 'sticky branch' as this is on the HEAD branch
+      'fakevcs_specific' => array('selected branch' => 'HEAD'),
     ),
     'DRUPAL-5' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision' => '1.41',
-      'internal' => array('sticky branch' => 'DRUPAL-5'),
+      'revision' => '1.23.2.41',
+      'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
     ),
   );
   // How SVN could also do it, if for example
@@ -551,7 +556,9 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'internal': May be set by the backend to remember additional item info.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
  *
  *   An empty array is returned if there are no tags for this item.
  *   NULL is returned if the given item is not inside the repository at the
@@ -566,13 +573,13 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item) {
       'path'     => '/contributions/modules/versioncontrol',
       'revision' => NULL, // Right, it's a directory in CVS -> unversioned.
                           // Files of course would indeed get a 'revision' entry.
-      'internal' => array('sticky tag' => 'DRUPAL-5--1-1'),
+      'fakevcs_specific' => array('tag' => 'DRUPAL-5--1-1'),
     ),
     'DRUPAL-5--1-2' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol',
       'revision' => NULL,
-      'internal' => array('sticky tag' => 'DRUPAL-5--1-2'),
+      'fakevcs_specific' => array('tag' => 'DRUPAL-5--1-2'),
     ),
   );
 
@@ -637,7 +644,9 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item) {
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'internal': May be set by the backend to remember additional item info.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -705,7 +714,9 @@ function versioncontrol_get_item_history($repository, $item) {
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
  *               directory items) then the 'revision' element is NULL.
- *   'internal': May be set by the backend to remember additional item info.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
@@ -815,7 +826,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
       'revision' => NULL,
-      'internal' => array('sticky branch' => 'DRUPAL-5'),
+      'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
     ),
   // $repository is some CVS repository and $recursive == FALSE.
 
@@ -824,13 +835,13 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
       'revision' => NULL,
-      'internal' => array('sticky branch' => 'DRUPAL-5'),
+      'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
       'revision' => '1.2',
-      'internal' => array('sticky branch' => 'DRUPAL-5'),
+      'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
     ),
   );
 }
