@@ -315,10 +315,14 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
   $and_constraints = array();
   $params = array();
 
-  // Filter out commits of which the corresponding backend is not enabled.
+  // Filter out commits of which the corresponding backend is not enabled,
+  // and handle the 'vcs' constraint at the same time.
   $backends = versioncontrol_get_backends();
   $or_constraints = array();
   foreach ($backends as $vcs => $backend) {
+    if (isset($constraints['vcs']) && !in_array($vcs, $constraints['vcs'])) {
+      continue; // don't include the vcs if the caller has not specified it
+    }
     $or_constraints[] = "r.vcs = '%s'";
     $params[] = $vcs;
   }
@@ -326,6 +330,78 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
     $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
+  // Filter by repository ids.
+  if (isset($constraints['repo_ids'])) {
+    $or_constraints = array();
+    foreach ($constraints['repo_ids'] as $repo_id) {
+      $or_constraints[] = "r.repo_id = '%d'";
+      $params[] = $repo_id;
+    }
+    if (!empty($or_constraints)) {
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
+  }
+
+  // Filter by commit ids.
+  if (isset($constraints['commit_ids'])) {
+    $or_constraints = array();
+    foreach ($constraints['commit_ids'] as $commit_id) {
+      $or_constraints[] = "c.commit_id = '%d'";
+      $params[] = $commit_id;
+    }
+    if (!empty($or_constraints)) {
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
+  }
+
+  // Filter by lower and/or upper commit id bounds.
+  if (isset($constraints['commit_id_lower'])) {
+    $and_constraints[] = "(c.commit_id >= '%d')";
+    $params[] = $constraints['commit_id_lower'];
+  }
+  if (isset($constraints['commit_id_upper'])) {
+    $and_constraints[] = "(c.commit_id <= '%d')";
+    $params[] = $constraints['commit_id_upper'];
+  }
+
+  // Filter by lower and/or upper date bounds.
+  if (isset($constraints['date_lower'])) {
+    $and_constraints[] = "(c.date >= '%d')";
+    $params[] = $constraints['date_lower'];
+  }
+  if (isset($constraints['date_upper'])) {
+    $and_constraints[] = "(c.date <= '%d')";
+    $params[] = $constraints['date_upper'];
+  }
+
+  // Filter by Drupal user ids.
+  if (isset($constraints['uids'])) {
+    $or_constraints = array();
+    foreach ($constraints['uids'] as $uid) {
+      $or_constraints[] = "c.uid = '%d'";
+      $params[] = $uid;
+    }
+    if (!empty($or_constraints)) {
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
+  }
+
+  // Filter by VCS specific user names.
+  if (isset($constraints['usernames'])) {
+    $or_constraints = array();
+    foreach ($constraints['usernames'] as $username) {
+      $or_constraints[] = "c.username = '%s'";
+      $params[] = $username;
+    }
+    if (!empty($or_constraints)) {
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
+  }
+
+  // TODO: 'branches' constraint
+  // TODO: 'paths' constraint
+
+  // All the constraints have been gathered, assemble them to a WHERE clause.
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
   // TODO: implement, as this is a bad fake
