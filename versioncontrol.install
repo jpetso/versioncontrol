@@ -44,6 +44,7 @@ function versioncontrol_install() {
         PRIMARY KEY (repo_id),
         UNIQUE KEY name (name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+      // TODO: split off the URL columns into a pluggable repo viewer.
 
       break;
 

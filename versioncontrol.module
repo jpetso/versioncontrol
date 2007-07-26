@@ -399,7 +399,20 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
   }
 
   // TODO: 'branches' constraint
-  // TODO: 'paths' constraint
+
+  // Filter by item paths.
+  if (isset($constraints['paths'])) {
+    $or_constraints = array();
+    foreach ($constraints['paths'] as $path) {
+      list($path_or_constraints, $path_params) =
+        _versioncontrol_construct_path_constraint('c.path', $path);
+      $or_constraints = array_merge($or_constraints, $path_or_constraints);
+      $params = array_merge($params, $path_params);
+    }
+    if (!empty($or_constraints)) {
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
+  }
 
   // All the constraints have been gathered, assemble them to a WHERE clause.
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
@@ -419,6 +432,10 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
   $commits = array();
 
   while ($row = db_fetch_object($result)) {
+    // Filter out false posivites that could not be filtered by the query.
+    // TODO: path checking
+
+    // Construct the commit array (which includes the repository array).
     $repository = array(
       'repo_id' => $row->repo_id,
       'name'    => $row->name,
@@ -447,6 +464,35 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
   }
 
   return $commits;
+}
+
+/**
+ * Construct an SQL constraint with all possible values for the path column
+ * given a path from $constraints['paths'].
+ */
+function _versioncontrol_construct_path_constraint($column, $path) {
+  $or_constraints = array();
+  $paths = array();
+
+  $current_path = $path;
+
+  // Now, we loop over the path, using the most restrictive path first,
+  // and create a condition for each possible path.
+  while (TRUE) {
+    $or_constraints[] = $column ." = '%s'";
+    $paths[] = $current_path;
+
+    if ($current_path == dirname($current_path)) {
+      break; // we reached the top-level directory
+    }
+    $current_path = dirname($current_path);
+  }
+
+  // Also include any children paths of the given one.
+  $or_constraints[] = $column ." LIKE '%s'";
+  $paths[] = $path .'/%';
+
+  return array($or_constraints, $paths);
 }
 
 
