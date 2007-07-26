@@ -1,0 +1,5 @@
+; $Id$
+name = "Commit Log"
+description = "Display a history of commits, optionally filtered by a set of constraint arguments."
+dependencies = versioncontrol
+package = Version Control

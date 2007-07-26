@@ -1,0 +1,530 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Commit Log - Display a history of commits, optionally filtered by a set
+ * of constraint arguments.
+ *
+ * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ */
+
+/**
+ * Implementation of hook_menu().
+ */
+function commitlog_menu($may_cache) {
+  $items = array();
+
+  if ($may_cache) {
+    $access = user_access('access commit messages');
+    $items[] = array(
+      'path' => 'commitlog',
+      'title' => t('Commit Log'),
+      'callback' => 'commitlog_page',
+      'access' => $access,
+      'type' => MENU_SUGGESTED_ITEM,
+    );
+    $items[] = array(
+      'path' => 'commitlog/feed',
+      'title' => t('Commit Log'),
+      'callback' => 'commitlog_rss',
+      'access' => $access,
+      'type' => MENU_CALLBACK,
+    );
+
+    // Search pages:
+/*
+    // until this works, no sense displaying this page
+    // see http://drupal.org/node/59659
+    $items[] = array(
+      'path' => 'search/commitlog',
+      'title' => t('Commit messages'),
+      'callback' => 'commitlog_page_search',
+      'access' => $access,
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 2,
+    );
+*/
+  }
+  else {
+    if (arg(0) == 'user' && is_numeric(arg(1)) && arg(2) == 'track' && arg(3) == 'code') {
+      $uid = arg(1);
+      $authors = versioncontrol_get_authors_by_uid(array($uid));
+      if (!empty($authors)) {
+        // If the user has a CVS account, add a 'track commit messages' tab to the tracker page.
+        $items[] = array(
+          'path' => 'user/'. $uid .'/track/code',
+          'title' => t('Track code'),
+          'callback' => 'commitlog_account_tracker',
+          'access' => user_access('access commit messages'),
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 2,
+        );
+      }
+    }
+  }
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function commitlog_perm() {
+  return array('access commit messages');
+}
+
+
+/**
+ * Page callback for the 'commitlog' menu path.
+ */
+function commitlog_page() {
+  if ($error_message = _commitlog_check_request()) {
+    return $error_message;
+  }
+
+  list($commits, $attributes) = _commitlog_get_commits(); // TODO: paging.
+
+  drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
+  return theme('commitlog_page', $commits, $attributes);
+}
+
+/**
+ * Page callback for the 'commitlog/feed' menu path.
+ */
+function commitlog_rss() {
+  if ($error_message = _commitlog_check_request()) {
+    exit();
+  }
+
+  list($commits, $attributes) = _commitlog_get_commits(); // TODO: paging.
+
+  drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  print theme('commitlog_rss', $commits);
+  exit();
+}
+
+
+/**
+ * Retrieve the commits that will be displayed by dissecting the $_REQUEST
+ * variable and querying the Version Control API with the resulting
+ * commit constraints.
+ *
+ * @return
+ *   An array($commits, $attributes) where $commits is an array of commits,
+ *   like the one returned by versioncontrol_get_commits(), and $attributes
+ *   is an associative array of the processed arguments in $_REQUEST.
+ */
+function _commitlog_get_commits() {
+  $constraints = array();
+  $attributes = array();
+
+  // Transform query string into query string. We use $_REQUEST because we 
+  // need to support both GET and POST requests.
+  if (isset($_REQUEST['commits'])) {
+    $constraints['commit_ids'] = explode(',', $_REQUEST['commits']);
+    $attributes['commits'] = $_REQUEST['commits'];
+  }
+  if (isset($_REQUEST['usernames'])) {
+    $constraints['usernames'] = explode(',', $_REQUEST['usernames']);
+    $attributes['usernames'] = $_REQUEST['usernames'];
+  }
+  if (isset($_REQUEST['uids'])) {
+    $constraints['uids'] = explode(',', $_REQUEST['uids']);
+    $attributes['uids'] = $_REQUEST['uids'];
+  }
+  if (isset($_REQUEST['vcs'])) {
+    $constraints['vcs'] = explode(',', $_REQUEST['vcs']);
+    $attributes['vcs'] = $_REQUEST['vcs'];
+  }
+  if (isset($_REQUEST['branches'])) {
+    $constraints['branches'] = explode(',', $_REQUEST['branches']);
+    $attributes['branches'] = $_REQUEST['branches'];
+  }
+  if (isset($_REQUEST['paths'])) {
+    $constraints['paths'] = explode(',', $_REQUEST['paths']);
+    $attributes['paths'] = $_REQUEST['paths'];
+  }
+  if (isset($_REQUEST['repos'])) {
+    $constraints['repo_ids'] = explode(',', $_REQUEST['repos']);
+    $attributes['repos'] = $_REQUEST['repos'];
+  }
+  // filter by commit message search? ...use cases?
+
+  if (module_exists('versioncontrol_project')) {
+    $project_constraints = array();
+    if (isset($_REQUEST['nids'])) {
+      $project_constraints['nids'] = explode(',', $_REQUEST['nids']);
+      $attributes['nids'] = $_REQUEST['nids'];
+    }
+    if (isset($_REQUEST['maintainer_uids'])) {
+      $project_constraints['maintainer_uids'] = explode(',', $_REQUEST['maintainers']);
+      $attributes['maintainers'] = $_REQUEST['maintainers'];
+    }
+    if (!empty($project_constraints)) {
+      $constraints = versioncontrol_project_alter_commit_constraints(
+        $constraints, $project_constraints
+      );
+    }
+  }
+
+  return array(versioncontrol_get_commits($constraints), $attributes);
+}
+
+/**
+ * Check the $_REQUEST variable if it contains elements that can't be processed
+ * in the current Drupal configuration.
+ *
+ * @return
+ *   A string containing the appropriate error message, or NULL if everything
+ *   can proceed as planned.
+ */
+function _commitlog_check_request() {
+  if (isset($_REQUEST['nids']) || isset($_REQUEST['maintainers'])) {
+    if (!module_exists('versioncontrol_project')) {
+      return '<p>'. t('The given commit constraints can\'t be applied as the Version Control / Project Node Integration module is not enabled. In order to use the "nids" or "maintainer_uids" constraints, please enable this module.') .'</p>';
+    }
+  }
+  return NULL;
+}
+
+
+/**
+ * Return a formatted date string if the given timestamp is on a different day
+ * than the one that was passed previous call to this function, or NULL if the
+ * previous call's timestamp argument is on the same day as this one.
+ */
+function _commitlog_date($timestamp) {
+  static $last;
+  $date = format_date($timestamp, 'custom', 'F j, Y');
+  if ($date != $last) {
+    $last = $date;
+    return $date;
+  }
+  return NULL;
+}
+
+/**
+ * Return formatted output for displaying the given commits on an HTML page.
+ */
+function theme_commitlog_page($commits, $attributes) {
+  if (empty($commits)) {
+    return '<div id="commitlog"><p>'. t('No commit messages found.') .'</p></div>';
+  }
+
+  $output = '<div id="commitlog">';
+  $initial = TRUE;
+
+  foreach ($commits as $commit) {
+    $date = _commitlog_date($commit['date']);
+    if (isset($date)) { // begin a new list for each day
+      if (!$initial) {
+        $output .= '</ul>';
+        $initial = FALSE;
+      }
+      $output .= "<h3>$date</h3>";
+      $output .= '<ul>';
+    }
+    $output .= '<li>'. theme('commitlog_commit', $commit) .'</li>';
+  }
+  $output .= '</ul>';
+
+  if ($pager = theme('pager', NULL, variable_get('commitlog_pager', 10), 0, $attributes)) {
+    $output .= $pager;
+  }
+  $output .= '</div>';
+
+  $query = array();
+  foreach ($attributes as $key => $value) {
+    $query[] = $key .'='. $value;
+  }
+  $output .= theme('feed_icon', url('commitlog/feed', implode('&', $query)));
+
+  return $output;
+}
+
+function theme_commitlog_rss($commits) {
+  global $languages, $base_url;
+  $language = empty($languages) ? 'en' : reset(array_keys($languages));
+  $items = '';
+
+  foreach ($commits as $commit) {
+    $location = theme('commitlog_commit_location', $commit);
+
+    $title = t('!location by !username', array('!location' => $location, '!username' => $commit['username']));
+    $link = url('commitlog', 'commits='. $commit['commit_id'], NULL, TRUE);
+    $extra = array('pubDate' => gmdate('r', $commit['date']));
+    $text = theme('commitlog_commit', $commit);
+    $items .= format_rss_item($title, $link, $text, $extra);
+  }
+
+  $title = t('Commit messages for !site', array('!site' => variable_get('site_name', 'Drupal')));
+  $link = url('commitlog', NULL, NULL, TRUE);
+
+  $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
+  $output .= "<rss version=\"0.92\" xml:base=\"". $base_url ."\">\n";
+  $output .= format_rss_channel($title, $link, $title, $items, $language);
+  $output .= "</rss>\n";
+
+  return $output;
+}
+
+function theme_commitlog_commit($commit) {
+  $commit_actions = versioncontrol_get_commit_actions($commit);
+  $actions = theme('commitlog_commit_actions', $commit, $commit_actions);
+  $message = theme('commitlog_commit_message', $commit);
+  $branches = theme('commitlog_commit_branches', $commit);
+
+  $name = $commit['username'];
+  if ($commit['uid']) {
+    $user = user_load(array('uid' => $commit['uid']));
+    if ($user !== FALSE) {
+      $name = theme('username', $user);
+    }
+  }
+
+  $output .= '<div class="commit">';
+  $output .= '<div class="title">';
+  $output .= t('Commit !id by !name at !time in !repo:', array(
+    '!id'   => theme('commitlog_commit_identifier', $commit),
+    '!repo' => $commit['repository']['name'],
+    '!name' => $name,
+    '!time' => format_date($commit['date'], 'custom', 'H:i'),
+  ));
+  $output .= "</div>\n"; // class "title"
+  $output .= '<div class="actions">'. $actions .'</div>'."\n";
+  $output .= '<div class="description"><pre>'. $message .'</pre></div>'."\n";
+  $output .= "</div>\n"; // class "commit"
+
+  return $output;
+}
+
+
+function theme_commitlog_commit_location($commit, $html = TRUE) {
+  $item = versioncontrol_get_commit_directory_item($commit);
+  $location = theme('commitlog_item', $commit['repository'], $item, NULL, $html);
+  $branches = theme('commitlog_commit_branches', $commit, $html);
+  if (!empty($branches)) {
+    $location = t('!directory @ !branches', array(
+      '!directory' => $location,
+      '!branches' => $branches,
+    ));
+  }
+  return $location;
+}
+
+function theme_commitlog_commit_identifier($commit, $html = TRUE) {
+  $id = empty($commit['revision']) ? $commit['commit_id'] : $commit['revision'];
+
+  if ($html) {
+    $commit_url = versioncontrol_get_url_commit_view($commit);
+    $id = empty($commit_url)
+          ? l($id, 'commitlog', NULL, 'commits='. $commit['commit_id'])
+          : '<a href="'. $commit_url .'">'. $id .'</a>';
+  }
+  return $id;
+}
+
+function theme_commitlog_commit_message($commit) {
+  // Link to issues whose numbers are given in the commit message.
+  $message = htmlspecialchars($commit['message']);
+  $matches = array();
+  if (preg_match('/(?:(?:fix|add|patch)(?:ed)?\s+#?|#)(\d+)/i', $message, $matches)) {
+    foreach ($matches as $match) {
+      $link = strtr('<a href="!url">!text</a>', array(
+        '!text' => $match[0],
+        '!url' => versioncontrol_get_url_tracker($commit['repository'], $match[1]),
+      ));
+      $message = strtr($message, array($match[0] => $link));
+    }
+  }
+  return $message;
+}
+
+function theme_commitlog_commit_branches($commit, $html = TRUE) {
+  $branches = versioncontrol_get_commit_branches($commit);
+
+  if (empty($branches)) {
+    return '';
+  }
+  if ($html) {
+    return l(implode(', ', $branches), 'commitlog', NULL, 'branches='. implode(',', $branches));
+  }
+  return implode(', ', $branches);
+}
+
+
+function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) {
+  if (empty($commit_actions)) {
+    return '';
+  }
+
+  $lines = array();
+
+  foreach ($commit_actions as $action) {
+    $item = isset($action['current item'])
+            ? $action['current item']     // new revision of the file, or
+            : $action['source items'][0]; // the deleted item
+
+    $item_path = substr($item['path'], strlen($commit['directory']) + 1);
+    $item_string = theme('commitlog_item', $commit['repository'], $item, $item_path, $html);
+
+    if (isset($action['source items'])) {
+      $oldrev_string = theme('commitlog_item_revision',
+        $commit['repository'], $action['source items'][0], $html
+      );
+    }
+
+    if (isset($action['source items'])) {
+      $olditems = array();
+      foreach ($action['source items'] as $source_item) {
+        $item_path = substr($source_item['path'], strlen($commit['directory']) + 1);
+        $olditems[] = theme('commitlog_item', $commit['repository'], $source_item, $item_path, $html);
+      }
+      $olditems_string = implode(', ', $olditems);
+    }
+
+    $show_diff = FALSE;
+    if ($html) {
+      $diff_string = theme('commitlog_diff_link', $commit, $action);
+      if (!empty($diff_string)) {
+        $show_diff = TRUE;
+      }
+    }
+
+    switch ($action['type']) {
+      case VERSIONCONTROL_ACTION_ADDED:
+        $action_string = t('!item (added)');
+        break;
+      case VERSIONCONTROL_ACTION_MODIFIED:
+        $action_string = $show_diff
+                         ? t('!item (modified, previous: !oldrev, !diff)')
+                         : t('!item (modified, previous: !oldrev)');
+        break;
+      case VERSIONCONTROL_ACTION_MOVED:
+        $action_string = $show_diff
+                         ? t('!item (moved from !olditems, !diff)')
+                         : t('!item (moved from !olditems)');
+        break;
+      case VERSIONCONTROL_ACTION_COPIED:
+        $action_string = $show_diff
+                         ? t('!item (copied from !olditems, !diff)')
+                         : t('!item (copied from !olditems)');
+        break;
+      case VERSIONCONTROL_ACTION_MERGED:
+        $action_string = $show_diff
+                         ? t('!item (merged from !olditems, !diff)')
+                         : t('!item (merged from !olditems)');
+        break;
+      case VERSIONCONTROL_ACTION_DELETED:
+        $action_string = t('!path (deleted: !oldrev)');
+        break;
+      default:
+        return 'Error: action type enum value not known: '. $action['type'];
+    }
+
+    if ($html) {
+      $project_string = theme('commitlog_project_for_item', $item, $html);
+      if (!empty($project_string)) {
+        $action_string = t('!project: !action', array('!action' => $action_string));
+      }
+    }
+
+    $lines[] = strtr($action_string, array(
+      '!project'  => $project_string,
+      '!item'     => $item_string,
+      '!path'     => $item_path,
+      '!oldrev'   => $oldrev_string,
+      '!olditems' => $olditems_string,
+      '!diff'     => $diff_string,
+    ));
+  }
+
+  $location = t('!location:', array(
+    '!location' => theme('commitlog_commit_location', $commit),
+  ));
+  $output = '<div class="location">'. theme('commitlog_commit_location', $commit) .'</div>'."\n";
+  $output .= '<div class="items">'. implode(($html ? "<br />\n" : "\n"), $lines) .'</div>'."\n";
+  return $output;
+}
+
+function theme_commitlog_item($repository, $item, $path = NULL, $html = TRUE) {
+  $backends = versioncontrol_get_backends();
+
+  if (!isset($backends[$repository['vcs']])) {
+    return '';
+  }
+
+  $has_atomic_commits = FALSE;
+  $backend = $backends[$repository['vcs']];
+  if (in_array(VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS, $backend['capabilities'])) {
+    $has_atomic_commits = TRUE;
+  }
+
+  if (!isset($path)) {
+    $path = $item['path'];
+  }
+
+  // For version control systems without atomic commits, display the revision
+  // next to the path. For all other ones this doesn't make sense, as there is
+  // only one global revision for all items, and that one is already displayed
+  // in the commit title.
+  if (empty($item['revision']) || $has_atomic_commits) {
+    $output = $path;
+    if ($html) {
+      $view_url = versioncontrol_get_url_item_view($repository, $item);
+      if (!empty($view_url)) {
+        $output = '<a href="'. $view_url .'">'. $path .'</a>';
+      }
+    }
+    return $output;
+  }
+  else {
+    return $path .' '. theme('commitlog_item_revision', $repository, $item, $html);
+  }
+}
+
+function theme_commitlog_item_revision($repository, $item, $html = TRUE) {
+  if (empty($item['revision'])) {
+    return '';
+  }
+  $revision = $item['revision'];
+
+  if ($html) {
+    $view_url = versioncontrol_get_url_item_view($repository, $item);
+    if (!empty($view_url)) {
+      $revision = ' <a href="'. $view_url .'">'. $item['revision'] .'</a>';
+    }
+  }
+  return $revision;
+}
+
+function theme_commitlog_diff_link($commit, $commit_action) {
+  // If the item was modified, link to the diff URL.
+  if (in_array($commit_action['type'], array(VERSIONCONTROL_ACTION_MODIFIED, VERSIONCONTROL_ACTION_MERGED))
+      || $action['modified'])
+  {
+    $diff_url = versioncontrol_get_url_diff(
+      $commit['repository'], $commit_action['current item'], $commit_action['source items'][0]
+    );
+    if (!empty($diff_url)) {
+      return '<a href="'. $diff_url .'">'. t('diff') .'</a>';
+    }
+  }
+  return '';
+}
+
+function theme_commitlog_project_for_item($item, $html = TRUE) {
+  if (module_exists('versioncontrol_project')) {
+    $project = versioncontrol_project_get_project_for_item($item['path']);
+    if (isset($project)) {
+      $project_node = node_load($project['nid']);
+    }
+    if ($project_node) {
+      if ($html) {
+        return l($project_node->title, 'node/'. $project_node->nid);
+      }
+      return $project_node->title;
+    }
+  }
+  return '';
+}

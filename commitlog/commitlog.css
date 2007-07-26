@@ -1,0 +1,13 @@
+#commitlog pre {
+  white-space: pre-wrap;
+  white-space: -moz-pre-wrap;
+  word-wrap: break-word;
+}
+
+#commitlog .items {
+  margin-left: 1.5em;
+}
+
+#commitlog .description {
+  margin-left: 1.5em;
+}
