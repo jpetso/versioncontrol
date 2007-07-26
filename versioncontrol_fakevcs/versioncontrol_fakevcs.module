@@ -251,7 +251,7 @@ function versioncontrol_fakevcs_get_authors_by_username($usernames_by_repository
 
 /**
  * Implementation of [versioncontrol_backend]_get_commit_actions():
- * Retrieves detailed information about what happened in a single commit.
+ * Retrieve detailed information about what happened in a single commit.
  *
  * @param $commit
  *   The commit whose actions should be retrieved.
@@ -307,6 +307,9 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
     // The committer's username known to the repository itself. In most cases
     // this will probably be the name of the committer's Unix user account.
     'username' => 'jpetso',
+    // The deepest-level directory in the repository that is common to
+    // all the changed items in this commit.
+    'directory' => '/',
     // The commit message, which is expected to span one or more lines.
     'message' => 'All kinds of demonstrative changes.',
     // The revision identifier of the commit, in the VCS's proprietary format -
@@ -446,6 +449,51 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
 }
 
 /**
+ * Implementation of [versioncontrol_backend]_get_commit_directory_item():
+ * Retrieve the item of the deepest-level directory in the repository that is
+ * common to all the changed items in a commit. In other words, this function
+ * gets you the item for $commit['directory'].
+ *
+ * @param $commit
+ *   The commit whose deepest-level changed directory should be retrieved.
+ *
+ * @return
+ *   The requested directory item. Item values are structured arrays and
+ *   consist of elements with the following keys:
+ *
+ *   'type': Specifies the item type, which in this case can only be
+ *           VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the directory at the time of the commit.
+ *   'revision': The (file-level) revision when the item was last changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is NULL.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
+ */
+function versioncontrol_fakevcs_get_commit_directory_item($commit) {
+  // Assuming $commit is a single commit array that looks like this:
+  $commit = array(
+    'commit_id' => 2345,
+    'repository' => $drupal_cvs,
+    'date' => time(),
+    'uid' => $user->uid,
+    'username' => 'jpetso',
+    'directory' => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
+    'message' => 'All kinds of demonstrative changes.',
+    'revision' => NULL, // for this commit, let's assume this is a CVS repository
+    'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
+  );
+
+  return array(
+    'type' => VERSIONCONTROL_ITEM_DIRECTORY,
+    'path' => $commit['directory'],
+    'revision' => NULL,
+    'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
+  );
+}
+
+/**
  * Implementation of [versioncontrol_backend]_get_commit_branches():
  * Retrieve the branches that have been affected by the given commit.
  *
@@ -460,11 +508,63 @@ function versioncontrol_fakevcs_get_commit_branches($commit) {
   return array('trunk', '5.x-1.x');
 }
 
+
 /**
- * Implementation of [versioncontrol_backend]_get_item_branches():
+ * Implementation of [versioncontrol_backend]_get_current_item_branch():
+ * Retrieve the current branch that this item is in. If this item was part of
+ * the result of versioncontrol_get_commit_actions(), this will probably be
+ * the branch that this item was committed to. If no specific branch is known
+ * or applicable for this item, NULL is returned. The main branch ('HEAD',
+ * 'trunk', 'master' or however it is called in the respective VCS) is also
+ * a valid branch and should be expected as return value.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose current branch should be retrieved.
+ *
+ * @return
+ *   A string containing the current item branch, or NULL if no branch
+ *   is known or applicable.
+ */
+function versioncontrol_fakevcs_get_current_item_branch($repository, $item) {
+  // How CVS would probably do it
+  return 'DRUPAL-5';
+  // How SVN could also do it
+  return 'trunk';
+}
+
+/**
+ * Implementation of [versioncontrol_backend]_get_current_item_tag():
+ * Retrieve the current tag that this item is in. If no specific tag is known
+ * or applicable for this item, NULL is returned.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose current branch should be retrieved.
+ *
+ * @return
+ *   A string containing the current item branch, or NULL if no tag
+ *   is known or applicable.
+ */
+function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
+  // How CVS would probably do it
+  return 'DRUPAL-5';
+  // How SVN could also do it
+  return 'trunk';
+}
+
+
+/**
+ * Implementation of [versioncontrol_backend]_get_all_item_branches():
  * Retrieve all branches that exist for the given item $path, and how this item
  * is named there. The main branch ('HEAD', 'trunk', 'master' or however it is
  * called in the respective VCS) is also included in the result.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_all_item_branches')
+ * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the item is located in.
@@ -530,9 +630,13 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_item_tags():
+ * Implementation of [versioncontrol_backend]_get_all_item_tags():
  * Retrieve all tags that exist for the given item $path, and how this item
  * is named there.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_all_item_tags')
+ * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the item is located in.
@@ -692,6 +796,10 @@ function versioncontrol_get_item_history($repository, $item) {
  * Implementation of [versioncontrol_backend]_get_directory_contents():
  * Retrieve the set of files and directories that exist at a specified revision
  * in the given directory inside the repository.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
+ * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the directory item is located in.
@@ -934,6 +1042,10 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
  * Implementation of [versioncontrol_backend]_insert_commit():
  * Insert additional commit data into the database.
  *
+ * This function is optional for VCS backends to implement. If not implemented,
+ * only standard database entries for this commit will be inserted by
+ * versioncontrol_insert_commit().
+ *
  * @param $commit
  *   A single commit array, like the ones returned
  *   by versioncontrol_get_commits().
@@ -942,7 +1054,7 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
  *   each item in this commit. The structure of this array is the same as
  *   the return value of versioncontrol_get_commit_actions().
  */
-function versioncontrol_cvs_insert_commit($commit, $commit_actions) {
+function versioncontrol_fakevcs_insert_commit($commit, $commit_actions) {
   // If nothing has to be stored in addition to the commit info that
   // versioncontrol_insert_commit() stores by itself, this function
   // doesn't have to be implemented by the backend.
