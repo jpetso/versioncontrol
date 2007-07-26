@@ -423,7 +423,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
     }
 
     if ($html) {
-      $project_string = theme('commitlog_project_for_item', $item, $html);
+      $project_string = theme('commitlog_project_for_item', $commit['repository'], $item, $html);
       if (!empty($project_string)) {
         $action_string = t('!project: !action', array('!action' => $action_string));
       }
@@ -513,9 +513,9 @@ function theme_commitlog_diff_link($commit, $commit_action) {
   return '';
 }
 
-function theme_commitlog_project_for_item($item, $html = TRUE) {
+function theme_commitlog_project_for_item($repository, $item, $html = TRUE) {
   if (module_exists('versioncontrol_project')) {
-    $project = versioncontrol_project_get_project_for_item($item['path']);
+    $project = versioncontrol_project_get_project_for_item($repository, $item['path']);
     if (isset($project)) {
       $project_node = node_load($project['nid']);
     }
