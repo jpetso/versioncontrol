@@ -110,56 +110,43 @@ versioncontrol_fakevcs_versioncontrol_backends() {
  * @param $repositories
  *   The repositories for which this backend module needs to retrieve
  *   additional repository data. This is an array like the one returned by
- *   versioncontrol_get_repositories(), and even the '[xxx]_specific' array
- *   already exists. (If the VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES flag
+ *   versioncontrol_get_repositories(), and even the '[xxx]_specific' arrays
+ *   already exist. (If the VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES flag
  *   has been set by this module, it may even be filled with values already.)
- */
-versioncontrol_fakevcs_alter_repositories(&$repositories) {
-  $repositories[$repo_id]['fakevcs_specific']['modules'] = array('drupal', 'contributions');
-}
-
-/**
- * Implementation of [versioncontrol_backend]_filter_commits():
- * Unset commits that don't match any of the given constraints.
- *
- * @param $commits
- *   The original array of commits retrieved by versioncontrol_get_commits().
- *   The filtered version will naturally be a subset of those.
- * @param $branches
- *   An array of strings, specified separately for each repository,
- *   like array($repo_id => array('HEAD', 'DRUPAL-5')).
- *   If given, only commits on the given branches will be returned.
- * @param paths
- *   An array of strings (item locations), specified separately for
- *   each repository, like
- *     array($repo_id => array(
- *       '/trunk/contributions/modules/versioncontrol',
- *       '/trunk/contributions/themes/b2',
- *     )).
- *   If given, only commits that affected this item (or its children,
- *   in case the item is a directory) will be returned.
- * @param $fakevcs_specific
- *   An array of FakeVCS specific constraints. Say, if FakeVCS supported
- *   modules like the CVS ones, the array would contain a 'modules' element
+ * @param $fakevcs_specific_constraints
+ *   An array of FakeVCS specific filter constraints which were passed to
+ *   versioncontrol_get_commits(). Say, if FakeVCS supported modules like
+ *   the CVS ones, the array would maybe contain a 'modules' constraint
  *   for filtering by module.
  */
-versioncontrol_fakevcs_filter_commits(&$commits, $branches = NULL, $paths = NULL, $fakevcs_specific = NULL) {
-  foreach($commits as $key => $commit) {
-    if ($constraint == 'matched') {
-      continue;
+versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_specific_constraints = array()) {
+  foreach ($commits as $repo_id => $repository) {
+    // Retrieve our own custom stuff.
+    $additions = array(
+      'modules' => array('drupal', 'contributions'),
+    );
+
+    // Filter out commits that don't match the given constraints.
+    if (isset($fakevcs_specific_constraints['modules'])) {
+      foreach ($fakevcs_specific_constraints['modules'] as $module_constraint) {
+        if (!in_array($module_constraint, $additions['modules'])) {
+          unset($repositories[$repo_id]);
+          continue;
+        }
+      }
     }
-    else if ($other_constraint == 'matched') {
-      continue;
-    }
-    else {
-      unset($commits[$key]);
-    }
+
+    // Merge the additions into the existing commit array.
+    $repositories[$repo_id]['fakevcs_specific'] = array_merge(
+      $repository['fakevcs_specific'], $additions
+    );
   }
 }
 
 /**
  * Implementation of [versioncontrol_backend]_alter_commits():
- * Add VCS specific repository data into a $commit['[xxx]_specific'] array.
+ * Add VCS specific repository data into a $commit['[xxx]_specific'] array,
+ * and/or unset commits that don't match VCS specific filter constraints.
  * By convention, this function only adds data in this specific element
  * and doesn't modify other parts of the commit array.
  *
@@ -168,22 +155,44 @@ versioncontrol_fakevcs_filter_commits(&$commits, $branches = NULL, $paths = NULL
  * property before messing with this specific commit.
  *
  * Also, this function is optional for backend modules to implement. If you
- * don't need custom additions to the commits, just don't implement it.
+ * don't need custom commit additions or constraints, just don't implement it.
  *
  * @param $commits
- *   The commits for which this backend module needs to retrieve additional
- *   commit data. This is an array like the one returned by
- *   versioncontrol_get_commits(), and for commits of this backend even the
- *   '[xxx]_specific' array already exists. (If the
+ *   The unfiltered commits retrieved by versioncontrol_get_commits(), and
+ *   even the '[xxx]_specific' arrays already exist. (If the
  *   VERSIONCONTROL_FLAG_AUTOADD_COMMITS flag has been set by this module,
  *   it may even be filled with values already.)
+ * @param $fakevcs_specific_constraints
+ *   An array of FakeVCS specific filter constraints which were passed to
+ *   versioncontrol_get_commits(). Say, if FakeVCS supported modules like
+ *   the CVS ones, the array would maybe contain a 'modules' constraint
+ *   for filtering by module.
  */
-versioncontrol_fakevcs_alter_commits(&$commits) {
+versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_constraints = array()) {
   foreach ($commits as $key => $commit) {
+    // Disregard commits from other backends.
     if ($commit['repository']['vcs'] != 'fakevcs') {
       continue;
     }
-    $commits[$key]['fakevcs_specific']['branch'] = 'HEAD';
+
+    // Retrieve our own custom stuff.
+    $additions = array(
+      'branch' => 'HEAD',
+      'module' => 'contrib',
+    );
+
+    // Filter out commits that don't match the given constraints.
+    if (isset($fakevcs_specific_constraints['modules'])) {
+      if (!in_array($additions['module'], $fakevcs_specific_constraints['modules'])) {
+        unset($commits[$key]);
+        continue;
+      }
+    }
+
+    // Merge the additions into the existing commit array.
+    $commits[$key]['fakevcs_specific'] = array_merge(
+      $commit['fakevcs_specific'], $additions
+    );
   }
 }
 
