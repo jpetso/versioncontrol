@@ -163,18 +163,28 @@ versioncontrol_fakevcs_filter_commits(&$commits, $branches = NULL, $paths = NULL
  * By convention, this function only adds data in this specific element
  * and doesn't modify other parts of the commit array.
  *
+ * Version Control API doesn't filter commits by backend before passing them
+ * to this function, so make sure you check each $commit['repository']['vcs']
+ * property before messing with this specific commit.
+ *
  * Also, this function is optional for backend modules to implement. If you
  * don't need custom additions to the commits, just don't implement it.
  *
  * @param $commits
  *   The commits for which this backend module needs to retrieve additional
  *   commit data. This is an array like the one returned by
- *   versioncontrol_get_commits(), and even the '[xxx]_specific' array
- *   already exists. (If the VERSIONCONTROL_FLAG_AUTOADD_COMMITS flag has been
- *   set by this module, it may even be filled with values already.)
+ *   versioncontrol_get_commits(), and for commits of this backend even the
+ *   '[xxx]_specific' array already exists. (If the
+ *   VERSIONCONTROL_FLAG_AUTOADD_COMMITS flag has been set by this module,
+ *   it may even be filled with values already.)
  */
-versioncontrol_fakevcs_alter_commits($commits) {
-  $repositories[$repo_id]['fakevcs_specific']['branch'] = 'HEAD';
+versioncontrol_fakevcs_alter_commits(&$commits) {
+  foreach ($commits as $key => $commit) {
+    if ($commit['repository']['vcs'] != 'fakevcs') {
+      continue;
+    }
+    $commits[$key]['fakevcs_specific']['branch'] = 'HEAD';
+  }
 }
 
 

@@ -113,6 +113,28 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
   return call_user_func_array('versioncontrol_'. $vcs .'_'. $function, $args);
 }
 
+/**
+ * Call a function from the desired VCS backend, return its result value,
+ * and make sure that the (single) function parameter which is a reference
+ * can be altered by the backend.
+ *
+ * @param $vcs
+ *   The unique string identifier of the version control system.
+ * @param $function
+ *   The function name without module prefix.
+ * @param $args
+ *   An array of argument that will be passed to the backend function.
+ *
+ * @return
+ *   Returns the result of the backend function. The result value of calls
+ *   where the backend function has no implementation is undefined, as functions
+ *   called by this function are considered mandatory for the backend.
+ */
+function _versioncontrol_call_backend_alter($vcs, $function, &$arg) {
+  $function = 'versioncontrol_'. $vcs .'_'. $function;
+  return $function($arg);
+}
+
 
 /**
  * Retrieve a set of repositories if they match the given constraints.
@@ -221,8 +243,8 @@ function versioncontrol_get_repositories($constraints = array()) {
 
     // Provide an opportunity for the backend to add its own stuff.
     if (versioncontrol_backend_implements($vcs, 'alter_repositories')) {
-      _versioncontrol_call_backend(
-        $vcs, 'alter_repositories', array($vcs_repositories)
+      _versioncontrol_call_backend_alter(
+        $vcs, 'alter_repositories', $vcs_repositories
       );
     }
 
@@ -318,11 +340,14 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
   // Filter out commits of which the corresponding backend is not enabled,
   // and handle the 'vcs' constraint at the same time.
   $backends = versioncontrol_get_backends();
+  $backend_is_autoadd = array();
   $or_constraints = array();
   foreach ($backends as $vcs => $backend) {
     if (isset($constraints['vcs']) && !in_array($vcs, $constraints['vcs'])) {
       continue; // don't include the vcs if the caller has not specified it
     }
+    $backend_is_autoadd[$vcs] = in_array(VERSIONCONTROL_FLAG_AUTOADD_COMMITS,
+                                         $backend['flags']);
     $or_constraints[] = "r.vcs = '%s'";
     $params[] = $vcs;
   }
@@ -405,7 +430,7 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
     $or_constraints = array();
     foreach ($constraints['paths'] as $path) {
       list($path_or_constraints, $path_params) =
-        _versioncontrol_construct_path_constraint('c.path', $path);
+        _versioncontrol_construct_path_constraint('c.directory', $path);
       $or_constraints = array_merge($or_constraints, $path_or_constraints);
       $params = array_merge($params, $path_params);
     }
@@ -430,11 +455,10 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
                       $where ."
                       ORDER BY c.date DESC", $params);
   $commits = array();
+  $commit_ids_by_backend = array();
+  $selected_backends = array();
 
   while ($row = db_fetch_object($result)) {
-    // Filter out false posivites that could not be filtered by the query.
-    // TODO: path checking
-
     // Construct the commit array (which includes the repository array).
     $repository = array(
       'repo_id' => $row->repo_id,
@@ -455,12 +479,109 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
       'directory'  => $row->directory,
       'message'    => $row->message,
       'revision'   => empty($row->revision) ? NULL : $row->revision,
-      'cvs_specific' => array(
-        'branch_id' => $row->branch_id,
-      ),
+      $row->vcs .'_specific' => array(),
     );
 
     $commits[] = $commit;
+
+    if (!isset($selected_backends[$row->vcs])) {
+      $selected_backends[$row->vcs] = $backends[$row->vcs];
+    }
+
+    if ($backend_is_autoadd[$row->vcs]) {
+      if (!isset($commit_ids_by_backend[$row->vcs])) {
+        $commit_ids_by_backend[$row->vcs] = array();
+      }
+      $commit_ids_by_backend[$row->vcs][] = $commit['commit_id'];
+    }
+  }
+
+  // VCS specific data additions
+  foreach ($selected_backends as $vcs => $backend) {
+    // Automatically load additional properties for backends that say so.
+    if ($backend_is_autoadd[$vcs]) {
+      $additions = _versioncontrol_db_get_additions(
+        'versioncontrol_'. $vcs .'_commits', 'commit_id', $commit_ids_by_backend[$vcs]
+      );
+
+      $additions_by_commit_id = array();
+      foreach ($additions as $commit_id => $additions) {
+        $additions_by_commit_id[$commit_id] = $additions;
+      }
+
+      // Apply the additions to their respective commits.
+      foreach ($commits as $key => $commit) {
+        $commits[$key][$vcs .'_specific'] = $additions_by_commit_id[$commit['commit_id']];
+      }
+    }
+
+    // Provide an opportunity for the backend to add its own stuff.
+    if (versioncontrol_backend_implements($vcs, 'alter_commits')) {
+      _versioncontrol_call_backend_alter($vcs, 'alter_commits', $commits);
+    }
+  }
+
+  // Filter out false posivites that could not be filtered by the query.
+  foreach ($commits as $key => $commit) {
+
+    // First, branches. That's easier.
+    if (isset($constraints['branches'])) {
+      $branches = versioncontrol_get_commit_branches($commit);
+      $valid_branch = FALSE;
+      foreach ($constraints['branches'] as $branch) {
+        if (in_array($branch, $branches)) {
+          $valid_branch = TRUE;
+          break;
+        }
+      }
+      if (!$valid_branch) {
+        // the commit doesn't match the 'branches' constraint,
+        // don't include it in the result value.
+        unset($commits[$key]);
+      }
+    }
+
+    if (isset($constraints['paths'])) {
+      $valid_path = FALSE;
+      foreach ($constraints['paths'] as $path) {
+        if ($path[strlen($path)-1] != '/') {
+          $path .= '/';
+        }
+        if (strpos($row->directory .'/', $path) !== FALSE) {
+          $valid_path = TRUE; // $row->directory is at least as deep as $path
+          break;
+        }
+      }
+      if (!$valid_path) {
+        // Bad luck, we need to check on the single item paths
+        // as the common directory is too high-level to tell.
+        $actions = versioncontrol_get_commit_actions($commit);
+        foreach ($actions as $action) {
+          $items = isset($action['current item']) ? array($action['current item']) : array();
+          $items = isset($action['source items']) ? array_merge($items, $action['source items']) : $items;
+
+          foreach ($items as $item) {
+            foreach ($constraints['paths'] as $path) {
+              if ($path[strlen($path)-1] != '/') {
+                $path .= '/';
+              }
+              if (strpos($item['path'] .'/', $path) !== FALSE) {
+                $valid_path = TRUE; // $row->directory is at least as deep as $path
+                break;
+              }
+            }
+          }
+          if ($valid_path) {
+            break;
+          }
+        }
+      }
+      if (!$valid_path) {
+        // the commit doesn't match the 'branches' constraint,
+        // don't include it in the result value.
+        unset($commits[$key]);
+      }
+    }
   }
 
   return $commits;
@@ -490,7 +611,7 @@ function _versioncontrol_construct_path_constraint($column, $path) {
 
   // Also include any children paths of the given one.
   $or_constraints[] = $column ." LIKE '%s'";
-  $paths[] = $path .'/%';
+  $paths[] = $path . (($path[strlen($path)-1] == '/') ? '%' : '/%');
 
   return array($or_constraints, $paths);
 }
