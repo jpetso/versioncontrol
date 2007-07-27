@@ -351,6 +351,17 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *                     provide one of those for each backend in one
  *                     single query.
  *
+ * @param $result_count
+ *   This variable will be set to the overall number of commits that matched
+ *   the constraints. You're likely to need this if you use paging, in all
+ *   other cases this will be the same value as count($commits).
+ * @param $page
+ *   If given, this function only return a subset of the result, where
+ *   $page == 0 would return the first $limit matching commits,
+ *   $page == 1 would return the second set, and so on.
+ * @param $limit
+ *   The number of query results to return per page.
+ *
  * @return
  *   An array of commits, reversely sorted by the time of the commit.
  *   Each element contains a structured array with the following keys:
@@ -376,7 +387,7 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *
  *   If no single commit matches these constraints, an empty array is returned.
  */
-function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) {
+function versioncontrol_get_commits($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   $backends = versioncontrol_get_backends();
 
   list($and_constraints, $params) =
@@ -448,6 +459,11 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
   );
 
   _versioncontrol_filter_commits($commits, $constraints);
+  $result_count = count($commits);
+
+  if (isset($page)) {
+    return _versioncontrol_page_commits($commits, $page, $limit);
+  }
   return $commits;
 }
 
@@ -698,6 +714,21 @@ function _versioncontrol_filter_commits(&$commits, $constraints) {
       }
     }
   }
+}
+
+/**
+ * Return a subset of the given commit according to the $page and $limit values.
+ */
+function _versioncontrol_page_commits($commits, $page, $limit) {
+  $i = 0;
+  $paged_commits = array();
+  foreach ($commits as $commit) {
+    if ($i >= ($page * $limit) && $i < (($page+1) * $limit)) {
+      $paged_commits[] = $commit;
+    }
+    ++$i;
+  }
+  return $paged_commits;
 }
 
 

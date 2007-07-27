@@ -82,7 +82,8 @@ function commitlog_page() {
     return $error_message;
   }
 
-  list($commits, $attributes) = _commitlog_get_commits(); // TODO: paging.
+  list($constraints, $attributes) = _commitlog_get_commits();
+  $commits = _commitlog_get_paged_commits($constraints);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
   return theme('commitlog_page', $commits, $attributes);
@@ -96,7 +97,8 @@ function commitlog_rss() {
     exit();
   }
 
-  list($commits, $attributes) = _commitlog_get_commits(); // TODO: paging.
+  list($constraints, $attributes) = _commitlog_get_commit_constraints();
+  $commits = _commitlog_get_paged_commits($constraints);
 
   drupal_set_header('Content-Type: text/xml; charset=utf-8');
   print theme('commitlog_rss', $commits);
@@ -105,14 +107,14 @@ function commitlog_rss() {
 
 
 /**
- * Retrieve the commits that will be displayed by dissecting the $_REQUEST
- * variable and querying the Version Control API with the resulting
- * commit constraints.
+ * Retrieve the commit constraints for the page display by dissecting
+ * the $_REQUEST variable.
  *
  * @return
- *   An array($commits, $attributes) where $commits is an array of commits,
- *   like the one returned by versioncontrol_get_commits(), and $attributes
- *   is an associative array of the processed arguments in $_REQUEST.
+ *   An array($constraints, $attributes) where $constraints is an array of
+ *   commit constraints supposed to be passed to versioncontrol_get_commits(),
+ *   and $attributes is an associative array of the processed arguments
+ *   from $_REQUEST.
  */
 function _commitlog_get_commits() {
   $constraints = array();
@@ -161,13 +163,35 @@ function _commitlog_get_commits() {
       $attributes['maintainers'] = $_REQUEST['maintainers'];
     }
     if (!empty($project_constraints)) {
-      $constraints = versioncontrol_project_alter_commit_constraints(
+      $constraints = versioncontrol_project_get_commit_constraints(
         $constraints, $project_constraints
       );
     }
   }
 
-  return array(versioncontrol_get_commits($constraints), $attributes);
+  return array($constraints, $attributes);
+}
+
+/**
+ * Return an array of commits, resulting from a versioncontrol_get_commits()
+ * call. Paging is also used by emulating pager_query().
+ */
+function _commitlog_get_paged_commits($constraints, $element = 0) {
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : '';
+  $pager_page_array = explode(',', $page);
+  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
+
+  $limit = variable_get('commitlog_pager', 10);
+
+  $commits = versioncontrol_get_commits($constraints, $result_count, $page, $limit);
+
+  // Emulate pager_query() in order to get a proper theme('pager').
+  $pager_total_items[$element] = $result_count;
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
+
+  return $commits;
 }
 
 /**
