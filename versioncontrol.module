@@ -423,8 +423,6 @@ function versioncontrol_get_commits($constraints = array(), $use_pager = FALSE) 
     }
   }
 
-  // TODO: 'branches' constraint
-
   // Filter by item paths.
   if (isset($constraints['paths'])) {
     $or_constraints = array();
