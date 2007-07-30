@@ -1124,7 +1124,7 @@ function versioncontrol_fakevcs_insert_account($uid, $username, $repository, $fa
   if (!is_array($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
     return;
   }
-  db_query("INSERT INTO {versioncontrol_fakevcs_accounts} (uid, repo_id, password)
-            VALUES ('%d', '%d', '%s')",
-            $uid, $repository['repo_id'], $fakevcs_specific['password']);
+  db_query("INSERT INTO {versioncontrol_fakevcs_accounts} (repo_id, username, password)
+            VALUES ('%d', '%s', '%s')",
+            $repository['repo_id'], $username, $fakevcs_specific['password']);
 }
