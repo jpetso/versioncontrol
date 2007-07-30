@@ -129,3 +129,51 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
 
   return $commit;
 }
+
+/**
+ * Insert a VCS user account into the database,
+ * and call the necessary module hooks.
+ *
+ * @param $uid
+ *   The Drupal user id corresponding to the VCS username.
+ * @param $username
+ *   The VCS specific username (a string).
+ * @param $repository
+ *   The repository where the user has its VCS account.
+ * @param $vcs_specific
+ *   An array of VCS specific additional author information.
+ *   How this array looks like is defined by the corresponding
+ *   backend module (versioncontrol_[xxx]).
+ *
+ * @return
+ *   A structured array with the combined account information that has been
+ *   passed. Subsequently, it consists of the elements 'repo_id', 'username',
+ *   and 'uid'.
+ */
+function versioncontrol_insert_account($uid, $username, $repository, $vcs_specific = NULL) {
+  db_query(
+    "INSERT INTO {versioncontrol_accounts} (uid, repo_id, username)
+     VALUES ('%d', '%d', '%s')", $uid, $repository['repo_id'], $username
+  );
+
+  // Provide an opportunity for the backend to add its own stuff.
+  if (versioncontrol_backend_implements($repository['vcs'], 'insert_account')) {
+    _versioncontrol_call_backend(
+      $repository['vcs'], 'insert_account',
+      array($repository, $username, $uid, $vcs_specific)
+    );
+  }
+
+  $account = array(
+    'repo_id'  => $repository['repo_id'],
+    'username' => $username,
+    'uid'      => $uid,
+  );
+
+  // Everything's done, let the world know about it!
+  module_invoke_all(
+    'versioncontrol_account', array('insert', $account)
+  );
+
+  return $account;
+}

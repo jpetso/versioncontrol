@@ -141,7 +141,7 @@ function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constra
 
 
 /**
- * Retrieve a set of repositories if they match the given constraints.
+ * Retrieve a set of repositories that match the given constraints.
  *
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
@@ -173,13 +173,8 @@ function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constra
  *   '[xxx]_specific': An array of VCS specific additional repository
  *                     information. How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
- *   'url_commit_view', 'url_item_view', 'url_diff' and 'url_tracker':
- *      Not meant to be used directly, please refer to the
- *      versioncontrol_get_url_commit_view(), versioncontrol_get_url_item_view(),
- *      versioncontrol_get_url_diff() and versioncontrol_get_url_tracker()
- *      functions if you need this functionality.
  *
- *   If no single repository matches these constraints,
+ *   If not a single repository matches these constraints,
  *   an empty array is returned.
  */
 function versioncontrol_get_repositories($constraints = array()) {
@@ -301,8 +296,7 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
 
 
 /**
- * Retrieve a set of commits for the specified repository if they match
- * the given constraints.
+ * Retrieve a set of commits that match the given constraints.
  *
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
@@ -385,7 +379,8 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *                     How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
  *
- *   If no single commit matches these constraints, an empty array is returned.
+ *   If not a single commit matches these constraints,
+ *   an empty array is returned.
  */
 function versioncontrol_get_commits($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   $backends = versioncontrol_get_backends();
@@ -395,15 +390,13 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
-  $result = db_query("SELECT c.commit_id, c.date, c.uid, c.username,
+  $result = db_query('SELECT c.commit_id, c.date, c.uid, c.username,
                              c.directory, c.message, c.revision,
-                             r.repo_id, r.name, r.vcs, r.root,
-                             r.url_commit_view, r.url_item_view, r.url_diff,
-                             r.url_tracker
+                             r.repo_id, r.name, r.vcs, r.root
                       FROM {versioncontrol_commits} c
                        INNER JOIN {versioncontrol_repositories} r ON c.repo_id = r.repo_id
-                      ". $where ."
-                      ORDER BY c.date DESC", $params);
+                      '. $where .'
+                      ORDER BY c.date DESC', $params);
 
   $commits = array();
   $commit_ids_by_backend = array();
@@ -733,109 +726,151 @@ function _versioncontrol_page_commits($commits, $page, $limit) {
 
 
 /**
- * Retrieve a Drupal uid / VCS username mapping given a set of user ids.
- * Non-existing uids are discarded and don't appear in the result value.
+ * Retrieve a set of Drupal uid / VCS username mappings
+ * that match the given constraints.
  *
- * @param $uid_list
- *   An array containing Drupal user ids.
- * @param $repositories
- *   An array of structured arrays containing repository information,
- *   presumably a subset of what is returned by versioncontrol_get_repositories().
- *   If given, only usernames of this specific repository will be retrieved.
- *   If NULL, usernames of all repositories will be looked up.
+ * @param $constraints
+ *   An optional array of constraints. Possible array elements are:
  *
- * @return
- *   A structured array that looks like
- *   array(
- *     $drupal_uid => array(
- *       $repo_id => 'VCS username',
- *       ...
- *     ),
- *     ...
- *   ).
- *   If no system specific VCS usernames correlate to the given uids,
- *   an empty array is returned.
- */
-function versioncontrol_get_authors_by_uid($uid_list, $repositories = NULL) {
-  if (!isset($repositories)) {
-    $repositories = versioncontrol_get_repositories(); // all of them.
-  }
-
-  $backends = array();
-  foreach ($repositories as $repository) {
-    if (!isset($backends[$repository['vcs']])) {
-      $backends[$repository['vcs']] = array();
-    }
-    $backends[$repository['vcs']][] = $repository;
-  }
-
-  $authors = array();
-  foreach ($backends as $vcs => $vcs_repositories) {
-    $authors = array_merge_recursive($authors, _versioncontrol_call_backend(
-      $vcs, 'get_authors_by_uid', array($uid_list, $vcs_repositories)
-    ));
-  }
-  return $authors;
-}
-
-/**
- * Retrieve a Drupal uid / VCS username mapping given a set of usernames.
- * Non-existing usernames are discarded and don't appear in the result value.
- *
- * @param $usernames_by_repository
- *   An array containing system specific VCS usernames. Specified separately
- *   for each repository, like array($repo_id => array('dww', 'jpetso'), ...).
- * @param $cached_repositories
- *   If you already have loaded some or all of the repository arrays that
- *   correspond to the given repo_id keys, you can pass it here in order to
- *   save a database query. If not, this function will retrieve them for you.
- *   If you do pass a list of repository arrays, its format has to be
- *   array($repo_id => $repository, ...).
+ *   'uids': An array of Drupal user ids. If given, only accounts that
+ *           correspond to these Drupal users will be returned.
+ *   'repo_ids': An array of repository ids. If given, only accounts
+ *               in the corresponding repositories will be returned.
+ *   'usernames': An array of system specific VCS usernames,
+ *                like array('dww', 'jpetso'). If given, only accounts
+ *                with these VCS usernames will be returned.
+ *   'usernames_by_repository': A structured array that looks like
+ *           array($repo_id => array('dww', 'jpetso'), ...).
+ *           You might want this if you combine multiple username and
+ *           repository constraints, otherwise you can well do without.
  *
  * @return
  *   A structured array that looks like
  *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
- *   If no Drupal uids correlate to the given usernames,
+ *   If not a single account matches these constraints,
  *   an empty array is returned.
  */
-function versioncontrol_get_authors_by_username($usernames_by_repository, $cached_repositories = array()) {
-  $repos = $cached_repositories;
-  $missing_repo_ids = array();
+function versioncontrol_get_accounts($constraints = array()) {
+  $and_constraints = array();
+  $params = array();
 
-  // Fetch the full repository arrays for the list of repo ids.
-  // We need those to figure out the responsible VCS backends.
-  foreach ($usernames_by_repository as $repo_id => $username_list) {
-    if (!isset($repos[$repo_id])) {
-      $missing_repo_ids[] = $repo_id;
+  // Filter by Drupal user id.
+  if (isset($constraints['uids'])) {
+    $or_constraints = array();
+    foreach ($constraints['uids'] as $uid) {
+      $or_constraints[] = "uid = '%d'";
+      $params[] = $uid;
     }
-  }
-  if (!empty($missing_repo_ids)) {
-    $repos = array_merge($repos, versioncontrol_get_repositories(array(
-      'repo_ids' => $missing_repo_ids,
-    )));
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
-  // Ok, we got the repositories, now let's split them up among backends.
-  $backends = array();
-  foreach ($repos as $repo_id => $repository) {
-    if (!isset($usernames_by_repository[$repo_id])) {
-      continue;
+  // Filter by repository id.
+  if (isset($constraints['repo_ids'])) {
+    $or_constraints = array();
+    foreach ($constraints['repo_ids'] as $repo_id) {
+      $or_constraints[] = "repo_id = '%d'";
+      $params[] = $repo_id;
     }
-    if (!isset($backends[$repository['vcs']])) {
-      $backends[$repository['vcs']] = array();
-    }
-    $backends[$repository['vcs']][$repo_id] = $usernames_by_repository[$repo_id];
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
-  // Now it's up to the backends to retrieve the results:
-  $authors = array();
-  foreach ($backends as $vcs => $vcs_usernames_by_repository) {
-    $authors = array_merge_recursive($authors, _versioncontrol_call_backend(
-      $vcs, 'get_authors_by_username',
-      array($vcs_usernames_by_repository, $repos)
-    ));
+  // Filter by VCS username.
+  if (isset($constraints['usernames'])) {
+    $or_constraints = array();
+    foreach ($constraints['usernames'] as $username) {
+      $or_constraints[] = "username = '%s'";
+      $params[] = $username;
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
-  return $authors;
+
+  // Filter by usernames-by-repository.
+  if (isset($constraints['usernames_by_repository'])) {
+    $or_constraints = array();
+    foreach ($usernames_by_repository as $repo_id => $usernames) {
+      $repo_constraint = "repo_id = '%d'";
+      $params[] = $repo_id;
+
+      $username_constraints = array();
+      foreach ($usernames as $username) {
+        $username_constraints[] = "username = '%s'";
+        $params[] = $username;
+      }
+
+      $or_constraints[] = '('. $repo_constraint
+                          .' AND ('. implode(' OR ', $username_constraints) .'))';
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  }
+
+  // Execute the query.
+
+  // All the constraints have been gathered, assemble them to a WHERE clause.
+  $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
+
+  $result = db_query('SELECT uid, repo_id, username
+                      FROM {versioncontrol_accounts}'.
+                      $where, $params);
+
+  // Assemble the return value.
+  $accounts = array();
+  while ($account = db_fetch_object($database_result)) {
+    if (!isset($accounts[$account->uid])) {
+      $accounts[$account->uid] = array();
+    }
+    $accounts[$account->uid][$account->repo_id] = $account->username;
+  }
+  return $accounts;
+}
+
+/**
+ * Retrieve the VCS username for a given Drupal user id in a specific
+ * repository. If you need more detailed querying functionality than this
+ * function provides, use versioncontrol_get_accounts() instead.
+ *
+ * @param $username
+ *   The VCS specific username (a string) corresponding to the Drupal user.
+ * @param $repo_id
+ *   The repository id of the repository where the user has its VCS account.
+ *
+ * @return
+ *   The Drupal user id that corresponds to the given username and repository,
+ *   or NULL if no Drupal user could be associated to those.
+ */
+function versioncontrol_get_account_uid_for_username($username, $repo_id) {
+  $result = db_query("SELECT uid FROM {versioncontrol_accounts}
+                      WHERE username = '%s' AND repo_id = '%d'",
+                      $username, $repo_id);
+
+  while ($account = db_fetch_object($result)) {
+    return $account->uid;
+  }
+  return NULL;
+}
+
+/**
+ * Retrieve the Drupal user id for a given VCS username in a specific
+ * repository. If you need more detailed querying functionality than this
+ * function provides, use versioncontrol_get_accounts() instead.
+ *
+ * @param $uid
+ *   The Drupal user id corresponding to the VCS account.
+ * @param $repo_id
+ *   The repository id of the repository where the user has its VCS account.
+ *
+ * @return
+ *   The VCS username (a string) that corresponds to the given Drupal user
+ *   and repository, or NULL if no VCS account could be associated to those.
+ */
+function versioncontrol_get_account_username_for_uid($uid, $repo_id) {
+  $result = db_query("SELECT username FROM {versioncontrol_accounts}
+                      WHERE uid = '%d' AND repo_id = '%d'",
+                      $uid, $repo_id);
+
+  while ($account = db_fetch_object($result)) {
+    return $account->username;
+  }
+  return NULL;
 }
 
 
@@ -855,7 +890,8 @@ function versioncontrol_get_url_commit_view($commit) {
   if (!isset($commit['revision'])) {
     return '';
   }
-  return strtr($commit['repository']['url_commit_view'], array(
+  $urls = _versioncontrol_get_repository_urls($commit['repository']);
+  return strtr($urls['commit_view'], array(
     '%revision' => $commit['revision'],
   ));
 }
@@ -875,12 +911,23 @@ function versioncontrol_get_url_commit_view($commit) {
  *   or if the item cannot be viewed for any reason.
  */
 function versioncontrol_get_url_item_view($repository, $item) {
+  $urls = _versioncontrol_get_repository_urls($repository);
   $current_branch = versioncontrol_get_current_item_branch($repository, $item);
-  return strtr($repository['url_item_view'], array(
-    '%path'     => $item['path'],
-    '%revision' => $item['revision'],
-    '%branch'   => isset($current_branch) ? '' : $current_branch,
-  ));
+
+  if ($item['type'] == VERSIONCONTROL_ITEM_FILE) {
+    return strtr($urls['file_view'], array(
+      '%path'     => $item['path'],
+      '%revision' => $item['revision'],
+      '%branch'   => isset($current_branch) ? '' : $current_branch,
+    ));
+  }
+  else if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
+    return strtr($urls['directory_view'], array(
+      '%path'     => $item['path'],
+      '%revision' => $item['revision'],
+      '%branch'   => isset($current_branch) ? '' : $current_branch,
+    ));
+  }
 }
 
 /**
@@ -888,8 +935,7 @@ function versioncontrol_get_url_item_view($repository, $item) {
  * two given files in the corresponding repository.
  *
  * @param $repository
- *   A structured array containing repository information, like a single
- *   element of what versioncontrol_get_repositories() returns.
+ *   The repository that the file items are located in.
  * @param $file_item_new
  *   The new version of the file that should be diffed.
  * @param $file_item_old
@@ -901,8 +947,9 @@ function versioncontrol_get_url_item_view($repository, $item) {
  *   or if the two items cannot be diffed for any reason.
  */
 function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old) {
+  $urls = _versioncontrol_get_repository_urls($repository);
   $current_branch = versioncontrol_get_current_item_branch($repository, $file_item_new);
-  return strtr($repository['url_diff'], array(
+  return strtr($urls['diff'], array(
     '%new_path'     => $file_item_new['path'],
     '%new_revision' => $file_item_new['revision'],
     '%old_path'     => $file_item_old['path'],
@@ -918,8 +965,7 @@ function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old
  * to be given as argument.
  *
  * @param $repository
- *   A structured array containing repository information, like a single
- *   element of what versioncontrol_get_repositories() returns.
+ *   The repository that is covered by the issue tracker.
  * @param $issue_id
  *   A number that uniquely identifies the mentioned issue/case/bug.
  *
@@ -928,7 +974,46 @@ function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old
  *   An empty string is returned if no issue tracker URL has been defined.
  */
 function versioncontrol_get_url_tracker($repository, $issue_id) {
-  return strtr($repository['url_commit_view'], array('%d' => $issue_id));
+  $urls = _versioncontrol_get_repository_urls($repository);
+  return strtr($urls['tracker'], array('%d' => $issue_id));
+}
+
+/**
+ * Retrieve the repository viewer URLs from the database (or from the cache).
+ *
+ * @param $repository
+ *   The repository for which the URLs should be retrieved.
+ *
+ * @return
+ *   A structured array with the repository viewer URLs as values (each of them
+ *   can be an empty string), corresponding to the following keys:
+ *
+ *   'commit_view': The overall summary view of a commit/revision.
+ *   'file_view': The 'view' URL of a file in the repository.
+ *   'directory_view': The 'view' URL of a directory in the repository.
+ *   'diff': The difference between two versions of a file
+ *           (or of two different files, if the repository viewer supports it).
+ *   'tracker': The issue/bug/case URL of the associated issue/case/bug tracker.
+ */
+function _versioncontrol_get_repository_urls($repository) {
+  static $urls_by_repository = array();
+
+  if (!isset($urls_by_repository[$repository['repo_id']])) {
+    $result = db_query("SELECT * FROM {versioncontrol_repository_urls}
+                        WHERE repo_id = '%d'", $repository['repo_id']);
+
+    while ($urls = db_fetch_array($result)) {
+      unset($urls['repo_id']);
+      $urls_by_repository[$repository['repo_id']] = $urls;
+    }
+  }
+  if (!isset($urls_by_repository[$repository['repo_id']])) {
+    return array(
+      'commit_view' => '', 'file_view' => '', 'directory_view' => '',
+      'diff' => '', 'tracker' => '',
+    );
+  }
+  return $urls_by_repository[$repository['repo_id']];
 }
 
 
