@@ -35,7 +35,7 @@ function versioncontrol_install() {
         message text,
         revision varchar(255) NOT NULL default '',
         PRIMARY KEY (commit_id),
-        KEY repoid (repo_id),
+        KEY repo_id (repo_id),
         KEY uid (uid),
         KEY date (date)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
@@ -45,6 +45,7 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
+        url_backend varchar(64) NOT NULL default '',
         PRIMARY KEY (repo_id),
         UNIQUE KEY name (name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
@@ -56,7 +57,7 @@ function versioncontrol_install() {
         directory_view varchar(255) NOT NULL default '',
         diff varchar(255) NOT NULL default '',
         tracker varchar(255) NOT NULL default '',
-        PRIMARY KEY (repo_id),
+        PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
       break;
 

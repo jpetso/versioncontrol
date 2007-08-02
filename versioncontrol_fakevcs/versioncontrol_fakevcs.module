@@ -1079,8 +1079,8 @@ function versioncontrol_fakevcs_insert_commit($commit, $commit_actions) {
   // doesn't have to be implemented by the backend.
   // If you've got stuff like file tables or whatever, it may come in handy.
   foreach ($commit_actions as $path => $action) {
-    $revision = NULL;
-    $source_revision = NULL;
+    $revision = '';
+    $source_revision = '';
 
     // If available, get item type and revision from the contained items.
     if (isset($action['current item'])) {
@@ -1089,7 +1089,7 @@ function versioncontrol_fakevcs_insert_commit($commit, $commit_actions) {
     }
     else {
       $type = $action['source items'][0]['type'];
-      $source_commit_id = $action['source items'][0]['fakevcs_specific']['commit_id'];
+      $source_revision = $action['source items'][0]['revision'];
       // of course, you need to store 'fakevcs_specific' items beforehand.
     }
 
@@ -1098,7 +1098,7 @@ function versioncontrol_fakevcs_insert_commit($commit, $commit_actions) {
        (commit_id, type, path, revision, action, source_revision)
        VALUES ('%d', '%d', '%s', '%s', '%d', '%d')",
       $commit['commit_id'], $type, $path, $revision, $action['action'],
-      $source_commit_id
+      $source_revision
     );
   }
 }

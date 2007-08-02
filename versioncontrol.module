@@ -40,6 +40,8 @@ define('VERSIONCONTROL_ACTION_DELETED',       5);
 define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES', 0);
 define('VERSIONCONTROL_FLAG_AUTOADD_COMMITS',      1);
 
+// The admin pages.
+include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol.admin.inc');
 // The backend-only part of the API.
 include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol-backend.inc');
 
@@ -141,6 +143,37 @@ function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constra
 
 
 /**
+ * Convenience function for retrieving one single repository by repository id.
+ *
+ * @return
+ *   A single repository array that consists of the following elements:
+ *
+ *   'repo_id': The unique repository id.
+ *   'name': The user-visible name of the repository.
+ *   'vcs': The unique string identifier of the version control system
+ *          that powers this repository.
+ *   'root': The root directory of the repository. In most cases,
+ *           this will be a local directory (e.g. '/var/repos/drupal'),
+ *           but it may also be some specialized string for remote repository
+ *           access. How this string may look like depends on the backend.
+ *   'url_backend': The prefix (excluding the trailing underscore)
+ *                  for URL backend retrieval functions.
+ *   '[xxx]_specific': An array of VCS specific additional repository
+ *                     information. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *
+ *   If no repository corresponds to the given repository id, NULL is returned.
+ */
+function versioncontrol_get_repository($repo_id) {
+  $repos = versioncontrol_get_repositories(array('repo_ids' => array($repo_id)));
+
+  foreach ($repos as $repo_id => $repository) {
+    return $repository;
+  }
+  return NULL; // in case of empty($repos)
+}
+
+/**
  * Retrieve a set of repositories that match the given constraints.
  *
  * @param $constraints
@@ -150,6 +183,9 @@ function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constra
  *          If given, only commits for these backends will be returned.
  *   'repo_ids': An array of repository ids.
  *               If given, only the corresponding repositories will be returned.
+ *   'names': An array of repository names, like
+ *            array('Drupal CVS', 'Experimental SVN'). If given, only
+ *            repositories with these repository names will be returned.
  *   '[xxx]_specific': An array of VCS specific constraints. How this array
  *                     looks like is defined by the corresponding backend
  *                     module (versioncontrol_[xxx]). Other backend modules
@@ -170,6 +206,8 @@ function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constra
  *           this will be a local directory (e.g. '/var/repos/drupal'),
  *           but it may also be some specialized string for remote repository
  *           access. How this string may look like depends on the backend.
+ *   'url_backend': The prefix (excluding the trailing underscore)
+ *                  for URL backend retrieval functions.
  *   '[xxx]_specific': An array of VCS specific additional repository
  *                     information. How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
@@ -250,6 +288,15 @@ function _versioncontrol_construct_repository_constraints($constraints, $backend
     $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
+  if (isset($constraints['names'])) {
+    $or_constraints = array();
+    foreach ($constraints['names'] as $name) {
+      $or_constraints[] = "r.name = '%s'";
+      $params[] = $name;
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  }
+
   return array($and_constraints, $params);
 }
 
@@ -289,7 +336,7 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
         $vcs, 'alter_repositories', $vcs_repositories, $vcs_specific_constraints
       );
     }
-    $repositories_by_backend[$vcs][$repo_id] = $vcs_repositories[$repo_id];
+    $repositories_by_backend[$vcs] = $vcs_repositories;
   }
   return $repositories_by_backend;
 }
@@ -392,7 +439,7 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
 
   $result = db_query('SELECT c.commit_id, c.date, c.uid, c.username,
                              c.directory, c.message, c.revision,
-                             r.repo_id, r.name, r.vcs, r.root
+                             r.repo_id, r.name, r.vcs, r.root, r.url_backend
                       FROM {versioncontrol_commits} c
                        INNER JOIN {versioncontrol_repositories} r ON c.repo_id = r.repo_id
                       '. $where .'
@@ -814,7 +861,7 @@ function versioncontrol_get_accounts($constraints = array()) {
 
   // Assemble the return value.
   $accounts = array();
-  while ($account = db_fetch_object($database_result)) {
+  while ($account = db_fetch_object($result)) {
     if (!isset($accounts[$account->uid])) {
       $accounts[$account->uid] = array();
     }
@@ -950,10 +997,10 @@ function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old
   $urls = _versioncontrol_get_repository_urls($repository);
   $current_branch = versioncontrol_get_current_item_branch($repository, $file_item_new);
   return strtr($urls['diff'], array(
-    '%new_path'     => $file_item_new['path'],
-    '%new_revision' => $file_item_new['revision'],
-    '%old_path'     => $file_item_old['path'],
-    '%old_revision' => $file_item_old['revision'],
+    '%path'         => $file_item_new['path'],
+    '%new-revision' => $file_item_new['revision'],
+    '%old-path'     => $file_item_old['path'],
+    '%old-revision' => $file_item_old['revision'],
     '%branch'       => isset($current_branch) ? '' : $current_branch,
   ));
 }
@@ -1470,28 +1517,6 @@ function _versioncontrol_get_common_directory($commit_actions) {
 
 
 /**
- * Generate and execute an INSERT query for the given table based on key names,
- * values and types of the given array elements. This function basically
- * accomplishes the insertion part of Version Control API's 'autoadd' feature.
- */
-function _versioncontrol_db_insert_additions($table_name, $elements) {
-  $keys = array();
-  $values = array();
-  $types = array();
-
-  foreach ($elements as $key => $value) {
-    $keys[] = $key;
-    $values[] = $value;
-    $types[] = is_numeric($value) ? "'%d'" : "'%s'";
-  }
-
-  db_query(
-    'INSERT INTO {'. $table_name .'} ('. implode(', ', $keys) .')
-     VALUES ('. implode(', ', $types) .')', $values
-  );
-}
-
-/**
  * Generate and execute a SELECT query for the given table base on the name
  * and given values of this table's primary key. This function basically
  * accomplishes the retrieval part of Version Control API's 'autoadd' feature.
@@ -1510,9 +1535,15 @@ function _versioncontrol_db_get_additions($table_name, $primary_key_name, $keys)
 
   $additions = array();
   while ($addition = db_fetch_array($result)) {
-    $key = $addition[$primary_key_name];
+    $primary_key = $addition[$primary_key_name];
     unset($addition[$primary_key_name]);
-    $additions[$key] = $addition;
+
+    foreach ($addition as $key => $value) {
+      if (!is_numeric($addition[$key])) {
+        $addition[$key] = unserialize($addition[$key]);
+      }
+    }
+    $additions[$primary_key] = $addition;
   }
   return $additions;
 }
