@@ -111,10 +111,10 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
   }
 
   // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($commit['repository']['vcs'], 'insert_commit')) {
+  if (versioncontrol_backend_implements($commit['repository']['vcs'], 'commit')) {
     _versioncontrol_call_backend(
-      $commit['repository']['vcs'], 'insert_commit',
-      array($commit, $commit_actions)
+      $commit['repository']['vcs'], 'commit',
+      array('insert', $commit, $commit_actions)
     );
   }
 
@@ -143,9 +143,9 @@ function versioncontrol_delete_commit($commit) {
   );
 
   // Provide an opportunity for the backend to delete its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'delete_commit')) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'commit')) {
     _versioncontrol_call_backend(
-      $commit['repository']['vcs'], 'delete_commit', array($commit, $commit_actions)
+      $commit['repository']['vcs'], 'commit', array('delete', $commit, $commit_actions)
     );
   }
 
@@ -167,11 +167,6 @@ function versioncontrol_delete_commit($commit) {
  *   An array of VCS specific additional author information.
  *   How this array looks like is defined by the corresponding
  *   backend module (versioncontrol_[xxx]).
- *
- * @return
- *   A structured array with the combined account information that has been
- *   passed. Subsequently, it consists of the elements 'repo_id', 'username',
- *   and 'uid'.
  */
 function versioncontrol_insert_account($uid, $username, $repository, $vcs_specific = NULL) {
   db_query(
@@ -180,10 +175,10 @@ function versioncontrol_insert_account($uid, $username, $repository, $vcs_specif
   );
 
   // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'insert_account')) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'account')) {
     _versioncontrol_call_backend(
-      $repository['vcs'], 'insert_account',
-      array($repository, $username, $uid, $vcs_specific)
+      $repository['vcs'], 'account',
+      array('insert', $uid, $username, $repository, $vcs_specific)
     );
   }
 
@@ -196,6 +191,61 @@ function versioncontrol_insert_account($uid, $username, $repository, $vcs_specif
   // Everything's done, let the world know about it!
   module_invoke_all(
     'versioncontrol_account', array('insert', $uid, $username, $repository)
+  );
+}
+
+/**
+ * Update a VCS user account in the database, and call the necessary
+ * module hooks. The @p $uid and @p $repository parameters must stay the same
+ * values as the one given on account creation, whereas @p $username and
+ * @p $vcs_specific may change.
+ *
+ * @param $uid
+ *   The Drupal user id corresponding to the VCS username.
+ * @param $username
+ *   The VCS specific username (a string).
+ * @param $repository
+ *   The repository where the user has its VCS account.
+ * @param $vcs_specific
+ *   An array of VCS specific additional author information.
+ *   How this array looks like is defined by the corresponding
+ *   backend module (versioncontrol_[xxx]).
+ */
+function versioncontrol_update_account($uid, $username, $repository, $vcs_specific = NULL) {
+  $old_username = versioncontrol_get_account_username_for_uid($uid, $repository);
+  $username_changed = ($username != $old_username);
+
+  if ($username_changed) {
+    db_query("UPDATE {versioncontrol_accounts}
+              SET username = '%s'
+              WHERE uid = '%d' AND repo_id = '%d'",
+              $username, $uid, $repository['repo_id']
+    );
+  }
+
+  // Provide an opportunity for the backend to add its own stuff.
+  if (versioncontrol_backend_implements($repository['vcs'], 'account')) {
+    _versioncontrol_call_backend(
+      $repository['vcs'], 'account',
+      array('update', $uid, $username, $repository, $vcs_specific)
+    );
+  }
+
+  // Update the commits table.
+  if ($username_changed) {
+    db_query("UPDATE {versioncontrol_commits}
+              SET uid = '0'
+              WHERE uid = '%d' AND repo_id = '%d'",
+              $uid, $repository['repo_id']);
+    db_query("UPDATE {versioncontrol_commits}
+              SET uid = '%d'
+              WHERE username = '%s' AND repo_id = '%d'",
+              $uid, $username, $repository['repo_id']);
+  }
+
+  // Everything's done, let the world know about it!
+  module_invoke_all(
+    'versioncontrol_account', array('update', $uid, $username, $repository)
   );
 }
 
@@ -223,9 +273,10 @@ function versioncontrol_delete_account($uid, $username, $repository) {
   );
 
   // Provide an opportunity for the backend to delete its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'delete_account')) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'account')) {
     _versioncontrol_call_backend(
-      $repository['vcs'], 'delete_account', array($uid, $username, $repository)
+      $repository['vcs'], 'account',
+      array('delete', $uid, $username, $repository, NULL)
     );
   }
 
@@ -235,18 +286,14 @@ function versioncontrol_delete_account($uid, $username, $repository) {
 }
 
 /**
- * Insert a repository into the database or update an existing one,
- * and call the necessary module hooks.
+ * Insert a repository into the database, and call the necessary hooks.
  *
  * @param $repository
  *   The repository array containing the new or existing repository.
  *   It's a single repository array like the one returned by
  *   versioncontrol_get_repository(), so it consists of the following elements:
  *
- *   'repo_id': The unique repository id. If this is 0 or not set,
- *              the repository is assumed not to exist yet, and will be
- *              inserted into the database. Otherwise the existing entry
- *              will be updated.
+ *   'repo_id': The unique repository id.
  *   'name': The user-visible name of the repository.
  *   'vcs': The unique string identifier of the version control system
  *          that powers this repository.
@@ -268,20 +315,84 @@ function versioncontrol_delete_account($uid, $username, $repository) {
  *   An array of repository viewer URLs. How this array looks like is
  *   defined by the corresponding URL backend.
  */
-function versioncontrol_set_repository($repository, $repository_urls) {
-  if (isset($repository['repo_id']) && $repository['repo_id'] > 0) {
-    _versioncontrol_update_repository($repository, $repository_url);
+function versioncontrol_insert_repository($repository, $repository_url) {
+  $repository['repo_id'] = db_next_id('{versioncontrol_repositories}_repo_id');
+
+  db_query(
+    "INSERT INTO {versioncontrol_repositories}
+     (repo_id, name, vcs, root, url_backend)
+     VALUES ('%d', '%s', '%s', '%s', '%s')",
+     $repository['repo_id'], $repository['name'], $repository['vcs'],
+     $repository['root'], $repository['url_backend']
+  );
+  // TODO: abstract out repository URLs into separate backends
+  db_query(
+    "INSERT INTO {versioncontrol_repository_urls}
+     (repo_id, commit_view, file_view, directory_view, diff, tracker)
+     VALUES ('%d', '%s', '%s', '%s', '%s', '%s')",
+     $repository['repo_id'], $repository_urls['commit_view'],
+     $repository_urls['file_view'], $repository_urls['directory_view'],
+     $repository_urls['diff'], $repository_urls['tracker']
+  );
+
+  // Auto-add repository info from $repository['[xxx]_specific'] into the database.
+  $backends = versioncontrol_get_backends();
+  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
+                         $backends[$repository['vcs']]['flags']);
+  if ($is_autoadd) {
+    $table_name = 'versioncontrol_'. $repository['vcs'] .'_repositories';
+    $elements = $repository[$repository['vcs'] .'_specific'];
+    $elements['repo_id'] = $repository['repo_id'];
+    _versioncontrol_db_insert_additions($table_name, $elements);
   }
-  else {
-    $repository['repo_id'] = db_next_id('{versioncontrol_repositories}_repo_id');
-    _versioncontrol_insert_repository($repository, $repository_url);
+
+  // Provide an opportunity for the backend to add its own stuff.
+  if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
+    _versioncontrol_call_backend(
+      $repository['vcs'], 'repository', array('insert', $repository)
+    );
   }
+
+  // Everything's done, let the world know about it!
+  module_invoke_all(
+    'versioncontrol_repository', array('insert', $repository)
+  );
 }
 
 /**
  * Update a repository in the database, and call the necessary hooks.
+ * The 'repo_id' and 'vcs' properties of the repository array must stay
+ * the same as the ones given on repository creation,
+ * whereas all other values may change.
+ *
+ * @param $repository
+ *   The repository array containing the new or existing repository.
+ *   It's a single repository array like the one returned by
+ *   versioncontrol_get_repository(), so it consists of the following elements:
+ *
+ *   'repo_id': The unique repository id.
+ *   'name': The user-visible name of the repository.
+ *   'vcs': The unique string identifier of the version control system
+ *          that powers this repository.
+ *   'root': The root directory of the repository. In most cases,
+ *           this will be a local directory (e.g. '/var/repos/drupal'),
+ *           but it may also be some specialized string for remote repository
+ *           access. How this string may look like depends on the backend.
+ *   'url_backend': The prefix (excluding the trailing underscore)
+ *                  for URL backend retrieval functions.
+ *   '[xxx]_specific': An array of VCS specific additional repository
+ *                     information. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *                     If the backend has registered itself with the
+ *                     VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option,
+ *                     all items of this array will automatically be inserted
+ *                     into the {versioncontrol_[xxx]_commits} table.
+ *
+ * @param $repository_urls
+ *   An array of repository viewer URLs. How this array looks like is
+ *   defined by the corresponding URL backend.
  */
-function _versioncontrol_update_repository($repository, $repository_url) {
+function versioncontrol_update_repository($repository, $repository_url) {
   db_query(
     "UPDATE {versioncontrol_repositories}
      SET name = '%s', vcs = '%s', root = '%s', url_backend = '%s'
@@ -312,60 +423,15 @@ function _versioncontrol_update_repository($repository, $repository_url) {
   }
 
   // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'update_repository')) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
     _versioncontrol_call_backend(
-      $repository['vcs'], 'update_repository', array($repository)
+      $repository['vcs'], 'repository', array('update', $repository)
     );
   }
 
   // Everything's done, let the world know about it!
   module_invoke_all(
     'versioncontrol_repository', array('update', $repository)
-  );
-}
-
-/**
- * Insert a repository into the database, and call the necessary hooks.
- */
-function _versioncontrol_insert_repository($repository, $repository_url) {
-  db_query(
-    "INSERT INTO {versioncontrol_repositories}
-     (repo_id, name, vcs, root, url_backend)
-     VALUES ('%d', '%s', '%s', '%s', '%s')",
-     $repository['repo_id'], $repository['name'], $repository['vcs'],
-     $repository['root'], $repository['url_backend']
-  );
-  // TODO: abstract out repository URLs into separate backends
-  db_query(
-    "INSERT INTO {versioncontrol_repository_urls}
-     (repo_id, commit_view, file_view, directory_view, diff, tracker)
-     VALUES ('%d', '%s', '%s', '%s', '%s', '%s')",
-     $repository['repo_id'], $repository_urls['commit_view'],
-     $repository_urls['file_view'], $repository_urls['directory_view'],
-     $repository_urls['diff'], $repository_urls['tracker']
-  );
-
-  // Auto-add repository info from $repository['[xxx]_specific'] into the database.
-  $backends = versioncontrol_get_backends();
-  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
-                         $backends[$repository['vcs']]['flags']);
-  if ($is_autoadd) {
-    $table_name = 'versioncontrol_'. $repository['vcs'] .'_repositories';
-    $elements = $repository[$repository['vcs'] .'_specific'];
-    $elements['repo_id'] = $repository['repo_id'];
-    _versioncontrol_db_insert_additions($table_name, $elements);
-  }
-
-  // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'insert_repository')) {
-    _versioncontrol_call_backend(
-      $repository['vcs'], 'insert_repository', array($repository)
-    );
-  }
-
-  // Everything's done, let the world know about it!
-  module_invoke_all(
-    'versioncontrol_repository', array('insert', $repository)
   );
 }
 
@@ -398,9 +464,9 @@ function versioncontrol_delete_repository($repository) {
   );
 
   // Provide an opportunity for the backend to delete its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'delete_repository')) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
     _versioncontrol_call_backend(
-      $repository['vcs'], 'delete_repository', array($repository)
+      $repository['vcs'], 'repository', array('delete', $repository)
     );
   }
 

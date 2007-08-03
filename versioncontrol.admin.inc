@@ -16,11 +16,12 @@
  * Implementation of hook_menu().
  */
 function versioncontrol_menu($may_cache) {
+  global $user;
   $items = array();
+  $admin_access = user_access('administer version control systems');
+  $committer_access = user_access('use version control systems');
 
   if ($may_cache) {
-    $access = user_access('administer version control systems');
-
     // If Version Control API is used without the Project module,
     // we need to define our own version of /admin/project
     // so the rest of our admin pages all work.
@@ -30,7 +31,7 @@ function versioncontrol_menu($may_cache) {
         'title' => t('Project administration'),
         'description' => t('Administrative interface for project management and related modules.'),
         'callback' => 'system_admin_menu_block_page',
-        'access' => $access,
+        'access' => $admin_access,
         'type' => MENU_NORMAL_ITEM,
       );
     }
@@ -41,26 +42,11 @@ function versioncontrol_menu($may_cache) {
       'description' => t('Define and configure what version control repositories are connected to your site, and how to integrate each repository with repository browser tools such as ViewVC or WebSVN.'),
       'callback' => 'drupal_get_form',
       'callback arguments' => array('versioncontrol_admin_repository_list'),
-      'access' => $access,
+      'access' => $admin_access,
       'type' => MENU_NORMAL_ITEM,
     );
     $items[] = array(
       'path' => 'admin/project/versioncontrol-repositories/list',
-      'title' => t('List'),
-      'type' => MENU_DEFAULT_LOCAL_TASK,
-    );
-
-    $items[] = array(
-      'path' => 'admin/project/versioncontrol-accounts',
-      'title' => t('VCS accounts'),
-      'description' => t('Manage associations of Drupal users to VCS user accounts.'),
-      'callback' => 'drupal_get_form',
-      'callback arguments' => array('versioncontrol_admin_account_list'),
-      'access' => $access,
-      'type' => MENU_NORMAL_ITEM,
-    );
-    $items[] = array(
-      'path' => 'admin/project/versioncontrol-accounts/list',
       'title' => t('List'),
       'type' => MENU_DEFAULT_LOCAL_TASK,
     );
@@ -70,23 +56,30 @@ function versioncontrol_menu($may_cache) {
     foreach ($backends as $vcs => $backend) {
       $items[] = array(
         'path' => 'admin/project/versioncontrol-repositories/add-'. $vcs,
-        'title' => t('Add !vcs repository', array('!vcs' => $backend['name'])),
+        'title' => t('Add @vcs repository', array('@vcs' => $backend['name'])),
         'callback' => 'drupal_get_form',
         'callback arguments' => array('versioncontrol_admin_repository_edit', 0, $vcs),
-        'access' => $access,
+        'access' => $admin_access,
         'type' => MENU_LOCAL_TASK,
         'weight' => $i,
       );
       ++$i;
     }
-    /*$items[] = array(
+
+    $items[] = array(
       'path' => 'admin/project/versioncontrol-accounts',
       'title' => t('VCS accounts'),
+      'description' => t('Manage associations of Drupal users to VCS user accounts.'),
       'callback' => 'drupal_get_form',
       'callback arguments' => array('versioncontrol_admin_account_list'),
-      'access' => $access,
+      'access' => $admin_access,
       'type' => MENU_NORMAL_ITEM,
-    );*/
+    );
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-accounts/list',
+      'title' => t('List'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
   }
   else {
     if (is_numeric(arg(4))) {
@@ -95,7 +88,7 @@ function versioncontrol_menu($may_cache) {
         'title' => t('Edit repository'),
         'callback' => 'drupal_get_form',
         'callback arguments' => array('versioncontrol_admin_repository_edit', arg(4)),
-        'access' => $access,
+        'access' => $admin_access,
         'type' => MENU_CALLBACK,
       );
       $items[] = array(
@@ -103,13 +96,327 @@ function versioncontrol_menu($may_cache) {
         'title' => t('Delete repository'),
         'callback' => 'drupal_get_form',
         'callback arguments' => array('versioncontrol_admin_repository_delete_confirm', arg(4)),
-        'access' => $access,
+        'access' => $admin_access,
         'type' => MENU_CALLBACK,
       );
+    }
+    if (arg(0) == 'user' && is_numeric(arg(1)) && arg(2) == 'edit') {
+      $uid = arg(1);
+      $account_access = ($committer_access && $uid == $user->uid) || $admin_access;
+      $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
+      $repositories = versioncontrol_get_repositories();
+
+      // The form for editing an account.
+      foreach ($accounts as $uid => $usernames_by_repository) {
+        foreach ($usernames_by_repository as $repo_id => $username) {
+          if (isset($repositories[$repo_id])) {
+            $items[] = array(
+              'path' => 'user/'. $uid .'/edit/versioncontrol/'. $repo_id,
+              'title' => $repositories[$repo_id]['name'],
+              'callback' => 'drupal_get_form',
+              'callback arguments' => array(
+                'versioncontrol_user_account_edit_form',
+                $uid, $username, $repositories[$repo_id]
+              ),
+              'access' => $account_access,
+              'type' => MENU_LOCAL_TASK,
+              'weight' => 99,
+            );
+            // Let only the ones without accounts for this user survive.
+            unset($repositories[$repo_id]);
+          }
+        }
+      }
+      // The indirection form for creating (or applying for) a VCS account.
+      if (!empty($repositories)) {
+        if (count($repositories) > 1) {
+          $callback = array('versioncontrol_user_account_register_form',
+                            $uid, $accounts, $repositories);
+          $title = t('Get commit access');
+        }
+        else { // there's exactly one repository choice left
+          foreach ($repositories as $repo_id => $repository) {
+            $callback = array('versioncontrol_user_account_edit_form',
+                              $uid, '', $repository);
+            $title = t('Get commit access for @repository',
+                       array('@repository' => $repository['name']));
+            unset($repositories[$repo_id]);
+          }
+        }
+        $items[] = array(
+          'path' => 'user/'. $uid .'/edit/versioncontrol/register',
+          'title' => $title,
+          'callback' => 'drupal_get_form',
+          'callback arguments' => $callback,
+          'access' => $account_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 100,
+        );
+        if (is_numeric(arg(4))) {
+          // The form for creating an account.
+          if (isset($repositories[arg(4)])) {
+            $items[] = array(
+              'path' => 'user/'. $uid .'/edit/versioncontrol/'. arg(4) .'/register',
+              'title' => $repositories[arg(4)]['name'],
+              'callback' => 'drupal_get_form',
+              'callback arguments' => array(
+                'versioncontrol_user_account_edit_form',
+                $uid, '', $repositories[arg(4)]
+              ),
+              'access' => $account_access,
+              'type' => MENU_LOCAL_TASK,
+              'weight' => 99,
+            );
+          }
+        }
+      }
     }
   }
   return $items;
 }
+
+/**
+ * Implementation of hook_perm().
+ */
+function versioncontrol_perm() {
+  return array(
+    'administer version control systems',
+    'use version control systems',
+  );
+}
+
+
+/**
+ * Form callback for "user/$uid/edit/versioncontrol/$repository['repo_id']",
+ * "user/$uid/edit/versioncontrol/$repository['repo_id']/register" and
+ * (in a certain case) "user/$uid/edit/versioncontrol/register":
+ * Provide a form to edit or register a VCS user account.
+ *
+ * @param $uid
+ *   The Drupal user id of the user whose account is being edited.
+ * @param $username
+ *   The VCS specific username of that user. If this is an empty string,
+ *   it means that a user account for this repository does not yet exist
+ *   and should be created.
+ * @param $repository
+ *   The repository of the added/edited account.
+ */
+function versioncontrol_user_account_edit_form($uid, $username, $repository) {
+  $form = array();
+  $backends = versioncontrol_get_backends();
+  $vcs_name = $backends[$repository['vcs']]['name'];
+
+  $form['#id'] = 'vcs-account-form';
+  $form['#vcs'] = $repository['vcs'];
+  $form['#validate'] = array('versioncontrol_user_account_edit_form_validate' => array());
+
+  $form['account'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('@vcs account settings', array('@vcs' => $vcs_name)),
+    '#weight' => 0,
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+
+  $form['account']['uid'] = array(
+    '#type' => 'value',
+    '#value' => $uid,
+  );
+  $form['account']['original_username'] = array(
+    '#type' => 'value',
+    '#value' => $username,
+  );
+  $form['account']['repo_id'] = array(
+    '#type' => 'value',
+    '#value' => $repository['repo_id'],
+  );
+  $form['account']['vcs_name'] = array(
+    '#type' => 'value',
+    '#value' => $vcs_name,
+  );
+
+  if (user_access('administer version control systems')) {
+    // When someone else than the user goes to this page (the admin, that is),
+    // the page title is incorrect and would say 'User', which is bad.
+    $user = user_load(array('uid' => $uid));
+    drupal_set_title(check_plain($user->name));
+
+    $form['account']['account_name'] = array(
+      '#type' => 'textfield',
+      '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
+      '#description' => t('The @vcs username associated with this account. This field is used to link commit messages to user accounts.', array('@vcs' => $vcs_name)),
+      '#default_value' => $username,
+      '#weight' => 0,
+      '#size' => 30,
+      '#maxlength' => 64,
+    );
+  }
+  else {
+    $form['account']['account_name'] = array(
+      '#type' => 'item',
+      '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
+      '#description' => t('The @vcs username associated with this account.',
+                          array('@vcs' => $vcs_name)),
+      '#value' => $username,
+      '#weight' => 0,
+    );
+  }
+
+  $form['account']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save account settings'),
+    '#weight' => 100,
+  );
+  return $form;
+}
+
+/**
+ * Validate the edit/register user account form submission before it is submitted.
+ */
+function versioncontrol_user_account_edit_form_validate($form_id, $form_values) {
+  if (!isset($form_values['account_name'])) {
+    return;
+  }
+  $uid = $form_values['uid'];
+  $username = trim($form_values['account_name']);
+  $repository = versioncontrol_get_repository($form_values['repo_id']);
+  $vcs_name = $form_values['vcs_name'];
+
+  if (!isset($repository)) { // admin deletes repo while user fills in form
+    form_set_error('account',
+      t('The repository has been deleted.', array('@vcs' => $vcs_name))
+    );
+    return;
+  }
+
+  if (empty($username)) {
+    form_set_error('account_name',
+      t('The @vcs username may not be empty.', array('@vcs' => $vcs_name))
+    );
+  }
+  else {
+    // Check for duplicates.
+    $existing_uid = versioncontrol_get_account_uid_for_username($username, $repository);
+    if ($existing_uid && $uid != $existing_uid) {
+      if ($existing_user = user_load(array('uid' => $existing_uid))) {
+        $existing_username = theme('username', $existing_user);
+      }
+      else {
+        $existing_username = t('user #!id', array('!id' => $existing_uid));
+      }
+      form_set_error('account_name',
+        t('The specified @vcs username is already in use by !existing-user.',
+          array('@vcs' => $vcs_name, '!existing-user' => $existing_username))
+      );
+    }
+  }
+}
+
+/**
+ * Add or update the user account when the edit/register form is submitted.
+ */
+function versioncontrol_user_account_edit_form_submit($form_id, $form_values) {
+  // Reconstruct the user data from the $form_values that were passed.
+  $uid = $form_values['uid'];
+  $username = trim($form_values['account_name']);
+  $repository = versioncontrol_get_repository($form_values['repo_id']);
+  $vcs_name = $form_values['vcs_name'];
+  $vcs_specific = NULL;
+
+  if (versioncontrol_backend_implements($repository['vcs'], 'extract_account_vcs_specific')) {
+    $vcs_specific = _versioncontrol_call_backend(
+      $repository['vcs'], 'extract_account_vcs_specific', array($form_values)
+    );
+  }
+
+  if (empty($form_values['original_username'])) {
+    versioncontrol_insert_account($uid, $username, $repository, $vcs_specific);
+    $message = drupal_set_message(t(
+      'The @vcs account %username has been created.',
+      array('@vcs' => $vcs_name, '%username' => $username)
+    ));
+  }
+  else {
+    versioncontrol_update_account($uid, $username, $repository, $vcs_specific);
+    $message = drupal_set_message(t(
+      'The @vcs account %username has been updated successfully.',
+      array('@vcs' => $vcs_name, '%username' => $username)
+    ));
+  }
+  if (user_access('administer version control systems')) {
+    return 'admin/project/versioncontrol-accounts';
+  }
+  else {
+    return 'user/'. $uid .'/edit/versioncontrol/'. $repository['repo_id'];
+  }
+}
+
+
+/**
+ * Form callback for "user/$uid/edit/versioncontrol/register":
+ * Provide an indirection that leads to an account registration form.
+ *
+ * @param $uid
+ *   The Drupal user id of the user who wants to register a new account.
+ * @param $accounts
+ *   All existing accounts of this user. You'll want to pass the result of
+ *   <code>versioncontrol_get_accounts(array('uids' => array($uid)))</code>
+ *   as this argument.
+ * @param $repositories
+ *   All repositories where the user does not yet have an account.
+ */
+function versioncontrol_user_account_register_form($uid, $accounts, $repositories) {
+  $form = array();
+
+  if (user_access('administer version control systems')) {
+    // When someone else than the user goes to this page (the admin, that is),
+    // the page title is incorrect and would say 'User', which is bad.
+    $user = user_load(array('uid' => $uid));
+    drupal_set_title(check_plain($user->name));
+  }
+
+  $form['#id'] = 'vcs-account-indirection-form';
+
+  // Construct the '#options' array.
+  $repository_names = array();
+  foreach ($repositories as $repo_id => $repository) {
+    if (!isset($first_repo_id)) {
+      $first_repo_id = $repo_id;
+    }
+    $repository_names[$repo_id] = $repository['name'];
+  }
+
+  $form['create'] = array(
+    '#type' => 'fieldset',
+  );
+  $form['create']['uid'] = array(
+    '#type' => 'value',
+    '#value' => $uid,
+  );
+  $form['create']['repo_id'] = array(
+    '#type' => 'select',
+    '#title' => t('For which repository'),
+    '#options' => $repository_names,
+    '#default_value' => $first_repo_id,
+  );
+  $form['create']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Create user account'),
+    '#weight' => 100,
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the indirection form.
+ * Surprisingly, all it does is redirect to the appropriate registration form.
+ */
+function versioncontrol_user_account_register_form_submit($form_id, $form_values) {
+  return 'user/'. $form_values['uid'] .'/edit/versioncontrol/'.
+         $form_values['repo_id'] .'/register';
+}
+
 
 /**
  * Form callback for 'admin/project/versioncontrol-repositories':
@@ -216,6 +523,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
 
   $form = array();
   $form['#id'] = 'repository-form';
+  $form['#validate'] = array('versioncontrol_admin_repository_edit_validate' => array());
   $form['#vcs'] = $vcs;
   $form['#repository'] = $repository;
 
@@ -254,10 +562,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#weight' => 5,
     '#size' => 60,
     '#maxlength' => 255,
-    '#description' => t(
-      'The location of the repository\'s root directory. @examples',
-      array('@examples' => _versioncontrol_call_backend($vcs, 'get_repository_root_example', array()))
-    ),
+    '#description' => t('The location of the repository\'s root directory.'),
   );
 
   if (isset($repository)) {
@@ -322,6 +627,9 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   return $form;
 }
 
+/**
+ * Validate the add/edit repository form before it is submitted.
+ */
 function versioncontrol_admin_repository_edit_validate($form_id, $form_values) {
   if ($form_values['repo_id'] != 0 && $form_values['repo_name'] == $form_values['original_name']) {
     return;
@@ -366,7 +674,12 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
   }
   $repository[$repository['vcs'] .'_specific'] = $vcs_specific;
 
-  versioncontrol_set_repository($repository, $repository_urls);
+  if ($repository['repo_id'] > 0) {
+    versioncontrol_update_repository($repository, $repository_urls);
+  }
+  else {
+    versioncontrol_insert_repository($repository, $repository_urls);
+  }
   return 'admin/project/versioncontrol-repositories';
 }
 

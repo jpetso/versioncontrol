@@ -49,8 +49,8 @@ function commitlog_menu($may_cache) {
   else {
     if (arg(0) == 'user' && is_numeric(arg(1))) {
       $uid = arg(1);
-      $username = versioncontrol_get_accounts(array('uids' => array($uid)));
-      if (!empty($username)) {
+      $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
+      if (!empty($accounts)) {
         // If the user has a CVS account, add a 'track commit messages' tab to the tracker page.
         $items[] = array(
           'path' => 'user/'. $uid .'/track/code',
@@ -84,7 +84,7 @@ function commitlog_page() {
   }
 
   list($constraints, $attributes) = _commitlog_get_commits();
-  $commits = _commitlog_get_paged_commits($constraints);
+  $commits = commitlog_get_paged_commits($constraints);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
   return theme('commitlog_page', $commits, $attributes);
@@ -99,7 +99,7 @@ function commitlog_rss() {
   }
 
   list($constraints, $attributes) = _commitlog_get_commit_constraints();
-  $commits = _commitlog_get_paged_commits($constraints);
+  $commits = commitlog_get_paged_commits($constraints);
 
   drupal_set_header('Content-Type: text/xml; charset=utf-8');
   print theme('commitlog_rss', $commits);
@@ -119,7 +119,7 @@ function commitlog_account_tracker($uid) {
   drupal_set_title($user->name);
 
   list($constraints, $attributes) = _commitlog_get_commits();
-  $commits = _commitlog_get_paged_commits($constraints);
+  $commits = commitlog_get_paged_commits($constraints);
   unset($_REQUEST['uid']);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
@@ -197,7 +197,7 @@ function _commitlog_get_commits() {
  * Return an array of commits, resulting from a versioncontrol_get_commits()
  * call. Paging is also used by emulating pager_query().
  */
-function _commitlog_get_paged_commits($constraints, $element = 0) {
+function commitlog_get_paged_commits($constraints, $element = 0) {
   global $pager_page_array, $pager_total, $pager_total_items;
   $page = isset($_GET['page']) ? $_GET['page'] : '';
   $pager_page_array = explode(',', $page);

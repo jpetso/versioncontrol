@@ -1058,13 +1058,12 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
 
 
 /**
- * Implementation of [versioncontrol_backend]_insert_commit():
- * Insert additional commit data into the database.
+ * Implementation of [versioncontrol_backend]_commit():
+ * Manage (insert or delete) additional commit data in the database.
  *
- * This function is optional for VCS backends to implement. If not implemented,
- * only standard database entries for this commit will be inserted by
- * versioncontrol_insert_commit().
- *
+ * @param $op
+ *   Either 'insert' when the commit is in the process of being created,
+ *   or 'delete' if it will be deleted after this function has been called.
  * @param $commit
  *   A single commit array, like the ones returned
  *   by versioncontrol_get_commits().
@@ -1073,44 +1072,53 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
  *   each item in this commit. The structure of this array is the same as
  *   the return value of versioncontrol_get_commit_actions().
  */
-function versioncontrol_fakevcs_insert_commit($commit, $commit_actions) {
+function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
   // If nothing has to be stored in addition to the commit info that
   // versioncontrol_insert_commit() stores by itself, this function
   // doesn't have to be implemented by the backend.
   // If you've got stuff like file tables or whatever, it may come in handy.
-  foreach ($commit_actions as $path => $action) {
-    $revision = '';
-    $source_revision = '';
+  switch ($op) {
+    case 'insert':
+      foreach ($commit_actions as $path => $action) {
+        $revision = '';
+        $source_revision = '';
 
-    // If available, get item type and revision from the contained items.
-    if (isset($action['current item'])) {
-      $type = $action['current item']['type'];
-      $revision = $action['current item']['revision'];
-    }
-    else {
-      $type = $action['source items'][0]['type'];
-      $source_revision = $action['source items'][0]['revision'];
-      // of course, you need to store 'fakevcs_specific' items beforehand.
-    }
+        // If available, get item type and revision from the contained items.
+        if (isset($action['current item'])) {
+          $type = $action['current item']['type'];
+          $revision = $action['current item']['revision'];
+        }
+        else {
+          $type = $action['source items'][0]['type'];
+          $source_revision = $action['source items'][0]['revision'];
+          // of course, you need to store 'fakevcs_specific' items beforehand.
+        }
 
-    db_query(
-      "INSERT INTO {versioncontrol_fakevcs_item_revisions}
-       (commit_id, type, path, revision, action, source_revision)
-       VALUES ('%d', '%d', '%s', '%s', '%d', '%d')",
-      $commit['commit_id'], $type, $path, $revision, $action['action'],
-      $source_revision
-    );
+        db_query(
+          "INSERT INTO {versioncontrol_fakevcs_item_revisions}
+          (commit_id, type, path, revision, action, source_revision)
+          VALUES ('%d', '%d', '%s', '%s', '%d', '%d')",
+          $commit['commit_id'], $type, $path, $revision, $action['action'],
+          $source_revision
+        );
+        break;
+
+    case 'delete':
+      db_query("DELETE FROM {versioncontrol_fakevcs_item_revisions}
+                WHERE commit_id = '%d'", $commit['commit_id']);
+      break;
   }
 }
 
 /**
- * Implementation of [versioncontrol_backend]_insert_account():
- * Insert additional VCS user account data into the database.
+ * Implementation of [versioncontrol_backend]_account():
+ * Manage (insert, update or delete) additional FakeVCS user account data
+ * in the database.
  *
- * This function is optional for VCS backends to implement. If not implemented,
- * only standard database entries for this commit will be inserted by
- * versioncontrol_insert_account().
- *
+ * @param $op
+ *   Either 'insert' when the account is in the process of being created,
+ *   or 'update' when username or VCS specific data change,
+ *   or 'delete' if it will be deleted after this function has been called.
  * @param $uid
  *   The Drupal user id corresponding to the VCS account.
  * @param $username
@@ -1120,11 +1128,38 @@ function versioncontrol_fakevcs_insert_commit($commit, $commit_actions) {
  * @param $fakevcs_specific
  *   An array of FakeVCS specific additional author information.
  */
-function versioncontrol_fakevcs_insert_account($uid, $username, $repository, $fakevcs_specific = NULL) {
-  if (!is_array($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
-    return;
+function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $fakevcs_specific = NULL) {
+  switch ($op) {
+    case 'insert':
+      if (!is_array($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
+        drupal_set_message(t('Error: no FakeVCS password given on account creation!'), 'error');
+        return;
+      }
+      db_query("INSERT INTO {versioncontrol_fakevcs_accounts}
+                (uid, repo_id, password)
+                VALUES ('%d', '%d', '%s')",
+                $uid, $repository['repo_id'], $fakevcs_specific['password']);
+      break;
+
+    case 'update':
+      if (!is_array($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
+        return; // the user didn't update the password in the process.
+      }
+      db_query("UPDATE {versioncontrol_fakevcs_accounts}
+                SET password = '%s'
+                WHERE uid = '%d' AND repo_id = '%d'",
+                $fakevcs_specific['password'], $uid, $repository['repo_id']);
+
+      if (!user_access('administer version control systems')) {
+        // Admins get "The account has been updated successfully" anyways.
+        drupal_set_message(t('The FakeVCS password has been updated successfully.'));
+      }
+      break;
+
+    case 'delete':
+      db_query("DELETE FROM {versioncontrol_fakevcs_accounts}
+                WHERE uid = '%d' AND repo_id = '%d'",
+                $uid, $repository['repo_id']);
+      break;
   }
-  db_query("INSERT INTO {versioncontrol_fakevcs_accounts} (repo_id, username, password)
-            VALUES ('%d', '%s', '%s')",
-            $repository['repo_id'], $username, $fakevcs_specific['password']);
 }
