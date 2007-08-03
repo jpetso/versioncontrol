@@ -295,14 +295,14 @@ function theme_commitlog_rss($commits) {
   foreach ($commits as $commit) {
     $location = theme('commitlog_commit_location', $commit);
 
-    $title = t('!location by !username', array('!location' => $location, '!username' => $commit['username']));
+    $title = t('!location by @username', array('!location' => $location, '@username' => $commit['username']));
     $link = url('commitlog', 'commits='. $commit['commit_id'], NULL, TRUE);
     $extra = array('pubDate' => gmdate('r', $commit['date']));
     $text = theme('commitlog_commit', $commit);
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
-  $title = t('Commit messages for !site', array('!site' => variable_get('site_name', 'Drupal')));
+  $title = t('Commit messages for @site', array('@site' => variable_get('site_name', 'Drupal')));
   $link = url('commitlog', NULL, NULL, TRUE);
 
   $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
@@ -557,7 +557,7 @@ function theme_commitlog_item_revision($repository, $item, $html = TRUE) {
   if ($html) {
     $view_url = versioncontrol_get_url_item_view($repository, $item);
     if (!empty($view_url)) {
-      $revision = ' <a href="'. $view_url .'">'. $item['revision'] .'</a>';
+      $revision = '<a href="'. $view_url .'">'. $item['revision'] .'</a>';
     }
   }
   return $revision;
@@ -586,9 +586,9 @@ function theme_commitlog_project_for_item($repository, $item, $html = TRUE) {
     }
     if ($project_node) {
       if ($html) {
-        return l($project_node->title, 'node/'. $project_node->nid);
+        return l(check_plain($project_node->title), 'node/'. $project_node->nid);
       }
-      return $project_node->title;
+      return check_plain($project_node->title);
     }
   }
   return '';
