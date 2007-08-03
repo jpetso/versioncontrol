@@ -345,14 +345,15 @@ function theme_commitlog_account_username($uid, $username, $repository, $replace
   }
 
   if (!$user) {
-    return l($username, 'commitlog', NULL,
-             'usernames='. $username .'&repos='. $repository['repo_id']);
+    return l(check_plain($username), 'commitlog', NULL,
+             'usernames='. check_plain($username) .'&repos='. $repository['repo_id']);
+    // TODO: find out the proper URL encoding function for the second $username
   }
   return theme('username', $user);
 }
 
 function theme_commitlog_repository($repository) {
-  return l($repository['name'], 'commitlog', NULL, 'repos='. $repository['repo_id']);
+  return l(check_plain($repository['name']), 'commitlog', NULL, 'repos='. $repository['repo_id']);
 }
 
 

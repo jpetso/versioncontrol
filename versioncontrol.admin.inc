@@ -190,6 +190,114 @@ function versioncontrol_perm() {
 
 
 /**
+ * Form callback for 'admin/project/versioncontrol-accounts':
+ * A list of accounts with filtering possibilities.
+ */
+function versioncontrol_admin_account_list() {
+  $form = array();
+  $users = array();
+  $accounts = versioncontrol_get_accounts();
+
+  // Retrieve all repositories that users are listed in.
+  $repo_ids = array();
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    $user = user_load(array('uid' => $uid));
+    if (!$user) {
+      continue;
+    }
+    $users[$uid] = $user;
+    foreach ($usernames_by_repository as $repo_id => $username) {
+      $repo_ids[] = $repo_id;
+    }
+  }
+
+  if (empty($users)) {
+    $form['empty'] = array(
+      '#value' => '<p>'. t('No Drupal users are currently associated to VCS user accounts. Please do a mass import of VCS users or add/approve them one by one.') .'</p>'
+    );
+    return $form;
+  }
+
+  $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
+
+  // Retrieve total, first and last commits of each user.
+  $result = db_query("SELECT uid, COUNT(commit_id) AS number_commits,
+                       MIN(date) AS first_commit_date, MAX(date) AS last_commit_date,
+                       MIN(commit_id) AS first_commit_id, MAX(commit_id) AS last_commit_id
+                      FROM {versioncontrol_commits}
+                      GROUP BY uid");
+
+  $number_commits = array();
+  $first_commits = array();
+  $last_commits = array();
+
+  while ($statistics = db_fetch_object($result)) {
+    $number_commits[$statistics->uid] = $statistics->number_commits;
+    $first_commits[$statistics->uid] = t('!time ago', array(
+      '!time' => format_interval(time() - $statistics->first_commit_date, 1))
+    );
+    $last_commits[$statistics->uid] = t('!time ago', array(
+      '!time' => format_interval(time() - $statistics->last_commit_date, 1))
+    );
+    if (module_exists('commitlog')) {
+      $number_commits[$statistics->uid] =
+        l($number_commits[$statistics->uid], 'user/'. $statistics->uid .'/track/code');
+      $first_commits[$statistics->uid] =
+        theme('commitlog_commit_id', $statistics->first_commit_id, $first_commits[$statistics->uid]);
+      $last_commits[$statistics->uid] =
+        theme('commitlog_commit_id', $statistics->last_commit_id, $last_commits[$statistics->uid]);
+    }
+  }
+
+  // Construct the user account table.
+  $header = array(t('User'), t('Accounts'), t('Commits'), t('First commit'), t('Last commit'));
+  $rows = array();
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    $user = $users[$uid];
+
+    // Present a list of all VCS usernames and the repository where they're in.
+    $repo_usernames = array();
+    foreach ($usernames_by_repository as $repo_id => $username) {
+      if (!isset($repositories[$repo_id])) { // happens if the backend isn't loaded
+        continue;
+      }
+      if (module_exists('commitlog')) {
+        $username = theme('commitlog_account_username',
+                          $uid, $username, $repositories[$repo_id], FALSE);
+        $repo_name = theme('commitlog_repository', $repositories[$repo_id]);
+      }
+      else {
+        $username = check_plain($username);
+        $repo_name = check_plain($repositories[$repo_id]['name']);
+      }
+
+      $repo_usernames[] = t('!username in !repository (!edit)', array(
+        '!username' => $username,
+        '!repository' => $repo_name,
+        '!edit' => l(t('edit'), 'user/'. $uid .'/edit/versioncontrol/'. $repo_id),
+      ));
+    }
+    $vcs_usernames = empty($repo_usernames)
+                     ? t('VCS backend is currently disabled')
+                     : theme('item_list', $repo_usernames);
+
+    $rows[] = array(
+      theme('username', $user), $vcs_usernames,
+      isset($number_commits[$uid]) ? $number_commits[$uid] : 0,
+      isset($first_commits[$uid]) ? $first_commits[$uid] : t('n/a'),
+      isset($last_commits[$uid]) ? $last_commits[$uid] : t('n/a'),
+    );
+  }
+
+  // The finished user account list.
+  $form['list'] = array(
+    '#value' => theme('table', $header, $rows)
+  );
+  return $form;
+}
+
+
+/**
  * Form callback for "user/$uid/edit/versioncontrol/$repository['repo_id']",
  * "user/$uid/edit/versioncontrol/$repository['repo_id']/register" and
  * (in a certain case) "user/$uid/edit/versioncontrol/register":
@@ -477,7 +585,9 @@ function versioncontrol_admin_repository_list() {
     // Add the standard items of each repository - name and root - to the rows.
     $rows_by_repo_id = array();
     foreach ($vcs_repositories as $repo_id => $repository) {
-      $rows_by_repo_id[$repo_id] = array($repository['name'], $repository['root']);
+      $rows_by_repo_id[$repo_id] = array(
+        check_plain($repository['name']), check_plain($repository['root']),
+      );
     }
     // Provide a possibility for backends and other modules to modify the list.
     foreach (module_implements('versioncontrol_alter_repository_list') as $module) {
@@ -560,7 +670,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   );
   $form['repository_information']['original_name'] = array(
     '#type' => 'value',
-    '#value' => isset($repository) ? $repository['name'] : 0,
+    '#value' => isset($repository) ? check_plain($repository['name']) : 0,
   );
   $form['repository_information']['vcs'] = array(
     '#type' => 'value',
@@ -570,7 +680,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#type' => 'textfield',
     '#title' => t('Repository name'),
     '#description' => t('A label for the repository that will be used in all user visible messages.'),
-    '#default_value' => isset($repository) ? $repository['name'] : '',
+    '#default_value' => isset($repository) ? check_plain($repository['name']) : '',
     '#weight' => 0,
     '#size' => 40,
     '#maxlength' => 255,
@@ -735,106 +845,4 @@ function versioncontrol_admin_repository_delete_confirm_submit($form_id, $form_v
   $repository = versioncontrol_get_repository($form_values['repo_id']);
   versioncontrol_delete_repository($repository);
   drupal_goto('admin/project/versioncontrol-repositories');
-}
-
-
-/**
- * Form callback for 'admin/project/versioncontrol-accounts':
- * A list of accounts with filtering possibilities.
- */
-function versioncontrol_admin_account_list() {
-  $form = array();
-  $users = array();
-  $accounts = versioncontrol_get_accounts();
-
-  // Retrieve all repositories that users are listed in.
-  $repo_ids = array();
-  foreach ($accounts as $uid => $usernames_by_repository) {
-    $user = user_load(array('uid' => $uid));
-    if (!$user) {
-      continue;
-    }
-    $users[$uid] = $user;
-    foreach ($usernames_by_repository as $repo_id => $username) {
-      $repo_ids[] = $repo_id;
-    }
-  }
-
-  if (empty($users)) {
-    $form['empty'] = array(
-      '#value' => '<p>'. t('No Drupal users are currently associated to VCS user accounts. Please do a mass import of VCS users or add/approve them one by one.') .'</p>'
-    );
-    return $form;
-  }
-
-  $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
-
-  // Retrieve total, first and last commits of each user.
-  $result = db_query("SELECT uid, COUNT(commit_id) AS number_commits,
-                       MIN(date) AS first_commit_date, MAX(date) AS last_commit_date,
-                       MIN(commit_id) AS first_commit_id, MAX(commit_id) AS last_commit_id
-                      FROM {versioncontrol_commits}
-                      GROUP BY uid");
-
-  $number_commits = array();
-  $first_commits = array();
-  $last_commits = array();
-
-  while ($statistics = db_fetch_object($result)) {
-    $number_commits[$statistics->uid] = $statistics->number_commits;
-    $first_commits[$statistics->uid] = t('!time ago', array(
-      '!time' => format_interval(time() - $statistics->first_commit_date, 1))
-    );
-    $last_commits[$statistics->uid] = t('!time ago', array(
-      '!time' => format_interval(time() - $statistics->last_commit_date, 1))
-    );
-    if (module_exists('commitlog')) {
-      $number_commits[$statistics->uid] =
-        l($number_commits[$statistics->uid], 'user/'. $statistics->uid .'/track/code');
-      $first_commits[$statistics->uid] =
-        theme('commitlog_commit_id', $statistics->first_commit_id, $first_commits[$statistics->uid]);
-      $last_commits[$statistics->uid] =
-        theme('commitlog_commit_id', $statistics->last_commit_id, $last_commits[$statistics->uid]);
-    }
-  }
-
-  // Construct the user account table.
-  $header = array(t('User'), t('Accounts'), t('Commits'), t('First commit'), t('Last commit'));
-  $rows = array();
-  foreach ($accounts as $uid => $usernames_by_repository) {
-    $user = $users[$uid];
-
-    // Present a list of all VCS usernames and the repository where they're in.
-    $repo_usernames = array();
-    foreach ($usernames_by_repository as $repo_id => $username) {
-      if (!isset($repositories[$repo_id])) { // happens if the backend isn't loaded
-        continue;
-      }
-      if (module_exists('commitlog')) {
-        $username = theme('commitlog_account_username',
-                          $uid, $username, $repositories[$repo_id], FALSE);
-        $repo_name = theme('commitlog_repository', $repositories[$repo_id]);
-      }
-      else {
-        $repo_name = $repositories[$repo_id]['name'];
-      }
-      $repo_usernames[] = $username .' in '. $repo_name;
-    }
-    $vcs_usernames = empty($repo_usernames)
-                     ? t('VCS backend is currently disabled')
-                     : theme('item_list', $repo_usernames);
-
-    $rows[] = array(
-      theme('username', $user), $vcs_usernames,
-      isset($number_commits[$uid]) ? $number_commits[$uid] : 0,
-      isset($first_commits[$uid]) ? $first_commits[$uid] : t('n/a'),
-      isset($last_commits[$uid]) ? $last_commits[$uid] : t('n/a'),
-    );
-  }
-
-  // The finished user account list.
-  $form['list'] = array(
-    '#value' => theme('table', $header, $rows)
-  );
-  return $form;
 }
