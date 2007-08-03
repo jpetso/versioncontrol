@@ -105,6 +105,7 @@ function versioncontrol_menu($may_cache) {
       $account_access = ($committer_access && $uid == $user->uid) || $admin_access;
       $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
       $repositories = versioncontrol_get_repositories();
+      $repository_count = count($repositories);
 
       // The form for editing an account.
       foreach ($accounts as $uid => $usernames_by_repository) {
@@ -127,6 +128,9 @@ function versioncontrol_menu($may_cache) {
           }
         }
       }
+      // From here on, $repositories only holds those where the user
+      // doesn't yet have an account but can register or apply for one.
+
       // The indirection form for creating (or applying for) a VCS account.
       if (!empty($repositories)) {
         if (count($repositories) > 1) {
@@ -138,8 +142,7 @@ function versioncontrol_menu($may_cache) {
           foreach ($repositories as $repo_id => $repository) {
             $callback = array('versioncontrol_user_account_edit_form',
                               $uid, '', $repository);
-            $title = t('Get commit access for @repository',
-                       array('@repository' => $repository['name']));
+            $title = t('@repository', array('@repository' => $repository['name']));
             unset($repositories[$repo_id]);
           }
         }
@@ -210,6 +213,14 @@ function versioncontrol_user_account_edit_form($uid, $username, $repository) {
   $form['#vcs'] = $repository['vcs'];
   $form['#validate'] = array('versioncontrol_user_account_edit_form_validate' => array());
 
+  $form['title'] = array(
+    '#value' => t('Create user account in @repository',
+                  array('@repository' => $repository['name'])),
+    '#prefix' => empty($username) ? '<h4>' : '<!--',
+    '#suffix' => empty($username) ? '</h4>' : '-->',
+    '#weight' => -10,
+  );
+
   $form['account'] = array(
     '#type' => 'fieldset',
     '#title' => t('@vcs account settings', array('@vcs' => $vcs_name)),
@@ -235,16 +246,23 @@ function versioncontrol_user_account_edit_form($uid, $username, $repository) {
     '#value' => $vcs_name,
   );
 
-  if (user_access('administer version control systems')) {
+  if (empty($username) || user_access('administer version control systems')) {
     // When someone else than the user goes to this page (the admin, that is),
     // the page title is incorrect and would say 'User', which is bad.
     $user = user_load(array('uid' => $uid));
     drupal_set_title(check_plain($user->name));
 
+    if (empty($username)) { // the account creation version
+      $description = t('Your @vcs username. This field can only be edited by administrators and is used to link your @vcs messages to your user account.', array('@vcs' => $vcs_name));
+    }
+    else { // the admin version
+      $description = t('The @vcs username associated with this account. This field is used to link commit messages to user accounts.', array('@vcs' => $vcs_name));
+    }
+
     $form['account']['account_name'] = array(
       '#type' => 'textfield',
       '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
-      '#description' => t('The @vcs username associated with this account. This field is used to link commit messages to user accounts.', array('@vcs' => $vcs_name)),
+      '#description' => $description,
       '#default_value' => $username,
       '#weight' => 0,
       '#size' => 30,
@@ -264,7 +282,9 @@ function versioncontrol_user_account_edit_form($uid, $username, $repository) {
 
   $form['account']['submit'] = array(
     '#type' => 'submit',
-    '#value' => t('Save account settings'),
+    '#value' => empty($username)
+                ? t('Create user account')
+                : ('Save account settings'),
     '#weight' => 100,
   );
   return $form;
@@ -522,7 +542,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   $vcs = isset($repository) ? $repository['vcs'] : $vcs;
 
   $form = array();
-  $form['#id'] = 'repository-form';
+  $form['#id'] = 'vcs-repository-form';
   $form['#validate'] = array('versioncontrol_admin_repository_edit_validate' => array());
   $form['#vcs'] = $vcs;
   $form['#repository'] = $repository;
