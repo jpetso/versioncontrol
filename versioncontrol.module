@@ -45,6 +45,252 @@ include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol.admin
 // The backend-only part of the API.
 include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol-backend.inc');
 
+
+
+/**
+ * Implementation of hook_user().
+ */
+function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
+  if ($type == 'categories') {
+    return _versioncontrol_user_account_edit_items($user, 'categories');
+  }
+}
+
+/**
+ * Implementation of hook_menu().
+ */
+function versioncontrol_menu($may_cache) {
+  global $user;
+  $items = array();
+  $user_access = user_access('use version control systems');
+  $admin_access = user_access('administer version control systems');
+
+  if ($may_cache) {
+    // If Version Control API is used without the Project module,
+    // we need to define our own version of /admin/project
+    // so the rest of our admin pages all work.
+    if (!module_exists('project')) {
+      $items[] = array(
+        'path' => 'admin/project',
+        'title' => t('Project administration'),
+        'description' => t('Administrative interface for project management and related modules.'),
+        'callback' => 'system_admin_menu_block_page',
+        'access' => $admin_access,
+        'type' => MENU_NORMAL_ITEM,
+      );
+    }
+
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-repositories',
+      'title' => t('VCS repositories'),
+      'description' => t('Define and configure what version control repositories are connected to your site, and how to integrate each repository with repository browser tools such as ViewVC or WebSVN.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('versioncontrol_admin_repository_list'),
+      'access' => $admin_access,
+      'type' => MENU_NORMAL_ITEM,
+    );
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-repositories/list',
+      'title' => t('List'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
+
+    $backends = versioncontrol_get_backends();
+    $i = 2;
+    foreach ($backends as $vcs => $backend) {
+      $items[] = array(
+        'path' => 'admin/project/versioncontrol-repositories/add-'. $vcs,
+        'title' => t('Add @vcs repository', array('@vcs' => $backend['name'])),
+        'callback' => 'drupal_get_form',
+        'callback arguments' => array('versioncontrol_admin_repository_edit', 0, $vcs),
+        'access' => $admin_access,
+        'type' => MENU_LOCAL_TASK,
+        'weight' => $i,
+      );
+      ++$i;
+    }
+
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-accounts',
+      'title' => t('VCS accounts'),
+      'description' => t('Manage associations of Drupal users to VCS user accounts.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('versioncontrol_admin_account_list'),
+      'access' => $admin_access,
+      'type' => MENU_NORMAL_ITEM,
+    );
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-accounts/list',
+      'title' => t('List'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
+
+    // autocomplete callback for Drupal usernames that have access to
+    // the repository given in arg(3).
+    $items[] = array(
+      'path' => 'versioncontrol/user/autocomplete', // .'/$repo_id/$string'
+      'title' => t('Version control user autocomplete'),
+      'callback' => 'versioncontrol_user_autocomplete',
+      'access' => $user_access,
+      'type' => MENU_CALLBACK,
+    );
+  }
+  else {
+    if (is_numeric(arg(4))) {
+      $items[] = array(
+        'path' => 'admin/project/versioncontrol-repositories/edit/'. arg(4),
+        'title' => t('Edit repository'),
+        'callback' => 'drupal_get_form',
+        'callback arguments' => array('versioncontrol_admin_repository_edit', arg(4)),
+        'access' => $admin_access,
+        'type' => MENU_CALLBACK,
+      );
+      $items[] = array(
+        'path' => 'admin/project/versioncontrol-repositories/delete/'. arg(4),
+        'title' => t('Delete repository'),
+        'callback' => 'drupal_get_form',
+        'callback arguments' => array('versioncontrol_admin_repository_delete_confirm', arg(4)),
+        'access' => $admin_access,
+        'type' => MENU_CALLBACK,
+      );
+    }
+    if (arg(0) == 'user' && is_numeric(arg(1)) && arg(2) == 'edit') {
+      $items = array_merge($items, _versioncontrol_user_account_edit_items($user));
+    }
+  }
+  return $items;
+}
+
+/**
+ * This needs to be split out of versioncontrol_menu() because user.module
+ * only sets 'user/$uid/edit/account' as default local task if
+ * hook_user($op='categories) returns more than one entry. Which means
+ * we have to provide those separately from the menu hook.
+ */
+function _versioncontrol_user_account_edit_items($user, $op = 'items') {
+  static $items;
+  static $categories;
+
+  $user_access = user_access('use version control systems');
+  $admin_access = user_access('administer version control systems');
+
+  // Cache the items, we don't want this being done twice.
+  if (isset($items)) {
+    if ($op == 'categories') {
+      return $categories;
+    }
+    return $items;
+  }
+  $items = array();
+  $categories = array();
+
+  $uid = arg(1);
+  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
+  $repositories = versioncontrol_get_repositories();
+
+  $account_access = ($user_access && $uid == $user->uid) || $admin_access;
+
+  // The form for editing an account.
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    foreach ($usernames_by_repository as $repo_id => $username) {
+      if (isset($repositories[$repo_id])) {
+        $items[] = array(
+          'path' => 'user/'. $uid .'/edit/versioncontrol/'. $repo_id,
+          'title' => $repositories[$repo_id]['name'],
+          'callback' => 'drupal_get_form',
+          'callback arguments' => array(
+            'versioncontrol_user_account_edit_form',
+            $uid, $username, $repositories[$repo_id]
+          ),
+          'access' => $account_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 99,
+        );
+        $categories[] = array(
+          'name' => 'versioncontrol/'. $repo_id,
+          'title' => $repositories[$repo_id]['name'],
+          'weight' => 99,
+        );
+        // Let only the ones without accounts for this user survive.
+        unset($repositories[$repo_id]);
+      }
+    }
+  }
+  // From here on, $repositories only holds those where the user
+  // doesn't yet have an account but can register or apply for one.
+
+  // The indirection form for creating (or applying for) a VCS account.
+  if (!empty($repositories)) {
+    if (count($repositories) > 1) {
+      $callback = array('versioncontrol_user_account_register_form',
+                        $uid, $accounts, $repositories);
+      $title = t('Get commit access');
+    }
+    else { // there's exactly one repository choice left
+      foreach ($repositories as $repo_id => $repository) {
+        $callback = array('versioncontrol_user_account_edit_form',
+                          $uid, '', $repository);
+        $title = t('@repository', array('@repository' => $repository['name']));
+        unset($repositories[$repo_id]);
+      }
+    }
+    $items[] = array(
+      'path' => 'user/'. $uid .'/edit/versioncontrol/register',
+      'title' => $title,
+      'callback' => 'drupal_get_form',
+      'callback arguments' => $callback,
+      'access' => $account_access,
+      'type' => MENU_LOCAL_TASK,
+      'weight' => 100,
+    );
+    $categories[] = array(
+      'name' => 'versioncontrol/register',
+      'title' => $title,
+      'weight' => 100,
+    );
+
+    if (is_numeric(arg(4))) {
+      // The form for creating an account.
+      if (isset($repositories[arg(4)])) {
+        $items[] = array(
+          'path' => 'user/'. $uid .'/edit/versioncontrol/'. arg(4) .'/register',
+          'title' => $repositories[arg(4)]['name'],
+          'callback' => 'drupal_get_form',
+          'callback arguments' => array(
+            'versioncontrol_user_account_edit_form',
+            $uid, '', $repositories[arg(4)]
+          ),
+          'access' => $account_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 99,
+        );
+      }
+      $categories[] = array(
+        'name' => 'versioncontrol/'. arg(4) .'/register',
+        'title' => $repositories[arg(4)]['name'],
+        'weight' => 99,
+      );
+    }
+  }
+
+  if ($op == 'categories') {
+    return $categories;
+  }
+  return $items;
+}
+
+/**
+ * Implementation of hook_perm().
+ */
+function versioncontrol_perm() {
+  return array(
+    'administer version control systems',
+    'use version control systems',
+  );
+}
+
+
+
 /**
  * Get a list of all backends and more detailed information about each of them.
  *
@@ -791,13 +1037,18 @@ function _versioncontrol_page_commits($commits, $page, $limit) {
  *           You might want this if you combine multiple username and
  *           repository constraints, otherwise you can well do without.
  *
+ * @param $include_non_approved
+ *   If FALSE (which is the default), this function does not return accounts
+ *   that are pending, queued, disabled, blocked, or otherwise non-approved.
+ *   If TRUE, all accounts are returned, regardless of their status.
+ *
  * @return
  *   A structured array that looks like
  *   array($drupal_uid => array($repo_id => 'VCS username', ...), ...).
  *   If not a single account matches these constraints,
  *   an empty array is returned.
  */
-function versioncontrol_get_accounts($constraints = array()) {
+function versioncontrol_get_accounts($constraints = array(), $include_non_approved = FALSE) {
   $and_constraints = array();
   $params = array();
 
@@ -862,6 +1113,11 @@ function versioncontrol_get_accounts($constraints = array()) {
   // Assemble the return value.
   $accounts = array();
   while ($account = db_fetch_object($result)) {
+    // Don't include non-approved accounts, except in case the caller said so.
+    if (!($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id))) {
+      continue;
+    }
+
     if (!isset($accounts[$account->uid])) {
       $accounts[$account->uid] = array();
     }
@@ -879,17 +1135,26 @@ function versioncontrol_get_accounts($constraints = array()) {
  *   The VCS specific username (a string) corresponding to the Drupal user.
  * @param $repo_id
  *   The repository id of the repository where the user has its VCS account.
+ * @param $include_non_approved
+ *   If FALSE (which is the default), this function does not return accounts
+ *   that are pending, queued, disabled, blocked, or otherwise non-approved.
+ *   If TRUE, all accounts are returned, regardless of their status.
  *
  * @return
  *   The Drupal user id that corresponds to the given username and repository,
  *   or NULL if no Drupal user could be associated to those.
  */
-function versioncontrol_get_account_uid_for_username($username, $repo_id) {
-  $result = db_query("SELECT uid FROM {versioncontrol_accounts}
+function versioncontrol_get_account_uid_for_username($username, $repo_id, $include_non_approved = FALSE) {
+  $result = db_query("SELECT uid, repo_id
+                      FROM {versioncontrol_accounts}
                       WHERE username = '%s' AND repo_id = '%d'",
                       $username, $repo_id);
 
   while ($account = db_fetch_object($result)) {
+    // Don't include non-approved accounts, except in case the caller said so.
+    if (!($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id))) {
+      continue;
+    }
     return $account->uid;
   }
   return NULL;
@@ -904,20 +1169,56 @@ function versioncontrol_get_account_uid_for_username($username, $repo_id) {
  *   The Drupal user id corresponding to the VCS account.
  * @param $repo_id
  *   The repository id of the repository where the user has its VCS account.
+ * @param $include_non_approved
+ *   If FALSE (which is the default), this function does not return accounts
+ *   that are pending, queued, disabled, blocked, or otherwise non-approved.
+ *   If TRUE, all accounts are returned, regardless of their status.
  *
  * @return
  *   The VCS username (a string) that corresponds to the given Drupal user
  *   and repository, or NULL if no VCS account could be associated to those.
  */
-function versioncontrol_get_account_username_for_uid($uid, $repo_id) {
-  $result = db_query("SELECT username FROM {versioncontrol_accounts}
+function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_non_approved = FALSE) {
+  $result = db_query("SELECT uid, username, repo_id
+                      FROM {versioncontrol_accounts}
                       WHERE uid = '%d' AND repo_id = '%d'",
                       $uid, $repo_id);
 
   while ($account = db_fetch_object($result)) {
+    // Don't include non-approved accounts, except in case the caller said so.
+    if (!($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id))) {
+      continue;
+    }
     return $account->username;
   }
   return NULL;
+}
+
+/**
+ * Returns TRUE if the account is approved (= the user may commit to the given
+ * repository), or FALSE otherwise. Only call this function on existing
+ * accounts, the return value for all other uid/repo_id combinations
+ * is undefined.
+ *
+ * @param $uid
+ *   The user id of the checked account.
+ * @param $repo_id
+ *   The repository id of the repository where the status should be checked.
+ *   (Note that a user can be disabled in one repository while staying approved
+ *   in another one.)
+ */
+function versioncontrol_is_account_approved($uid, $repo_id) {
+  $approved = array();
+  foreach (module_implements('versioncontrol_is_account_approved') as $module) {
+    $function = $module .'_versioncontrol_is_account_approved';
+    $approved[] = $function($uid, $repo_id);
+  }
+  // If at least one hook_versioncontrol_is_account_approved returns FALSE,
+  // the account is assumed not to be approved.
+  if (in_array(FALSE, $approved)) {
+    return FALSE;
+  }
+  return TRUE;
 }
 
 
@@ -1462,6 +1763,35 @@ function versioncontrol_get_file_annotation($repository, $file_item) {
     $repository['vcs'], 'get_file_annotation', array($repository, $file_item)
   );
 }
+
+
+/**
+ * Returns a string of suggestions for Drupal usernames with accounts for
+ * the given repository, formatted to be suitable for use with
+ * JS autocomplete fields.
+ */
+function versioncontrol_user_autocomplete($repo_id, $string) {
+  if (!is_numeric($repo_id)) {
+    return drupal_to_js(array());
+  }
+  $matches = array();
+  $result = db_query_range("SELECT u.uid, u.name
+                            FROM {users} u
+                             INNER JOIN {versioncontrol_accounts} a
+                              ON u.uid = a.uid
+                            WHERE repo_id = '%d'
+                             AND LOWER(u.name) LIKE LOWER('%s%%')",
+                            $repo_id, $string, 0, 10);
+
+  while ($user = db_fetch_object($result)) {
+    if (versioncontrol_is_account_approved($user->uid, $repo_id)) {
+      $matches[$user->name] = check_plain($user->name);
+    }
+  }
+  print drupal_to_js($matches);
+  exit();
+}
+
 
 /**
  * Retrieve the deepest-level directory in the repository that is common

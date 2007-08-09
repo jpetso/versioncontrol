@@ -212,7 +212,7 @@ function versioncontrol_insert_account($uid, $username, $repository, $vcs_specif
  *   backend module (versioncontrol_[xxx]).
  */
 function versioncontrol_update_account($uid, $username, $repository, $vcs_specific = NULL) {
-  $old_username = versioncontrol_get_account_username_for_uid($uid, $repository);
+  $old_username = versioncontrol_get_account_username_for_uid($uid, $repository, TRUE);
   $username_changed = ($username != $old_username);
 
   if ($username_changed) {
@@ -451,7 +451,9 @@ function versioncontrol_delete_repository($repository) {
     versioncontrol_delete_commit($commit);
   }
 
-  $accounts = versioncontrol_get_accounts(array('repo_ids' => array($repository['repo_id'])));
+  $accounts = versioncontrol_get_accounts(
+    array('repo_ids' => array($repository['repo_id'])), TRUE
+  );
   foreach ($accounts as $uid => $usernames_by_repository) {
     foreach ($usernames_by_repository as $repo_id => $username) {
       versioncontrol_delete_account($uid, $username, $repository);
