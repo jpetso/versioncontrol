@@ -960,11 +960,14 @@ function _versioncontrol_filter_commits(&$commits, $constraints) {
     if (isset($constraints['paths'])) {
       $valid_path = FALSE;
       foreach ($constraints['paths'] as $path) {
+        // Append a trailing slash to the commit and constraint directories.
+        $commit_directory = ($commit['directory'] == '/') ? '/' : $commit['directory'] .'/';
         if ($path[strlen($path)-1] != '/') {
           $path .= '/';
         }
-        if (strpos($commit['directory'] .'/', $path) !== FALSE) {
-          $valid_path = TRUE; // $row->directory is at least as deep as $path
+        // Check if $commit_directory is at least as deep as $path.
+        if (strpos($commit_directory, $path) !== FALSE) {
+          $valid_path = TRUE;
           break;
         }
       }
@@ -982,7 +985,7 @@ function _versioncontrol_filter_commits(&$commits, $constraints) {
                 $path .= '/';
               }
               if (strpos($item['path'] .'/', $path) !== FALSE) {
-                // $row->directory is the same or a child element of $path
+                // The item is the same or a child element of the path constraint
                 $valid_path = TRUE;
                 break;
               }
@@ -994,7 +997,7 @@ function _versioncontrol_filter_commits(&$commits, $constraints) {
         }
       }
       if (!$valid_path) {
-        // the commit doesn't match the 'branches' constraint,
+        // the commit doesn't match the 'paths' constraint,
         // don't include it in the result value.
         unset($commits[$key]);
       }
@@ -1211,12 +1214,12 @@ function versioncontrol_is_account_approved($uid, $repo_id) {
   $approved = array();
   foreach (module_implements('versioncontrol_is_account_approved') as $module) {
     $function = $module .'_versioncontrol_is_account_approved';
-    $approved[] = $function($uid, $repo_id);
-  }
-  // If at least one hook_versioncontrol_is_account_approved returns FALSE,
-  // the account is assumed not to be approved.
-  if (in_array(FALSE, $approved)) {
-    return FALSE;
+
+    // If at least one hook_versioncontrol_is_account_approved returns FALSE,
+    // the account is assumed not to be approved.
+    if ($function($uid, $repo_id) === FALSE) {
+      return FALSE;
+    }
   }
   return TRUE;
 }
