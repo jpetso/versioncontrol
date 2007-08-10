@@ -12,6 +12,68 @@
  */
 
 /**
+ * Determine if a commit may be executed or not.
+ * Call this inside a pre-commit hook.
+ *
+ * @param $commit
+ *   A single commit array like the ones returned by
+ *   versioncontrol_get_commits(), but leaving out on a few details that
+ *   will instead be determined by this function. This array describes
+ *   the commit that is about to happen. Here's the allowed elements:
+ *
+ *   'repository': The repository where this commit occurs, given as a
+ *                 structured array, like a single element of what is returned
+ *                 by versioncontrol_get_repositories().
+ *                 You can either pass this or 'repo_id'.
+ *   'repo_id': The repository where this commit occurs, given as a simple
+ *              integer id. You can either pass this or 'repository'.
+ *   'uid': The Drupal user id of the committer. Passing this is optional -
+ *          if it isn't set, this function will determine the uid.
+ *   'username': The system specific VCS username of the committer.
+ *   'message': The commit message. Passing this is optional, just leave the
+ *              'message' element unset if the VCS can't retrieve the commit
+ *              message at the time of the pre-commit hook.
+ *   '[xxx]_specific': An array of VCS specific additional commit information.
+ *                     How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *
+ * @param $commit_actions
+ *   A structured array containing the exact details of what is about to happen
+ *   to each item in this commit. The structure of this array is the same as
+ *   the return value of versioncontrol_get_commit_actions().
+ *   The 'source items' element of each action and the 'revision' element of
+ *   each item in these actions are optional and may be left unset.
+ * @param $branch
+ *   The target branch where the commit will happen (a string like 'DRUPAL-5').
+ *   If the VCS can't retrieve the branch at the time of the pre-commit hook
+ *   or doesn't support branches at all, this may be NULL instead.
+ *
+ * @return
+ *   TRUE if the commit may happen, or FALSE if not.
+ */
+function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NULL) {
+  $commit = _versioncontrol_fill_commit($commit, $commit_actions);
+  if (!isset($commit['repository'])) {
+    return NULL;
+  }
+
+  $allowed = array();
+  foreach (module_implements('versioncontrol_commit_access') as $module) {
+    $function = $module .'_versioncontrol_commit_access';
+
+    // If at least one hook_versioncontrol_commit_access returns TRUE,
+    // the commit goes through. (This is for admin or sandbox exceptions.)
+    if ($function($commit, $commit_actions, $branch) === TRUE) {
+      return TRUE;
+    }
+    if ($function($commit, $commit_actions, $branch) === FALSE) {
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/**
  * Insert a commit into the database, and call the necessary module hooks.
  * Only call this function after the commit has been successfully executed.
  *
@@ -54,38 +116,10 @@
  *   In case of an error, NULL is returned instead of the commit array.
  */
 function versioncontrol_insert_commit($commit, $commit_actions) {
-  // If not already there, retrieve the full repository object.
+  $commit = _versioncontrol_fill_commit($commit, $commit_actions);
   if (!isset($commit['repository'])) {
-    $repository = versioncontrol_get_repository($commit['repo_id']);
-    unset($commit['repo_id']);
-
-    if (!isset($repository)) {
-      return NULL;
-    }
-    $commit['repository'] = $repository;
+    return NULL;
   }
-
-  // If not already there, retrieve the Drupal user id of the committer.
-  if (!isset($commit['uid'])) {
-    $authors = versioncontrol_get_authors_by_username(
-      array($commit['repository']['repo_id'] => array($commit['username'])),
-      array($commit['repository']['repo_id'] => $commit['repository'])
-    );
-
-    if (empty($authors)) {
-      // If no uid could be retrieved, blame the commit on user 0 (anonymous).
-      $commit['uid'] = 0;
-    }
-    else {
-      foreach ($authors as $uid => $mapping) {
-        $commit['uid'] = $uid;
-        break; // we only asked for one username in one repository, that's it
-      }
-    }
-  }
-
-  // Also, retrieve the deepest-level directory for all commit actions.
-  $commit['directory'] = _versioncontrol_get_common_directory($commit_actions);
 
   // Ok, everything's there, insert the commit into the database.
   $commit['commit_id'] = db_next_id('{versioncontrol_commits}_commit_id');
@@ -122,6 +156,49 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
   module_invoke_all(
     'versioncontrol_commit', array('insert', $commit, $commit_actions)
   );
+
+  return $commit;
+}
+
+/**
+ * Code that is shared between versioncontrol_has_commit_access()
+ * and versioncontrol_insert_commit(): fill up a commit array's missing values.
+ *
+ * @return
+ *   The completed commit array. Check on isset($commit['repository'])
+ *   before proceeding.
+ */
+function _versioncontrol_fill_commit($commit, $commit_actions) {
+  // If not already there, retrieve the full repository object.
+  if (!isset($commit['repository'])) {
+    $repository = versioncontrol_get_repository($commit['repo_id']);
+    unset($commit['repo_id']);
+    if (isset($repository)) {
+      $commit['repository'] = $repository;
+    }
+  }
+
+  // If not already there, retrieve the Drupal user id of the committer.
+  if (!isset($commit['uid'])) {
+    $authors = versioncontrol_get_authors_by_username(
+      array($commit['repository']['repo_id'] => array($commit['username'])),
+      array($commit['repository']['repo_id'] => $commit['repository'])
+    );
+
+    if (empty($authors)) {
+      // If no uid could be retrieved, blame the commit on user 0 (anonymous).
+      $commit['uid'] = 0;
+    }
+    else {
+      foreach ($authors as $uid => $mapping) {
+        $commit['uid'] = $uid;
+        break; // we only asked for one username in one repository, that's it
+      }
+    }
+  }
+
+  // Also, retrieve the deepest-level directory for all commit actions.
+  $commit['directory'] = _versioncontrol_get_common_directory($commit_actions);
 
   return $commit;
 }
