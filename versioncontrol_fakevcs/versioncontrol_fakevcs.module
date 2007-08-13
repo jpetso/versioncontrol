@@ -54,31 +54,17 @@ versioncontrol_fakevcs_versioncontrol_backends() {
       // A list of optional capabilities, in addition to the required retrieval
       // of detailed commit information. All allowed values are listed below.
       'capabilities' => array(
-        // Able to programmatically create a new repository at a specified
-        // location in the file system.
-        VERSIONCONTROL_CAPABILITY_CREATE_REPOSITORY,
+        // Able to cancel commits if the committer lacks permissions
+        // to commit to specific paths and/or branches.
+        VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS,
 
-        // Able to programmatically create and delete user accounts for the
-        // specific VCS, and assign or deny them access permission for certain
-        // directories in a repository.
-        VERSIONCONTROL_CAPABILITY_ACCOUNT_MANAGEMENT,
-
-        // Able to cancel commits if the committer lacks permissions to commit
-        // to specific directories.
-        VERSIONCONTROL_CAPABILITY_DIRECTORY_RESTRICTIONS,
-
-        // Able to cancel commits if the committer lacks permissions to commit
-        // to specific branches or tags.
-        VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS,
+        // Able to cancel commits if the committer lacks permissions
+        // to assign specific tags.
+        VERSIONCONTROL_CAPABILITY_TAG_RESTRICTIONS,
 
         // Able to retrieve a file or its revision number based on a global
         // revision identifier.
         VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS,
-
-        // Able to get the list of all current files and directories in a given
-        // version controlled directory, along with revision identifiers for
-        // each of the files. Comes in handy for repository browsing.
-        VERSIONCONTROL_CAPABILITY_LIST_FILES,
       ),
 
       // An array listing which tables should be managed by Version Control API
