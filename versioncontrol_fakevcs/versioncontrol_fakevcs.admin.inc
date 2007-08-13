@@ -55,13 +55,15 @@ function versioncontrol_fakevcs_repository_admin_form_alter($form_id, &$form) {
 }
 
 /**
- * Implementation of [versioncontrol_backend]_extract_repository_vcs_specific():
+ * Implementation of hook_versioncontrol_extract_repository_data():
  * Extract FakeVCS specific repository additions from the repository
  * editing/adding form's submitted values.
  */
-function versioncontrol_fakevcs_extract_repository_vcs_specific($form_values) {
+function versioncontrol_fakevcs_versioncontrol_extract_repository_data($form_values) {
   return array(
-    'update_method' => $form_values['update_method'],
+    'fakevcs_specific' => array(
+      'update_method' => $form_values['update_method'],
+    ),
   );
 }
 
@@ -134,15 +136,17 @@ function versioncontrol_fakevcs_account_form_validate($form_id, $form_values) {
 }
 
 /**
- * Implementation of [versioncontrol_backend]_extract_account_vcs_specific():
+ * Implementation of hook_versioncontrol_extract_account_data():
  * Extract FakeVCS specific user account additions (say: the password)
  * from the edit/register user account form's submitted values.
  */
-function versioncontrol_fakevcs_extract_account_vcs_specific($form_values) {
+function versioncontrol_fakevcs_versioncontrol_extract_account_data($form_values) {
   if (empty($form_values['account_password'])) {
-    return NULL;
+    return array();
   }
   return array(
-    'password' => crypt($form_values['account_password']),
+    'fakevcs_specific' => array(
+      'password' => crypt($form_values['account_password']),
+    ),
   );
 }

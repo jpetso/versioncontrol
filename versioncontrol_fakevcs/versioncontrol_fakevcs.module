@@ -1132,13 +1132,15 @@ function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
  *   The VCS specific username (a string).
  * @param $repository
  *   The repository where the user has its VCS account.
- * @param $fakevcs_specific
- *   An array of FakeVCS specific additional author information.
+ * @param $additional_data
+ *   An array of additional author information.
  */
-function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $fakevcs_specific = NULL) {
+function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $additional_data = array()) {
+  $fakevcs_specific = $additional_data['fakevcs_specific'];
+
   switch ($op) {
     case 'insert':
-      if (!is_array($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
+      if (!isset($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
         drupal_set_message(t('Error: no FakeVCS password given on account creation!'), 'error');
         return;
       }
@@ -1149,7 +1151,7 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $fake
       break;
 
     case 'update':
-      if (!is_array($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
+      if (!isset($fakevcs_specific) || !isset($fakevcs_specific['password'])) {
         return; // the user didn't update the password in the process.
       }
       db_query("UPDATE {versioncontrol_fakevcs_accounts}

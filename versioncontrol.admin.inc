@@ -275,21 +275,19 @@ function versioncontrol_user_account_edit_form_submit($form_id, $form_values) {
   $vcs_name = $form_values['vcs_name'];
   $vcs_specific = NULL;
 
-  if (versioncontrol_backend_implements($repository['vcs'], 'extract_account_vcs_specific')) {
-    $vcs_specific = _versioncontrol_call_backend(
-      $repository['vcs'], 'extract_account_vcs_specific', array($form_values)
-    );
-  }
+  $additional_data = module_invoke_all(
+    'versioncontrol_extract_account_data', $form_values
+  );
 
   if (empty($form_values['original_username'])) {
-    versioncontrol_insert_account($uid, $username, $repository, $vcs_specific);
+    versioncontrol_insert_account($uid, $username, $repository, $additional_data);
     $message = drupal_set_message(t(
       'The @vcs account %username has been created.',
       array('@vcs' => $vcs_name, '%username' => $username)
     ));
   }
   else {
-    versioncontrol_update_account($uid, $username, $repository, $vcs_specific);
+    versioncontrol_update_account($uid, $username, $repository, $additional_data);
     $message = drupal_set_message(t(
       'The @vcs account %username has been updated successfully.',
       array('@vcs' => $vcs_name, '%username' => $username)
@@ -621,12 +619,10 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
   }
   $repository['url_backend'] = 'versioncontrol_default_urls'; // hardcoded for now
 
-  if (versioncontrol_backend_implements($repository['vcs'], 'extract_repository_vcs_specific')) {
-    $vcs_specific = _versioncontrol_call_backend(
-      $repository['vcs'], 'extract_repository_vcs_specific', array($form_values)
-    );
-  }
-  $repository[$repository['vcs'] .'_specific'] = $vcs_specific;
+  $additional_data = module_invoke_all(
+    'versioncontrol_extract_repository_data', $form_values
+  );
+  $repository = array_merge($additional_data, $repository);
 
   if ($repository['repo_id'] > 0) {
     versioncontrol_update_repository($repository, $repository_urls);

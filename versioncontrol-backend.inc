@@ -153,8 +153,8 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
   }
 
   // Everything's done, let the world know about it!
-  module_invoke_all(
-    'versioncontrol_commit', array('insert', $commit, $commit_actions)
+  module_invoke_all('versioncontrol_commit',
+    'insert', $commit, $commit_actions
   );
 
   return $commit;
@@ -215,8 +215,8 @@ function versioncontrol_delete_commit($commit) {
   $commit_actions = versioncontrol_get_commit_actions($commit);
 
   // Announce deletion of the commit before anything has happened.
-  module_invoke_all(
-    'versioncontrol_commit', array('delete', $commit, $commit_actions)
+  module_invoke_all('versioncontrol_commit',
+    'delete', $commit, $commit_actions
   );
 
   // Provide an opportunity for the backend to delete its own stuff.
@@ -240,12 +240,11 @@ function versioncontrol_delete_commit($commit) {
  *   The VCS specific username (a string).
  * @param $repository
  *   The repository where the user has its VCS account.
- * @param $vcs_specific
- *   An array of VCS specific additional author information.
- *   How this array looks like is defined by the corresponding
- *   backend module (versioncontrol_[xxx]).
+ * @param $additional_data
+ *   An array of additional author information. Modules can fill this array
+ *   by implementing hook_versioncontrol_extract_account_data().
  */
-function versioncontrol_insert_account($uid, $username, $repository, $vcs_specific = NULL) {
+function versioncontrol_insert_account($uid, $username, $repository, $additional_data = array()) {
   db_query(
     "INSERT INTO {versioncontrol_accounts} (uid, repo_id, username)
      VALUES ('%d', '%d', '%s')", $uid, $repository['repo_id'], $username
@@ -255,7 +254,7 @@ function versioncontrol_insert_account($uid, $username, $repository, $vcs_specif
   if (versioncontrol_backend_implements($repository['vcs'], 'account')) {
     _versioncontrol_call_backend(
       $repository['vcs'], 'account',
-      array('insert', $uid, $username, $repository, $vcs_specific)
+      array('insert', $uid, $username, $repository, $additional_data)
     );
   }
 
@@ -266,8 +265,8 @@ function versioncontrol_insert_account($uid, $username, $repository, $vcs_specif
             $uid, $username, $repository['repo_id']);
 
   // Everything's done, let the world know about it!
-  module_invoke_all(
-    'versioncontrol_account', array('insert', $uid, $username, $repository)
+  module_invoke_all('versioncontrol_account',
+    'insert', $uid, $username, $repository, $additional_data
   );
 }
 
@@ -283,12 +282,11 @@ function versioncontrol_insert_account($uid, $username, $repository, $vcs_specif
  *   The VCS specific username (a string).
  * @param $repository
  *   The repository where the user has its VCS account.
- * @param $vcs_specific
- *   An array of VCS specific additional author information.
- *   How this array looks like is defined by the corresponding
- *   backend module (versioncontrol_[xxx]).
+ * @param $additional_data
+ *   An array of additional author information. Modules can fill this array
+ *   by implementing hook_versioncontrol_extract_account_data().
  */
-function versioncontrol_update_account($uid, $username, $repository, $vcs_specific = NULL) {
+function versioncontrol_update_account($uid, $username, $repository, $additional_data = array()) {
   $old_username = versioncontrol_get_account_username_for_uid($uid, $repository, TRUE);
   $username_changed = ($username != $old_username);
 
@@ -304,7 +302,7 @@ function versioncontrol_update_account($uid, $username, $repository, $vcs_specif
   if (versioncontrol_backend_implements($repository['vcs'], 'account')) {
     _versioncontrol_call_backend(
       $repository['vcs'], 'account',
-      array('update', $uid, $username, $repository, $vcs_specific)
+      array('update', $uid, $username, $repository, $additional_data)
     );
   }
 
@@ -321,8 +319,8 @@ function versioncontrol_update_account($uid, $username, $repository, $vcs_specif
   }
 
   // Everything's done, let the world know about it!
-  module_invoke_all(
-    'versioncontrol_account', array('update', $uid, $username, $repository)
+  module_invoke_all('versioncontrol_account',
+    'update', $uid, $username, $repository, $additional_data
   );
 }
 
@@ -345,15 +343,15 @@ function versioncontrol_delete_account($uid, $username, $repository) {
             $uid, $repository['repo_id']);
 
   // Announce deletion of the account before anything has happened.
-  module_invoke_all(
-    'versioncontrol_account', array('delete', $uid, $username, $repository)
+  module_invoke_all('versioncontrol_account',
+    'delete', $uid, $username, $repository, array()
   );
 
   // Provide an opportunity for the backend to delete its own stuff.
   if (versioncontrol_backend_implements($repository['vcs'], 'account')) {
     _versioncontrol_call_backend(
       $repository['vcs'], 'account',
-      array('delete', $uid, $username, $repository, NULL)
+      array('delete', $uid, $username, $repository, array())
     );
   }
 
@@ -392,7 +390,7 @@ function versioncontrol_delete_account($uid, $username, $repository) {
  *   An array of repository viewer URLs. How this array looks like is
  *   defined by the corresponding URL backend.
  */
-function versioncontrol_insert_repository($repository, $repository_url) {
+function versioncontrol_insert_repository($repository, $repository_urls) {
   $repository['repo_id'] = db_next_id('{versioncontrol_repositories}_repo_id');
 
   db_query(
@@ -431,9 +429,7 @@ function versioncontrol_insert_repository($repository, $repository_url) {
   }
 
   // Everything's done, let the world know about it!
-  module_invoke_all(
-    'versioncontrol_repository', array('insert', $repository)
-  );
+  module_invoke_all('versioncontrol_repository', 'insert', $repository);
 }
 
 /**
@@ -469,7 +465,7 @@ function versioncontrol_insert_repository($repository, $repository_url) {
  *   An array of repository viewer URLs. How this array looks like is
  *   defined by the corresponding URL backend.
  */
-function versioncontrol_update_repository($repository, $repository_url) {
+function versioncontrol_update_repository($repository, $repository_urls) {
   db_query(
     "UPDATE {versioncontrol_repositories}
      SET name = '%s', vcs = '%s', root = '%s', url_backend = '%s'
@@ -507,9 +503,7 @@ function versioncontrol_update_repository($repository, $repository_url) {
   }
 
   // Everything's done, let the world know about it!
-  module_invoke_all(
-    'versioncontrol_repository', array('update', $repository)
-  );
+  module_invoke_all('versioncontrol_repository', 'update', $repository);
 }
 
 /**
@@ -538,9 +532,7 @@ function versioncontrol_delete_repository($repository) {
   }
 
   // Announce deletion of the repository before anything has happened.
-  module_invoke_all(
-    'versioncontrol_repository', array('delete', $repository)
-  );
+  module_invoke_all('versioncontrol_repository', 'delete', $repository);
 
   // Provide an opportunity for the backend to delete its own stuff.
   if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
