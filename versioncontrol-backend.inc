@@ -79,7 +79,7 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  * Call this inside a pre-commit/pre-branch hook.
  *
  * @param $op
- *   'create' if the branch is being created, 'update' if it's being renamed,
+ *   'add' if the branch is being created, 'move' if it's being renamed,
  *   or 'delete' if it is slated for deletion.
  * @param $user
  *   The user who wants to assign the branch. This may either be a string
@@ -139,7 +139,7 @@ function versioncontrol_has_branch_access($op, $user, $repo, $directory_item, $b
  * Call this inside a pre-commit/pre-tag hook.
  *
  * @param $op
- *   'create' if the tag is being created, 'update' if it's being renamed,
+ *   'add' if the tag is being created, 'move' if it's being renamed,
  *   or 'delete' if it is slated for deletion.
  * @param $user
  *   The user who wants to assign the tag. This may either be a string
@@ -157,7 +157,7 @@ function versioncontrol_has_branch_access($op, $user, $repo, $directory_item, $b
  * @param $source_branch
  *   If the backend can tell the branch from which the tag is being created,
  *   then it may be given here. Otherwise, this is NULL. (For $op values other
- *   than 'create', this is NULL as well.)
+ *   than 'add', this is NULL as well.)
  *
  * @return
  *   TRUE if the tag may be assigned, or FALSE if not.
@@ -250,7 +250,7 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
      (commit_id, repo_id, date, uid, username, directory, message, revision)
      VALUES ('%d', '%d', '%d', '%d', '%s', '%s', '%s', '%s')",
     $commit['commit_id'], $commit['repository']['repo_id'],
-    $commit['date'], $uid, $commit['username'], $commit['directory'],
+    $commit['date'], $commit['uid'], $commit['username'], $commit['directory'],
     $commit['message'], $commit['revision']
   );
 
@@ -301,21 +301,11 @@ function _versioncontrol_fill_commit($commit, $commit_actions) {
 
   // If not already there, retrieve the Drupal user id of the committer.
   if (!isset($commit['uid'])) {
-    $authors = versioncontrol_get_authors_by_username(
-      array($commit['repository']['repo_id'] => array($commit['username'])),
-      array($commit['repository']['repo_id'] => $commit['repository'])
+    $uid = versioncontrol_get_account_uid_for_username(
+      $commit['username'], $commit['repository']['repo_id'], TRUE
     );
-
-    if (empty($authors)) {
-      // If no uid could be retrieved, blame the commit on user 0 (anonymous).
-      $commit['uid'] = 0;
-    }
-    else {
-      foreach ($authors as $uid => $mapping) {
-        $commit['uid'] = $uid;
-        break; // we only asked for one username in one repository, that's it
-      }
-    }
+    // If no uid could be retrieved, blame the commit on user 0 (anonymous).
+    $commit['uid'] = isset($uid) ? $uid : 0;
   }
 
   // Also, retrieve the deepest-level directory for all commit actions.

@@ -9,9 +9,9 @@
  */
 
 // Optional capabilities that backend modules can provide.
-define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',      0);
-define('VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS', 1);
-define('VERSIONCONTROL_CAPABILITY_TAG_RESTRICTIONS',    2);
+define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
+define('VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS',     1);
+define('VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS', 2);
 
 // VCS item types.
 define('VERSIONCONTROL_ITEM_FILE',            0);
@@ -1113,15 +1113,13 @@ function versioncontrol_get_accounts($constraints = array(), $include_non_approv
   // Assemble the return value.
   $accounts = array();
   while ($account = db_fetch_object($result)) {
-    // Don't include non-approved accounts, except in case the caller said so.
-    if (!($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id))) {
-      continue;
+    // Only include approved accounts, except in case the caller said otherwise.
+    if ($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id)) {
+      if (!isset($accounts[$account->uid])) {
+        $accounts[$account->uid] = array();
+      }
+      $accounts[$account->uid][$account->repo_id] = $account->username;
     }
-
-    if (!isset($accounts[$account->uid])) {
-      $accounts[$account->uid] = array();
-    }
-    $accounts[$account->uid][$account->repo_id] = $account->username;
   }
   return $accounts;
 }
@@ -1151,11 +1149,10 @@ function versioncontrol_get_account_uid_for_username($username, $repo_id, $inclu
                       $username, $repo_id);
 
   while ($account = db_fetch_object($result)) {
-    // Don't include non-approved accounts, except in case the caller said so.
-    if (!($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id))) {
-      continue;
+    // Only include approved accounts, except in case the caller said otherwise.
+    if ($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id)) {
+      return $account->uid;
     }
-    return $account->uid;
   }
   return NULL;
 }
@@ -1185,11 +1182,10 @@ function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_no
                       $uid, $repo_id);
 
   while ($account = db_fetch_object($result)) {
-    // Don't include non-approved accounts, except in case the caller said so.
-    if (!($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id))) {
-      continue;
+    // Only include approved accounts, except in case the caller said otherwise.
+    if ($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id)) {
+      return $account->username;
     }
-    return $account->username;
   }
   return NULL;
 }

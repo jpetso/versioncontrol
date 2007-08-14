@@ -7,6 +7,8 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: directories that may be tagged (whereas branching must always
+//       be allowed, as the main branch is just a regular branch as well)
 
 /**
  * Implementation of hook_form_alter(): Add commit restriction settings
@@ -112,7 +114,7 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
   db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
             $repository['repo_id']);
 
-  if (isset($restrictions) && ($op == 'update' || $op == 'insert')) {
+  if (isset($restrictions) && ($op == 'add' || $op == 'move')) {
     db_query("INSERT INTO {commit_restrictions}
               (repo_id, allowed_paths, forbidden_paths, deny_undefined_paths,
                 valid_branches, valid_tags)
@@ -262,7 +264,7 @@ function commit_restrictions_versioncontrol_commit_access($commit, $commit_actio
  * Determine if the given branch may be assigned to a directory.
  *
  * @param $op
- *   'create' if the branch is being created, 'update' if it's being renamed,
+ *   'add' if the branch is being created, 'move' if it's being renamed,
  *   or 'delete' if it is slated for deletion.
  * @param $uid
  *   The Drupal user id of the user who wants to assign the tag.
@@ -303,7 +305,7 @@ function commit_restrictions_versioncontrol_branch_access($op, $uid, $repository
  * Determine if the given tag may be assigned to a directory.
  *
  * @param $op
- *   'create' if the tag is being created, 'update' if it's being renamed,
+ *   'add' if the tag is being created, 'move' if it's being renamed,
  *   or 'delete' if it is slated for deletion.
  * @param $uid
  *   The Drupal user id of the user who wants to assign the tag.
@@ -318,7 +320,7 @@ function commit_restrictions_versioncontrol_branch_access($op, $uid, $repository
  * @param $source_branch
  *   If the backend can tell the branch from which the tag is being created,
  *   then it may be given here. Otherwise, this is NULL. (For $op values other
- *   than 'create', this is NULL as well.)
+ *   than 'add', this is NULL as well.)
  *
  * @return
  *   FALSE when the tag should not be allowed, NULL if we're indifferent,
