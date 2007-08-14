@@ -58,8 +58,8 @@ versioncontrol_fakevcs_versioncontrol_backends() {
         // to commit to specific paths and/or branches.
         VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS,
 
-        // Able to cancel commits if the committer lacks permissions
-        // to assign specific branches or tags.
+        // Able to cancel branch or tag assignments if the committer lacks
+        // permissions to create/update/delete those.
         VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS,
 
         // Able to retrieve a file or its revision number based on a global
