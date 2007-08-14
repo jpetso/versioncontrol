@@ -57,18 +57,139 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
     return NULL;
   }
 
-  $allowed = array();
   foreach (module_implements('versioncontrol_commit_access') as $module) {
     $function = $module .'_versioncontrol_commit_access';
 
     // If at least one hook_versioncontrol_commit_access returns TRUE,
     // the commit goes through. (This is for admin or sandbox exceptions.)
-    if ($function($commit, $commit_actions, $branch) === TRUE) {
+    $access = $function($commit, $commit_actions, $branch);
+    if ($access === TRUE) {
       return TRUE;
     }
-    if ($function($commit, $commit_actions, $branch) === FALSE) {
+    else if ($access === FALSE) {
       return FALSE;
     }
+    // on NULL, continue;
+  }
+  return TRUE;
+}
+
+/**
+ * Determine if a branch may be assigned to a directory.
+ * Call this inside a pre-commit/pre-branch hook.
+ *
+ * @param $op
+ *   'create' if the branch is being created, 'update' if it's being renamed,
+ *   or 'delete' if it is slated for deletion.
+ * @param $user
+ *   The user who wants to assign the branch. This may either be a string
+ *   (in which case it is the user's VCS specific username) or an integer
+ *   (in which case it represents the user's Drupal user id).
+ * @param $repo
+ *   The repository where the branching takes place. This may either be
+ *   an integer (in which case it is the repository id) or a full-fledged
+ *   repository array.
+ * @param $directory_item
+ *   The item for the (target) directory that is being branched off.
+ *   The 'revision' element of the item array may not be set.
+ * @param $branch
+ *   The target branch (a string like 'DRUPAL-6--1').
+ * @param $source_branch
+ *   If the backend can tell the original branch name, then it may be
+ *   given here. Otherwise, this is NULL. (For $op == 'delete',
+ *   this is NULL as well.)
+ *
+ * @return
+ *   TRUE if the branch may be assigned, or FALSE if not.
+ */
+function versioncontrol_has_branch_access($op, $user, $repo, $directory_item, $branch, $source_branch = NULL) {
+  if (is_string($user)) {
+    $uid = versioncontrol_get_account_uid_for_username($user);
+  }
+  else {
+    $uid = $user;
+  }
+
+  if (is_numeric($repo)) {
+    $repository = versioncontrol_get_repository($repo);
+  }
+  else {
+    $repository = $repo;
+  }
+
+  foreach (module_implements('versioncontrol_branch_access') as $module) {
+    $function = $module .'_versioncontrol_branch_access';
+
+    // If at least one hook_versioncontrol_branch_access returns TRUE,
+    // the tag goes through.
+    $access = $function($op, $uid, $repository, $directory_item, $tag, $source_branch);
+    if ($access === TRUE) {
+      return TRUE;
+    }
+    else if ($access === FALSE) {
+      return FALSE;
+    }
+    // on NULL, continue;
+  }
+  return TRUE;
+}
+
+/**
+ * Determine if a tag may be assigned to a directory.
+ * Call this inside a pre-commit/pre-tag hook.
+ *
+ * @param $op
+ *   'create' if the tag is being created, 'update' if it's being renamed,
+ *   or 'delete' if it is slated for deletion.
+ * @param $user
+ *   The user who wants to assign the tag. This may either be a string
+ *   (in which case it is the user's VCS specific username) or an integer
+ *   (in which case it represents the user's Drupal user id).
+ * @param $repo
+ *   The repository where the tagging takes place. This may either be
+ *   an integer (in which case it is the repository id) or a full-fledged
+ *   repository array.
+ * @param $directory_item
+ *   The item for the (target) directory that is being tagged.
+ *   The 'revision' element of the item array may not be set.
+ * @param $tag
+ *   The tag that is being assigned (a string like 'DRUPAL-6--1-1').
+ * @param $source_branch
+ *   If the backend can tell the branch from which the tag is being created,
+ *   then it may be given here. Otherwise, this is NULL. (For $op values other
+ *   than 'create', this is NULL as well.)
+ *
+ * @return
+ *   TRUE if the tag may be assigned, or FALSE if not.
+ */
+function versioncontrol_has_tag_access($op, $user, $repo, $directory_item, $tag, $source_branch = NULL) {
+  if (is_string($user)) {
+    $uid = versioncontrol_get_account_uid_for_username($user);
+  }
+  else {
+    $uid = $user;
+  }
+
+  if (is_numeric($repo)) {
+    $repository = versioncontrol_get_repository($repo);
+  }
+  else {
+    $repository = $repo;
+  }
+
+  foreach (module_implements('versioncontrol_tag_access') as $module) {
+    $function = $module .'_versioncontrol_tag_access';
+
+    // If at least one hook_versioncontrol_tag_access returns TRUE,
+    // the tag goes through.
+    $access = $function($op, $uid, $repository, $directory_item, $tag, $source_branch);
+    if ($access === TRUE) {
+      return TRUE;
+    }
+    else if ($access === FALSE) {
+      return FALSE;
+    }
+    // on NULL, continue;
   }
   return TRUE;
 }
