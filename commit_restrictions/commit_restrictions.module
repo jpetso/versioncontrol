@@ -1,0 +1,340 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Commit Restrictions - Restrict commits, branches and tags
+ * based on item path or branch/tag name.
+ *
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ */
+
+/**
+ * Implementation of hook_form_alter(): Add commit restriction settings
+ * to the add/edit repository form of the Version Control API module.
+ */
+function commit_restrictions_form_alter($form_id, &$form) {
+  if ($form['#id'] == 'vcs-repository-form') {
+    $backends = versioncontrol_get_backends();
+    $backend_capabilities = $backends[$form['#vcs']]['capabilities'];
+    $repo_id = $form['repository_information']['repo_id']['#value'];
+    $restrictions = _commit_restrictions_load($repo_id);
+
+    if (in_array(VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS, $backend_capabilities)) {
+      $form['directory_restrictions'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Commit restrictions'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+        '#weight' => 4,
+      );
+      $form['directory_restrictions']['allowed_paths'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Freely accessible paths'),
+        '#description' => t('A space-separated list of PHP regular expressions for directories or files that will always be granted commit access to everyone, no matter what other commit restrictions are imposed. Example: "@.*\.(po|pot)$@", "@^/contributions/(docs|sandbox|tricks)/@"'),
+        '#default_value' => implode(' ', $restrictions['allowed_paths']),
+        '#size' => 60,
+      );
+      $form['directory_restrictions']['deny_undefined_paths'] = array(
+        '#type' => 'checkbox',
+        '#title' => t('Deny access to all other paths'),
+        '#description' => t('If this is enabled, no paths other than the ones given above will be granted commit access, except if there is an exception that specifically allows the commit to happen.'),
+        '#default_value' => $restrictions['deny_undefined_paths'],
+      );
+      $form['directory_restrictions']['forbidden_paths'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Forbidden paths'),
+        '#description' => t('A space-separated list of PHP regular expressions for directories or files that will be denied access to everyone, except if there is an exception that specifically allows the commit to happen. Example: "@^/contributions/profiles.*(?&lt;!\.profile|\.txt)$@ @^.*\.(gz|tgz|tar|zip)$@"'),
+        '#default_value' => implode(' ', $restrictions['forbidden_paths']),
+        '#size' => 60,
+      );
+    }
+    if (in_array(VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS, $backend_capabilities)) {
+      $form['branch_tag_restrictions'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Branch and tag restrictions'),
+        '#collapsible' => TRUE,
+        '#collapsed' => TRUE,
+        '#weight' => 5,
+      );
+      $form['branch_tag_restrictions']['valid_branches'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Valid branches'),
+        '#description' => t('A space-separated list of PHP regular expressions for allowed branch names. If empty, all branch names will be allowed. Example: "@^HEAD$@ @^DRUPAL-5(--[2-9])?$@ @^DRUPAL-6--[1-9]$@"'),
+        '#default_value' => implode(' ', $restrictions['valid_branches']),
+        '#size' => 60,
+      );
+      $form['branch_tag_restrictions']['valid_tags'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Valid tags'),
+        '#description' => t('A space-separated list of PHP regular expressions for allowed tag names. If empty, all tag names will be allowed. Example: "@^DRUPAL-[56]--(\d+)-(\d+)(-[A-Z0-9]+)?$@"'),
+        '#default_value' => implode(' ', $restrictions['valid_tags']),
+        '#size' => 60,
+      );
+    }
+  }
+}
+
+/**
+ * Implementation of hook_versioncontrol_extract_repository_data():
+ * Extract commit restriction repository additions from the repository
+ * editing/adding form's submitted values.
+ */
+function commit_restrictions_versioncontrol_extract_repository_data($form_values) {
+  $allowed_paths = empty($form_values['allowed_paths'])
+                   ? array() : array_filter(explode(' ', $form_values['allowed_paths']));
+
+  $forbidden_paths = empty($form_values['forbidden_paths'])
+                     ? array() : array_filter(explode(' ', $form_values['forbidden_paths']));
+
+  $deny_undefined_paths = isset($form_values['deny_undefined_paths'])
+                          ? FALSE : $form_values['deny_undefined_paths'];
+
+  $valid_branches = empty($form_values['valid_branches'])
+                    ? array() : array_filter(explode(' ', $form_values['valid_branches']));
+
+  $valid_tags = empty($form_values['valid_tags'])
+                ? array() : array_filter(explode(' ', $form_values['valid_tags']));
+
+  return array(
+    'commit_restrictions' => array(
+      'allowed_paths'        => $form_values['allowed_paths'],
+      'forbidden_paths'      => $form_values['forbidden_paths'],
+      'deny_undefined_paths' => $form_values['deny_undefined_paths'],
+      'valid_branches'       => $form_values['valid_branches'],
+      'valid_tags'           => $form_values['valid_tags'],
+    ),
+  );
+}
+
+function commit_restrictions_versioncontrol_repository($op, $repository) {
+  $restrictions = $repository['commit_restrictions'];
+
+  db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
+            $repository['repo_id']);
+
+  if (isset($restrictions) && ($op == 'update' || $op == 'insert')) {
+    db_query("INSERT INTO {commit_restrictions}
+              (repo_id, allowed_paths, forbidden_paths, deny_undefined_paths,
+                valid_branches, valid_tags)
+              VALUES ('%d', '%s', '%s', '%d', '%s', '%s')",
+              $repository['repo_id'], $restrictions['allowed_paths'],
+              $restrictions['forbidden_paths'], $restrictions['deny_undefined_paths'],
+              $restrictions['valid_branches'], $restrictions['valid_tags']);
+  }
+}
+
+/**
+ * Retrieve a structured array with the database values of the
+ * {commit_restrictions} table as array elements. The allowed/forbidden lists
+ * already appear as arrays, not as space-separated strings.
+ *
+ * @param $repo_id
+ *   A valid repository id of the repository for which the restrictions
+ *   should be retrieved, or 0 if a default array should be returned instead.
+ *
+ * @return
+ *   The mentioned restrictions array, or a default array if no restrictions
+ *   could be found for the given repository.
+ */
+function _commit_restrictions_load($repo_id) {
+  if ($repo_id) {
+    $result = db_query("SELECT allowed_paths, forbidden_paths,
+                              deny_undefined_paths, valid_branches, valid_tags
+                        FROM {commit_restrictions}
+                        WHERE repo_id = '%d'", $repo_id);
+
+    while ($row = db_fetch_array($result)) {
+      $restrictions = $row;
+      break;
+    }
+    if (isset($restrictions)) {
+      $restrictions['allowed_paths'] = explode(' ', $restrictions['allowed_paths']);
+      $restrictions['forbidden_paths'] = explode(' ', $restrictions['forbidden_paths']);
+      $restrictions['valid_branches'] = explode(' ', $restrictions['valid_branches']);
+      $restrictions['valid_tags'] = explode(' ', $restrictions['valid_tags']);
+
+      $restrictions['deny_undefined_paths'] =
+        ($restrictions['deny_undefined_paths'] > 0) ? TRUE : FALSE;
+
+      return $restrictions;
+    }
+  }
+  // If $repo_id == 0 or the query didn't return any results,
+  // return a default array.
+  return array(
+    'allowed_paths' => array(),
+    'forbidden_paths' => array(),
+    'deny_undefined_paths' => FALSE,
+    'valid_branches' => array(),
+    'valid_tags' => array(),
+  );
+}
+
+/**
+ * Implementation of hook_versioncontrol_commit_access():
+ * Determine if the given commit should be denied or allowed.
+ *
+ * @param $commit
+ *   A commit array of the commit that is about to happen. As it's not
+ *   committed yet, it's not yet in the database as well, which means that
+ *   any commit info retrieval functions won't work on this commit array.
+ *   It also means there's no 'commit_id', 'revision' and 'date' elements like
+ *   in regular commit arrays. The 'message' element might or might not be set.
+ * @param $commit_actions
+ *   The commit actions of the above commit that is about to happen.
+ *   Further information retrieval functions won't work on this array as well.
+ *   Also, the 'source items' element of each action and the 'revision' element
+ *   of each item in these actions might not be set.
+ * @param $branch
+ *   The target branch where the commit will happen (a string like 'DRUPAL-5').
+ *   If the respective backend doesn't support branches,
+ *   this may be NULL instead.
+ *
+ * @return
+ *   FALSE when the commit should not be allowed, NULL if we're indifferent,
+ *   or TRUE if the commit should be allowed no matter what other
+ *   commit access callbacks say.
+ */
+function commit_restrictions_versioncontrol_commit_access($commit, $commit_actions, $branch = NULL) {
+  if (empty($commit_actions)) {
+    return NULL; // no idea if this is ever going to happen, but let's be prepared
+  }
+
+  $restrictions = _commit_restrictions_load($commit['repository']['repo_id']);
+
+  // Paths where it is always allowed to commit.
+  if (!empty($restrictions['allowed_paths'])) {
+    foreach ($commit_actions as $action) {
+      $always_allow = TRUE;
+
+      foreach ($restrictions['allowed_paths'] as $allowed_path_regexp) {
+        $path = $action['current item']['path'];
+
+        if ($action['current item']['type'] == VERSIONCONTROL_ITEM_DIRECTORY
+            && $action['current item']['path'] != '/')
+        {
+          $path = $action['current item']['path'] .'/';
+        }
+        if (!preg_match($allowed_path_regexp, $path)) {
+          $always_allow = FALSE;
+          break;
+        }
+      }
+      // If only one single item is not always allowed,
+      // we won't always allow the commit. Makes sense, right?
+      if (!$always_allow) {
+        break;
+      }
+    }
+    if ($always_allow) {
+      return TRUE;
+    }
+  }
+
+  if ($restrictions['deny_undefined_paths']) {
+    return FALSE;
+  }
+
+  // Paths where it is not allowed to commit.
+  if (!empty($restrictions['forbidden_paths'])) {
+    foreach ($commit_actions as $action) {
+      foreach ($restrictions['forbidden_paths'] as $forbidden_path_regexp) {
+        $path = $action['current item']['path'];
+
+        if ($action['current item']['type'] == VERSIONCONTROL_ITEM_DIRECTORY
+            && $action['current item']['path'] != '/')
+        {
+          $path = $action['current item']['path'] .'/';
+        }
+        if (preg_match($forbidden_path_regexp, $path)) {
+          // one single restricted item is enough to prevent the commit
+          return FALSE;
+        }
+      }
+    }
+  }
+
+  return NULL;
+}
+
+/**
+ * Implementation of hook_versioncontrol_branch_access():
+ * Determine if the given branch may be assigned to a directory.
+ *
+ * @param $op
+ *   'create' if the branch is being created, 'update' if it's being renamed,
+ *   or 'delete' if it is slated for deletion.
+ * @param $uid
+ *   The Drupal user id of the user who wants to assign the tag.
+ * @param $repository
+ *   A repository array describing the repository where the branching
+ *   takes place.
+ * @param $directory_item
+ *   The item for the (target) directory that is being branched off.
+ *   The 'revision' element of the item array may not be set.
+ * @param $branch
+ *   The target branch (a string like 'DRUPAL-6--1').
+ * @param $source_branch
+ *   If the backend can tell the original branch name, then it may be
+ *   given here. Otherwise, this is NULL. (For $op == 'delete',
+ *   this is NULL as well.)
+ *
+ * @return
+ *   FALSE when the branch should not be allowed, NULL if we're indifferent,
+ *   or TRUE if the branch should be allowed no matter what other
+ *   branch access callbacks say.
+ */
+function commit_restrictions_versioncontrol_branch_access($op, $uid, $repository, $directory_item, $branch, $source_branch = NULL) {
+  $restrictions = _commit_restrictions_load($commit['repository']['repo_id']);
+
+  if (!empty($restrictions['valid_branches'])) {
+    foreach ($restrictions['valid_branches'] as $valid_branch_regexp) {
+      if (preg_match($valid_branch_regexp, $branch)) {
+        return NULL;
+      }
+    }
+    return FALSE; // no branch regexps match this branch, so deny it
+  }
+  return NULL;
+}
+
+/**
+ * Implementation of hook_versioncontrol_tag_access():
+ * Determine if the given tag may be assigned to a directory.
+ *
+ * @param $op
+ *   'create' if the tag is being created, 'update' if it's being renamed,
+ *   or 'delete' if it is slated for deletion.
+ * @param $uid
+ *   The Drupal user id of the user who wants to assign the tag.
+ * @param $repository
+ *   A repository array describing the repository where the tagging
+ *   takes place.
+ * @param $directory_item
+ *   The item for the (target) directory that is being tagged.
+ *   The 'revision' element of the item array may not be set.
+ * @param $tag
+ *   The tag that is being assigned (a string like 'DRUPAL-6--1-1').
+ * @param $source_branch
+ *   If the backend can tell the branch from which the tag is being created,
+ *   then it may be given here. Otherwise, this is NULL. (For $op values other
+ *   than 'create', this is NULL as well.)
+ *
+ * @return
+ *   FALSE when the tag should not be allowed, NULL if we're indifferent,
+ *   or TRUE if the tag should be allowed no matter what other
+ *   tag access callbacks say.
+ */
+function commit_restrictions_versioncontrol_tag_access($op, $uid, $repository, $directory_item, $tag, $source_branch = NULL) {
+  $restrictions = _commit_restrictions_load($commit['repository']['repo_id']);
+
+  if (!empty($restrictions['valid_tags'])) {
+    foreach ($restrictions['valid_tags'] as $valid_tag_regexp) {
+      if (preg_match($valid_tag_regexp, $tag)) {
+        return NULL;
+      }
+    }
+    return FALSE; // no branch regexps match this branch, so deny it
+  }
+  return NULL;
+}

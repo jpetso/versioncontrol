@@ -1,0 +1,5 @@
+; $Id$
+name = "Commit Restrictions"
+description = "Restrict commits, branches and tags based on item path or branch/tag name."
+dependencies = versioncontrol
+package = Version Control

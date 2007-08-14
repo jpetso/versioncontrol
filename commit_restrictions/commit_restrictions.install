@@ -1,0 +1,41 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Commit Restrictions - Restrict commits, branches and tags
+ * based on item path or branch/tag name.
+ *
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function commit_restrictions_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      db_query("CREATE TABLE {commit_restrictions} (
+        repo_id int unsigned NOT NULL default '0',
+        allowed_paths longtext NOT NULL,
+        forbidden_paths longtext NOT NULL,
+        deny_undefined_paths tinyint NOT NULL default '0',
+        valid_branches varchar(255) NOT NULL default '',
+        valid_tags varchar(255) NOT NULL default '',
+        PRIMARY KEY (repo_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      break;
+
+    case 'pgsql':
+      break;
+  }
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function commit_restrictions_uninstall() {
+  db_query("DROP TABLE {commit_restrictions}");
+}
