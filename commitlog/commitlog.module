@@ -426,9 +426,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
   $lines = array();
 
   foreach ($commit_actions as $action) {
-    $item = isset($action['current item'])
-            ? $action['current item']     // new revision of the file, or
-            : $action['source items'][0]; // the deleted item
+    $item = versioncontrol_get_affected_item($action);
 
     $item_path = substr($item['path'], strlen($commit['directory']) + 1);
     $item_string = theme('commitlog_item', $commit['repository'], $item, $item_path, $html);

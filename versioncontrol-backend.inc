@@ -50,6 +50,8 @@
  *
  * @return
  *   TRUE if the commit may happen, or FALSE if not.
+ *   If FALSE is returned, you can retrieve the concerning error messages
+ *   by calling versioncontrol_get_access_errors().
  */
 function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NULL) {
   $commit = _versioncontrol_fill_commit($commit, $commit_actions);
@@ -57,19 +59,26 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
     return NULL;
   }
 
+  $error_messages = array();
+
   foreach (module_implements('versioncontrol_commit_access') as $module) {
     $function = $module .'_versioncontrol_commit_access';
 
     // If at least one hook_versioncontrol_commit_access returns TRUE,
     // the commit goes through. (This is for admin or sandbox exceptions.)
-    $access = $function($commit, $commit_actions, $branch);
-    if ($access === TRUE) {
+    $outcome = $function($commit, $commit_actions, $branch);
+    if ($outcome === TRUE) {
       return TRUE;
     }
-    else if ($access === FALSE) {
-      return FALSE;
+    else { // If !TRUE, $outcome is required to be an array with error messages
+      $error_messages = array_merge($error_messages, $outcome);
     }
-    // on NULL, continue;
+  }
+
+  // Let the commit fail if there's more than zero error messages.
+  if (!empty($error_messages)) {
+    _versioncontrol_access_errors($error_messages);
+    return FALSE;
   }
   return TRUE;
 }
@@ -81,57 +90,42 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  * @param $op
  *   'add' if the branch is being created, 'move' if it's being renamed,
  *   or 'delete' if it is slated for deletion.
- * @param $user
- *   The user who wants to assign the branch. This may either be a string
- *   (in which case it is the user's VCS specific username) or an integer
- *   (in which case it represents the user's Drupal user id).
- * @param $repo
- *   The repository where the branching takes place. This may either be
- *   an integer (in which case it is the repository id) or a full-fledged
- *   repository array.
- * @param $directory_item
- *   The item for the (target) directory that is being branched off.
- *   The 'revision' element of the item array may not be set.
+ *
  * @param $branch
- *   The target branch (a string like 'DRUPAL-6--1').
- * @param $source_branch
- *   If the backend can tell the original branch name, then it may be
- *   given here. Otherwise, this is NULL. (For $op == 'delete',
- *   this is NULL as well.)
+ *   A structured array that consists of the following elements:
+ *
+ *   'name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'uid': The Drupal user id of the committer. Passing this is optional -
+ *          if it isn't set, this function will determine the uid.
+ *   'username': The system specific VCS username of the committer.
+ *   'repository': The repository where the branching occurs, given as a
+ *                 structured array, like a single element of what is returned
+ *                 by versioncontrol_get_repositories().
+ *                 You can either pass this or 'repo_id'.
+ *   'repo_id': The repository where the branching occurs, given as a simple
+ *              integer id. You can either pass this or 'repository'.
+ *   'directory': The path of the (target) directory that is being branched.
+ *   'items': If the backend can determine all items (including the item
+ *            that corresponds to the 'directory' element) that are affected by
+ *            the branching operation, they will be given as a structured array
+ *            in this element. Array keys are the item paths, and array values
+ *            are item arrays. Compared to standard item arrays, the ones
+ *            in here don't need the 'revision' element to be set and can
+ *            optionally contain a 'source branch' element that specifies
+ *            the original branch of this item.
+ *            (For $op == 'delete', 'source branch' is never set.)
+ *            If the backend cannot determine all affected items,
+ *            the 'items' element is not set.
  *
  * @return
  *   TRUE if the branch may be assigned, or FALSE if not.
+ *   If FALSE is returned, you can retrieve the concerning error messages
+ *   by calling versioncontrol_get_access_errors().
  */
-function versioncontrol_has_branch_access($op, $user, $repo, $directory_item, $branch, $source_branch = NULL) {
-  if (is_string($user)) {
-    $uid = versioncontrol_get_account_uid_for_username($user);
-  }
-  else {
-    $uid = $user;
-  }
-
-  if (is_numeric($repo)) {
-    $repository = versioncontrol_get_repository($repo);
-  }
-  else {
-    $repository = $repo;
-  }
-
-  foreach (module_implements('versioncontrol_branch_access') as $module) {
-    $function = $module .'_versioncontrol_branch_access';
-
-    // If at least one hook_versioncontrol_branch_access returns TRUE,
-    // the tag goes through.
-    $access = $function($op, $uid, $repository, $directory_item, $tag, $source_branch);
-    if ($access === TRUE) {
-      return TRUE;
-    }
-    else if ($access === FALSE) {
-      return FALSE;
-    }
-    // on NULL, continue;
-  }
-  return TRUE;
+function versioncontrol_has_branch_access($op, $branch) {
+  return _versioncontrol_has_branch_or_tag_access(
+    'versioncontrol_branch_access', $op, $branch
+  );
 }
 
 /**
@@ -141,57 +135,94 @@ function versioncontrol_has_branch_access($op, $user, $repo, $directory_item, $b
  * @param $op
  *   'add' if the tag is being created, 'move' if it's being renamed,
  *   or 'delete' if it is slated for deletion.
- * @param $user
- *   The user who wants to assign the tag. This may either be a string
- *   (in which case it is the user's VCS specific username) or an integer
- *   (in which case it represents the user's Drupal user id).
- * @param $repo
- *   The repository where the tagging takes place. This may either be
- *   an integer (in which case it is the repository id) or a full-fledged
- *   repository array.
- * @param $directory_item
- *   The item for the (target) directory that is being tagged.
- *   The 'revision' element of the item array may not be set.
+ *
  * @param $tag
- *   The tag that is being assigned (a string like 'DRUPAL-6--1-1').
- * @param $source_branch
- *   If the backend can tell the branch from which the tag is being created,
- *   then it may be given here. Otherwise, this is NULL. (For $op values other
- *   than 'add', this is NULL as well.)
+ *   A structured array that consists of the following elements:
+ *
+ *   'name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'uid': The Drupal user id of the committer. Passing this is optional -
+ *          if it isn't set, this function will determine the uid.
+ *   'username': The system specific VCS username of the committer.
+ *   'repository': The repository where the tagging occurs, given as a
+ *                 structured array, like a single element of what is returned
+ *                 by versioncontrol_get_repositories().
+ *                 You can either pass this or 'repo_id'.
+ *   'repo_id': The repository where the tagging occurs, given as a simple
+ *              integer id. You can either pass this or 'repository'.
+ *   'directory': The path of the directory that is being tagged.
+ *   'items': If the backend can determine all items (including the item
+ *            that corresponds to the 'directory' element) that are affected by
+ *            the tagging operation, they will be given as a structured array
+ *            in this element. Array keys are the item paths, and array values
+ *            are item arrays. Compared to standard item arrays, the ones
+ *            in here don't need the 'revision' element to be set and can
+ *            optionally contain a 'source branch' element that specifies
+ *            the original branch of this item. (For $op == 'move' or
+ *            $op == 'delete', 'source branch' is never set.)
+ *            If the backend cannot determine all affected items,
+ *            the 'items' element is not set.
  *
  * @return
  *   TRUE if the tag may be assigned, or FALSE if not.
+ *   If FALSE is returned, you can retrieve the concerning error messages
+ *   by calling versioncontrol_get_access_errors().
  */
-function versioncontrol_has_tag_access($op, $user, $repo, $directory_item, $tag, $source_branch = NULL) {
-  if (is_string($user)) {
-    $uid = versioncontrol_get_account_uid_for_username($user);
-  }
-  else {
-    $uid = $user;
-  }
+function versioncontrol_has_tag_access($op, $tag) {
+  return _versioncontrol_has_branch_or_tag_access(
+    'versioncontrol_tag_access', $op, $tag
+  );
+}
 
-  if (is_numeric($repo)) {
-    $repository = versioncontrol_get_repository($repo);
-  }
-  else {
-    $repository = $repo;
-  }
+/**
+ * The branch_access() and tag_access() functions work totally similar
+ * internally, so let's share the code in a common function.
+ */
+function _versioncontrol_has_branch_or_tag_access($hook, $op, $branch_or_tag) {
+  $branch_or_tag = _versioncontrol_fill_uid_and_repository($branch_or_tag);
+  $error_messages = array();
 
-  foreach (module_implements('versioncontrol_tag_access') as $module) {
-    $function = $module .'_versioncontrol_tag_access';
+  foreach (module_implements($hook) as $module) {
+    $function = $module .'_'. $hook;
 
-    // If at least one hook_versioncontrol_tag_access returns TRUE,
-    // the tag goes through.
-    $access = $function($op, $uid, $repository, $directory_item, $tag, $source_branch);
-    if ($access === TRUE) {
+    // If at least one access hook returns TRUE, the branch/tag goes through.
+    $outcome = $function($op, $branch_or_tag);
+    if ($outcome === TRUE) {
       return TRUE;
     }
-    else if ($access === FALSE) {
-      return FALSE;
+    else { // If !TRUE, $outcome is required to be an array with error messages
+      $error_messages = array_merge($error_messages, $outcome);
     }
-    // on NULL, continue;
+  }
+
+  // Let the branch/tag assignment fail if there's more than zero error messages.
+  if (!empty($error_messages)) {
+    _versioncontrol_access_errors($error_messages);
+    return FALSE;
   }
   return TRUE;
+}
+
+/**
+ * If versioncontrol_has_commit_access(), versioncontrol_has_branch_access()
+ * or versioncontrol_has_tag_access() returned FALSE, you can use this function
+ * to retrieve the list of error messages from the various access checks.
+ * The error messages do not include trailing linebreaks, it is expected that
+ * those are inserted by the caller.
+ */
+function versioncontrol_get_access_errors() {
+  return _versioncontrol_access_errors();
+}
+
+/**
+ * Retrieve or set the list of access errors.
+ */
+function _versioncontrol_access_errors($new_messages = NULL) {
+  static $error_messages = array();
+
+  if (isset($new_messages)) {
+    $error_messages = $new_messages;
+  }
+  return $error_messages;
 }
 
 /**
@@ -290,28 +321,35 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
  *   before proceeding.
  */
 function _versioncontrol_fill_commit($commit, $commit_actions) {
+  $commit = _versioncontrol_fill_uid_and_repository($commit);
+  $commit['directory'] = _versioncontrol_get_common_directory($commit_actions);
+  return $commit;
+}
+
+/**
+ * Code that is shared between _versioncontrol_fill_commit() and the
+ * branch/tag access functions: fill up Drupal user id and repository
+ * in case they are not given.
+ */
+function _versioncontrol_fill_uid_and_repository($object) {
   // If not already there, retrieve the full repository object.
-  if (!isset($commit['repository'])) {
-    $repository = versioncontrol_get_repository($commit['repo_id']);
-    unset($commit['repo_id']);
+  if (!isset($object['repository'])) {
+    $repository = versioncontrol_get_repository($object['repo_id']);
+    unset($object['repo_id']);
     if (isset($repository)) {
-      $commit['repository'] = $repository;
+      $object['repository'] = $repository;
     }
   }
 
   // If not already there, retrieve the Drupal user id of the committer.
-  if (!isset($commit['uid'])) {
+  if (!isset($object['uid'])) {
     $uid = versioncontrol_get_account_uid_for_username(
-      $commit['username'], $commit['repository']['repo_id'], TRUE
+      $object['username'], $object['repository']['repo_id'], TRUE
     );
     // If no uid could be retrieved, blame the commit on user 0 (anonymous).
-    $commit['uid'] = isset($uid) ? $uid : 0;
+    $object['uid'] = isset($uid) ? $uid : 0;
   }
-
-  // Also, retrieve the deepest-level directory for all commit actions.
-  $commit['directory'] = _versioncontrol_get_common_directory($commit_actions);
-
-  return $commit;
+  return $object;
 }
 
 /**

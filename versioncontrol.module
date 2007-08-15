@@ -1412,6 +1412,18 @@ function versioncontrol_get_commit_actions($commit) {
 }
 
 /**
+ * Return the 'current item' of a commit action if there is one,
+ * or the first (only) one of the 'source items' if the file has been deleted.
+ * As this function is also being used within access checks, it also works
+ * when the corresponding commit has not yet been inserted into the database.
+ */
+function versioncontrol_get_affected_item($commit_action) {
+  return isset($action['current item'])
+         ? $action['current item']     // new revision of the file, or
+         : $action['source items'][0]; // the deleted item
+}
+
+/**
  * Retrieve the item of the deepest-level directory in the repository that is
  * common to all the changed items in a commit. In other words, this function
  * gets you the item for $commit['directory'].
