@@ -327,18 +327,16 @@ function _commit_restrictions_item_error_message($item) {
  *   'repository': The repository where the branching occurs, given as a
  *                 structured array, like a single element of what is returned
  *                 by versioncontrol_get_repositories().
- *   'directory': The path of the (target) directory that is being branched.
- *   'items': If the backend can determine all items (including the item
- *            that corresponds to the 'directory' element) that are affected by
- *            the branching operation, they will be given as a structured array
- *            in this element. Array keys are the item paths, and array values
- *            are item arrays. Compared to standard item arrays, the ones
- *            in here don't need the 'revision' element to be set and can
- *            optionally contain a 'source branch' element that specifies
- *            the original branch of this item.
- *            (For $op == 'delete', 'source branch' is never set.)
- *            If the backend cannot determine all affected items,
- *            the 'items' element is not set.
+ *   'directory': The deepest-level directory in the repository that is common
+ *                to all of the branched items.
+ *
+ * @param $branched_items
+ *   All items that are affected by the branching operation, given as
+ *   a structured array in this element. Array keys are the item paths,
+ *   and array values are item arrays. Compared to standard item arrays,
+ *   the ones in here don't need the 'revision' element to be set and can
+ *   optionally contain a 'source branch' element that specifies the original
+ *   branch of this item. (For $op == 'delete', 'source branch' is never set.)
  *
  * @return
  *   An array with error messages (without trailing newlines) if the branch
@@ -346,7 +344,7 @@ function _commit_restrictions_item_error_message($item) {
  *   or TRUE if the branch may be assigned no matter what other
  *   branch access callbacks say.
  */
-function commit_restrictions_versioncontrol_branch_access($op, $branch) {
+function commit_restrictions_versioncontrol_branch_access($op, $branch, $branched_items) {
   $restrictions = _commit_restrictions_load($branch['repository']['repo_id']);
 
   if (!empty($restrictions['valid_branches'])) {
@@ -382,18 +380,17 @@ function commit_restrictions_versioncontrol_branch_access($op, $branch) {
  *   'repository': The repository where the tagging occurs, given as a
  *                 structured array, like a single element of what is returned
  *                 by versioncontrol_get_repositories().
- *   'directory': The path of the directory that is being tagged.
- *   'items': If the backend can determine all items (including the item
- *            that corresponds to the 'directory' element) that are affected by
- *            the tagging operation, they will be given as a structured array
- *            in this element. Array keys are the item paths, and array values
- *            are item arrays. Compared to standard item arrays, the ones
- *            in here don't need the 'revision' element to be set and can
- *            optionally contain a 'source branch' element that specifies
- *            the original branch of this item. (For $op == 'move' or
- *            $op == 'delete', 'source branch' is never set.)
- *            If the backend cannot determine all affected items,
- *            the 'items' element is not set.
+ *   'directory': The deepest-level directory in the repository that is common
+ *                to all of the tagged items.
+ *
+ * @param $tagged_items
+ *   All items that are affected by the tagging operation, given as
+ *   a structured array in this element. Array keys are the item paths,
+ *   and array values are item arrays. Compared to standard item arrays,
+ *   the ones in here don't need the 'revision' element to be set and
+ *   can optionally contain a 'source branch' element that specifies
+ *   the original branch of this item. (For $op == 'move' or $op == 'delete',
+ *   'source branch' is never set.)
  *
  * @return
  *   An array with error messages (without trailing newlines) if the tag
@@ -401,7 +398,7 @@ function commit_restrictions_versioncontrol_branch_access($op, $branch) {
  *   or TRUE if the tag may be assigned no matter what other
  *   tag access callbacks say.
  */
-function commit_restrictions_versioncontrol_tag_access($op, $tag) {
+function commit_restrictions_versioncontrol_tag_access($op, $tag, $tagged_items) {
   $restrictions = _commit_restrictions_load($tag['repository']['repo_id']);
 
   if (!empty($restrictions['valid_tags'])) {

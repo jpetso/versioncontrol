@@ -104,27 +104,23 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  *                 You can either pass this or 'repo_id'.
  *   'repo_id': The repository where the branching occurs, given as a simple
  *              integer id. You can either pass this or 'repository'.
- *   'directory': The path of the (target) directory that is being branched.
- *   'items': If the backend can determine all items (including the item
- *            that corresponds to the 'directory' element) that are affected by
- *            the branching operation, they will be given as a structured array
- *            in this element. Array keys are the item paths, and array values
- *            are item arrays. Compared to standard item arrays, the ones
- *            in here don't need the 'revision' element to be set and can
- *            optionally contain a 'source branch' element that specifies
- *            the original branch of this item.
- *            (For $op == 'delete', 'source branch' is never set.)
- *            If the backend cannot determine all affected items,
- *            the 'items' element is not set.
+ *
+ * @param $branched_items
+ *   All items that are affected by the branching operation, given as
+ *   a structured array in this element. Array keys are the item paths,
+ *   and array values are item arrays. Compared to standard item arrays,
+ *   the ones in here don't need the 'revision' element to be set and can
+ *   optionally contain a 'source branch' element that specifies the original
+ *   branch of this item. (For $op == 'delete', 'source branch' is never set.)
  *
  * @return
  *   TRUE if the branch may be assigned, or FALSE if not.
  *   If FALSE is returned, you can retrieve the concerning error messages
  *   by calling versioncontrol_get_access_errors().
  */
-function versioncontrol_has_branch_access($op, $branch) {
+function versioncontrol_has_branch_access($op, $branch, $branched_items) {
   return _versioncontrol_has_branch_or_tag_access(
-    'versioncontrol_branch_access', $op, $branch
+    'versioncontrol_branch_access', $op, $branch, $branched_items
   );
 }
 
@@ -149,27 +145,24 @@ function versioncontrol_has_branch_access($op, $branch) {
  *                 You can either pass this or 'repo_id'.
  *   'repo_id': The repository where the tagging occurs, given as a simple
  *              integer id. You can either pass this or 'repository'.
- *   'directory': The path of the directory that is being tagged.
- *   'items': If the backend can determine all items (including the item
- *            that corresponds to the 'directory' element) that are affected by
- *            the tagging operation, they will be given as a structured array
- *            in this element. Array keys are the item paths, and array values
- *            are item arrays. Compared to standard item arrays, the ones
- *            in here don't need the 'revision' element to be set and can
- *            optionally contain a 'source branch' element that specifies
- *            the original branch of this item. (For $op == 'move' or
- *            $op == 'delete', 'source branch' is never set.)
- *            If the backend cannot determine all affected items,
- *            the 'items' element is not set.
+ *
+ * @param $tagged_items
+ *   All items that are affected by the tagging operation, given as
+ *   a structured array in this element. Array keys are the item paths,
+ *   and array values are item arrays. Compared to standard item arrays,
+ *   the ones in here don't need the 'revision' element to be set and
+ *   can optionally contain a 'source branch' element that specifies
+ *   the original branch of this item. (For $op == 'move' or $op == 'delete',
+ *   'source branch' is never set.)
  *
  * @return
  *   TRUE if the tag may be assigned, or FALSE if not.
  *   If FALSE is returned, you can retrieve the concerning error messages
  *   by calling versioncontrol_get_access_errors().
  */
-function versioncontrol_has_tag_access($op, $tag) {
+function versioncontrol_has_tag_access($op, $tag, $tagged_items) {
   return _versioncontrol_has_branch_or_tag_access(
-    'versioncontrol_tag_access', $op, $tag
+    'versioncontrol_tag_access', $op, $tag, $tagged_items
   );
 }
 
@@ -177,15 +170,16 @@ function versioncontrol_has_tag_access($op, $tag) {
  * The branch_access() and tag_access() functions work totally similar
  * internally, so let's share the code in a common function.
  */
-function _versioncontrol_has_branch_or_tag_access($hook, $op, $branch_or_tag) {
+function _versioncontrol_has_branch_or_tag_access($hook, $op, $branch_or_tag, $items) {
   $branch_or_tag = _versioncontrol_fill_uid_and_repository($branch_or_tag);
+  $branch_or_tag['directory'] = _versioncontrol_get_common_directory($items);
   $error_messages = array();
 
   foreach (module_implements($hook) as $module) {
     $function = $module .'_'. $hook;
 
     // If at least one access hook returns TRUE, the branch/tag goes through.
-    $outcome = $function($op, $branch_or_tag);
+    $outcome = $function($op, $branch_or_tag, $items);
     if ($outcome === TRUE) {
       return TRUE;
     }
