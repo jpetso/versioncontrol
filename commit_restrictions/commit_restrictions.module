@@ -110,20 +110,59 @@ function commit_restrictions_versioncontrol_extract_repository_data($form_values
   );
 }
 
+/**
+ * Implementation of hook_versioncontrol_repository():
+ * Manage (insert, update or delete) additional repository data in the database.
+ *
+ * @param $op
+ *   Either 'insert' when the repository has just been created, or 'update'
+ *   when repository name, root, URL backend or module specific data change,
+ *   or 'delete' if it will be deleted after this function has been called.
+ *
+ * @param $repository
+ *   The repository array containing the repository. It's a single
+ *   repository array like the one returned by versioncontrol_get_repository(),
+ *   so it consists of the following elements:
+ *
+ *   'repo_id': The unique repository id.
+ *   'name': The user-visible name of the repository.
+ *   'vcs': The unique string identifier of the version control system
+ *          that powers this repository.
+ *   'root': The root directory of the repository. In most cases,
+ *           this will be a local directory (e.g. '/var/repos/drupal'),
+ *           but it may also be some specialized string for remote repository
+ *           access. How this string may look like depends on the backend.
+ *   'url_backend': The prefix (excluding the trailing underscore)
+ *                  for URL backend retrieval functions.
+ *   '[xxx]_specific': An array of VCS specific additional repository
+ *                     information. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ */
 function commit_restrictions_versioncontrol_repository($op, $repository) {
   $restrictions = $repository['commit_restrictions'];
 
-  db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
-            $repository['repo_id']);
+  switch ($op) {
+    case 'update':
+      db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
+                $repository['repo_id']);
+      // fall through
 
-  if (isset($restrictions) && ($op == 'add' || $op == 'move')) {
-    db_query("INSERT INTO {commit_restrictions}
-              (repo_id, allowed_paths, forbidden_paths, deny_undefined_paths,
-                valid_branches, valid_tags)
-              VALUES ('%d', '%s', '%s', '%d', '%s', '%s')",
-              $repository['repo_id'], $restrictions['allowed_paths'],
-              $restrictions['forbidden_paths'], $restrictions['deny_undefined_paths'],
-              $restrictions['valid_branches'], $restrictions['valid_tags']);
+    case 'insert':
+      if (isset($restrictions) && ($op == 'add' || $op == 'move')) {
+        db_query("INSERT INTO {commit_restrictions}
+                  (repo_id, allowed_paths, forbidden_paths,
+                   deny_undefined_paths, valid_branches, valid_tags)
+                  VALUES ('%d', '%s', '%s', '%d', '%s', '%s')",
+                  $repository['repo_id'], $restrictions['allowed_paths'],
+                  $restrictions['forbidden_paths'], $restrictions['deny_undefined_paths'],
+                  $restrictions['valid_branches'], $restrictions['valid_tags']);
+      }
+      break;
+
+    case 'delete':
+      db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
+                $repository['repo_id']);
+      break;
   }
 }
 
@@ -147,20 +186,19 @@ function _commit_restrictions_load($repo_id) {
                         FROM {commit_restrictions}
                         WHERE repo_id = '%d'", $repo_id);
 
-    while ($row = db_fetch_array($result)) {
-      $restrictions = $row;
-      break;
-    }
-    if (isset($restrictions)) {
-      $restrictions['allowed_paths'] = explode(' ', $restrictions['allowed_paths']);
-      $restrictions['forbidden_paths'] = explode(' ', $restrictions['forbidden_paths']);
-      $restrictions['valid_branches'] = explode(' ', $restrictions['valid_branches']);
-      $restrictions['valid_tags'] = explode(' ', $restrictions['valid_tags']);
-
-      $restrictions['deny_undefined_paths'] =
-        ($restrictions['deny_undefined_paths'] > 0) ? TRUE : FALSE;
-
-      return $restrictions;
+    while ($restrictions = db_fetch_object($result)) {
+      return array(
+        'allowed_paths'   => empty($restrictions->allowed_paths)
+                             ? array() : explode(' ', $restrictions->allowed_paths),
+        'forbidden_paths' => empty($restrictions->forbidden_paths)
+                             ? array() : explode(' ', $restrictions->forbidden_paths),
+        'valid_branches'  => empty($restrictions->valid_branches)
+                             ? array() : explode(' ', $restrictions->valid_branches),
+        'valid_tags'      => empty($restrictions->valid_tags)
+                             ? array() : explode(' ', $restrictions->valid_tags),
+        'deny_undefined_paths' => ($restrictions->deny_undefined_paths > 0)
+                                  ? TRUE : FALSE,
+      );
     }
   }
   // If $repo_id == 0 or the query didn't return any results,
