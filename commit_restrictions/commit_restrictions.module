@@ -33,7 +33,7 @@ function commit_restrictions_form_alter($form_id, &$form) {
       $form['directory_restrictions']['allowed_paths'] = array(
         '#type' => 'textfield',
         '#title' => t('Freely accessible paths'),
-        '#description' => t('A space-separated list of PHP regular expressions for directories or files that will always be granted commit access to everyone, no matter what other commit restrictions are imposed. Example: "@.*\.(po|pot)$@", "@^/contributions/(docs|sandbox|tricks)/@"'),
+        '#description' => t('A space-separated list of PHP regular expressions for directories or files that will always be granted commit access to everyone, no matter what other commit restrictions are imposed. Example: "@.*\.(po|pot)$@ @^/contributions/(docs|sandbox|tricks)/@"'),
         '#default_value' => implode(' ', $restrictions['allowed_paths']),
         '#size' => 60,
       );
