@@ -7,8 +7,7 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: directories that may be tagged (whereas branching must always
-//       be allowed, as the main branch is just a regular branch as well)
+// TODO: directories where branches and tags may be created
 // TODO: better error message for invalid branch, but valid tag
 //       (and the other way round)
 
