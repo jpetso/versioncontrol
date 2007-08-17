@@ -425,7 +425,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
 
   $lines = array();
 
-  foreach ($commit_actions as $action) {
+  foreach ($commit_actions as $path => $action) {
     $item = versioncontrol_get_affected_item($action);
 
     $item_path = substr($item['path'], strlen($commit['directory']) + 1);

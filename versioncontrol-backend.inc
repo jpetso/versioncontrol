@@ -45,7 +45,7 @@
  *   each item in these actions are optional and may be left unset.
  * @param $branch
  *   The target branch where the commit will happen (a string like 'DRUPAL-5').
- *   If the VCS can't retrieve the branch at the time of the pre-commit hook
+ *   If the VCS can't retrieve the branch when calling this function
  *   or doesn't support branches at all, this may be NULL instead.
  *
  * @return
@@ -84,17 +84,17 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
 }
 
 /**
- * Determine if a branch may be assigned to a directory.
+ * Determine if a branch may be assigned to a set of items.
  * Call this inside a pre-commit/pre-branch hook.
- *
- * @param $op
- *   'add' if the branch is being created, 'move' if it's being renamed,
- *   or 'delete' if it is slated for deletion.
  *
  * @param $branch
  *   A structured array that consists of the following elements:
  *
- *   'name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'action': Specifies what is going to happen with the branch. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the branch is being created,
+ *             VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
  *   'uid': The Drupal user id of the committer. Passing this is optional -
  *          if it isn't set, this function will determine the uid.
  *   'username': The system specific VCS username of the committer.
@@ -104,38 +104,40 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  *                 You can either pass this or 'repo_id'.
  *   'repo_id': The repository where the branching occurs, given as a simple
  *              integer id. You can either pass this or 'repository'.
+ *   '[xxx]_specific': An array of VCS specific additional branch operation
+ *                     info. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
  *
  * @param $branched_items
- *   All items that are affected by the branching operation, given as
- *   a structured array in this element. Array keys are the item paths,
- *   and array values are item arrays. Compared to standard item arrays,
- *   the ones in here don't need the 'revision' element to be set and can
- *   optionally contain a 'source branch' element that specifies the original
- *   branch of this item. (For $op == 'delete', 'source branch' is never set.)
+ *   An array of all items that are affected by the branching operation.
+ *   Compared to standard item arrays, the ones in here don't need the
+ *   'revision' element to be set and can optionally contain a 'source branch'
+ *   element that specifies the original branch of this item.
+ *   (For $op == 'delete', 'source branch' is never set.)
  *
  * @return
  *   TRUE if the branch may be assigned, or FALSE if not.
  *   If FALSE is returned, you can retrieve the concerning error messages
  *   by calling versioncontrol_get_access_errors().
  */
-function versioncontrol_has_branch_access($op, $branch, $branched_items) {
+function versioncontrol_has_branch_access($branch, $branched_items) {
   return _versioncontrol_has_branch_or_tag_access(
-    'versioncontrol_branch_access', $op, $branch, $branched_items
+    'versioncontrol_branch_access', $branch, $branched_items
   );
 }
 
 /**
- * Determine if a tag may be assigned to a directory.
+ * Determine if a tag may be assigned to a set of items.
  * Call this inside a pre-commit/pre-tag hook.
- *
- * @param $op
- *   'add' if the tag is being created, 'move' if it's being renamed,
- *   or 'delete' if it is slated for deletion.
  *
  * @param $tag
  *   A structured array that consists of the following elements:
  *
- *   'name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'action': Specifies what is going to happen with the tag. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the tag is being created,
+ *             VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
  *   'uid': The Drupal user id of the committer. Passing this is optional -
  *          if it isn't set, this function will determine the uid.
  *   'username': The system specific VCS username of the committer.
@@ -145,24 +147,25 @@ function versioncontrol_has_branch_access($op, $branch, $branched_items) {
  *                 You can either pass this or 'repo_id'.
  *   'repo_id': The repository where the tagging occurs, given as a simple
  *              integer id. You can either pass this or 'repository'.
+ *   '[xxx]_specific': An array of VCS specific additional tag operation
+ *                     info. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
  *
  * @param $tagged_items
- *   All items that are affected by the tagging operation, given as
- *   a structured array in this element. Array keys are the item paths,
- *   and array values are item arrays. Compared to standard item arrays,
- *   the ones in here don't need the 'revision' element to be set and
- *   can optionally contain a 'source branch' element that specifies
- *   the original branch of this item. (For $op == 'move' or $op == 'delete',
- *   'source branch' is never set.)
+ *   An array of all items that are affected by the tagging operation.
+ *   Compared to standard item arrays, the ones in here don't need the
+ *   'revision' element to be set and can optionally contain a 'source branch'
+ *   element that specifies the original branch of this item.
+ *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
  *
  * @return
  *   TRUE if the tag may be assigned, or FALSE if not.
  *   If FALSE is returned, you can retrieve the concerning error messages
  *   by calling versioncontrol_get_access_errors().
  */
-function versioncontrol_has_tag_access($op, $tag, $tagged_items) {
+function versioncontrol_has_tag_access($tag, $tagged_items) {
   return _versioncontrol_has_branch_or_tag_access(
-    'versioncontrol_tag_access', $op, $tag, $tagged_items
+    'versioncontrol_tag_access', $tag, $tagged_items
   );
 }
 
@@ -170,7 +173,7 @@ function versioncontrol_has_tag_access($op, $tag, $tagged_items) {
  * The branch_access() and tag_access() functions work totally similar
  * internally, so let's share the code in a common function.
  */
-function _versioncontrol_has_branch_or_tag_access($hook, $op, $branch_or_tag, $items) {
+function _versioncontrol_has_branch_or_tag_access($hook, $branch_or_tag, $items) {
   $branch_or_tag = _versioncontrol_fill_uid_and_repository($branch_or_tag);
   $branch_or_tag['directory'] = _versioncontrol_get_common_directory($items);
   $error_messages = array();
@@ -179,7 +182,7 @@ function _versioncontrol_has_branch_or_tag_access($hook, $op, $branch_or_tag, $i
     $function = $module .'_'. $hook;
 
     // If at least one access hook returns TRUE, the branch/tag goes through.
-    $outcome = $function($op, $branch_or_tag, $items);
+    $outcome = $function($branch_or_tag, $items);
     if ($outcome === TRUE) {
       return TRUE;
     }
@@ -281,69 +284,193 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
 
   // Auto-add commit info from $commit['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
+  $vcs = $commit['repository']['vcs'];
   $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_COMMITS,
-                         $backends[$commit['repository']['vcs']]['flags']);
+                         $backends[$vcs]['flags']);
   if ($is_autoadd) {
-    $table_name = 'versioncontrol_'. $commit['repository']['vcs'] .'_commits';
-    $elements = $commit[$commit['repository']['vcs'] .'_specific'];
+    $table_name = 'versioncontrol_'. $vcs .'_commits';
+    $elements = $commit[$vcs .'_specific'];
     $elements['commit_id'] = $commit['commit_id'];
     _versioncontrol_db_insert_additions($table_name, $elements);
   }
 
   // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($commit['repository']['vcs'], 'commit')) {
-    _versioncontrol_call_backend(
-      $commit['repository']['vcs'], 'commit',
-      array('insert', $commit, $commit_actions)
-    );
+  if (versioncontrol_backend_implements($vcs, 'commit')) {
+    _versioncontrol_call_backend($vcs, 'commit',
+                                 array('insert', $commit, $commit_actions));
   }
 
   // Everything's done, let the world know about it!
-  module_invoke_all('versioncontrol_commit',
-    'insert', $commit, $commit_actions
-  );
+  module_invoke_all('versioncontrol_commit', 'insert', $commit, $commit_actions);
 
   return $commit;
 }
 
 /**
- * Code that is shared between versioncontrol_has_commit_access()
- * and versioncontrol_insert_commit(): fill up a commit array's missing values.
+ * Insert a branch operation into the database, and call the necessary hooks.
+ *
+ * @param $branch
+ *   A structured array that consists of the following elements:
+ *
+ *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'action': Specifies what happened to the branch. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
+ *             VERSIONCONTROL_ACTION_MODIFIED if was renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   'date': The time when the branching was done, given as Unix timestamp.
+ *   'uid': The Drupal user id of the committer. Passing this is optional -
+ *          if it isn't set, this function will determine the uid.
+ *   'username': The system specific VCS username of the committer.
+ *   'repository': The repository where the branching occurred,
+ *                 given as a structured array, like the return value
+ *                 of versioncontrol_get_repository().
+ *                 You can either pass this or 'repo_id'.
+ *   'repo_id': The repository where the branching occurs, given as a simple
+ *              integer id. You can either pass this or 'repository'.
+ *   '[xxx]_specific': An array of VCS specific additional branch operation
+ *                     info. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *                     If the backend has registered itself with the
+ *                     VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS option,
+ *                     all items of this array will automatically be inserted
+ *                     into the {versioncontrol_[xxx]_branch_operations} table.
+ *
+ * @param $branched_items
+ *   An array of all items that are affected by the branching operation.
+ *   Compared to standard item arrays, the ones in here don't need the
+ *   'revision' element to be set and can optionally contain a 'source branch'
+ *   element that specifies the original branch of this item.
+ *   (For $op == 'delete', 'source branch' is never set.)
  *
  * @return
- *   The completed commit array. Check on isset($commit['repository'])
- *   before proceeding.
+ *   The finalized branch operation array, with all of the 'branch_op_id',
+ *   'repository', 'uid' and 'directory' properties filled in, and 'repo_id'
+ *   removed if it existed before. In case of an error, NULL is returned
+ *   instead of the branch operation array.
  */
-function _versioncontrol_fill_commit($commit, $commit_actions) {
-  $commit = _versioncontrol_fill_uid_and_repository($commit);
-  $commit['directory'] = _versioncontrol_get_common_directory($commit_actions);
-  return $commit;
+function versioncontrol_insert_branch_operation($branch, $branched_items) {
+  $branch = _versioncontrol_fill_branch_or_tag($branch, $branched_items);
+  if (!isset($branch['repository'])) {
+    return NULL;
+  }
+  $branch_id = versioncontrol_ensure_branch($branch['branch_name'], $branch['repo_id']);
+
+  // Ok, everything's there, insert the branch into the database.
+  $branch['branch_op_id'] = db_next_id('{versioncontrol_branch_operations}_branch_op_id');
+
+  db_query("INSERT INTO {versioncontrol_branch_operations}
+            (branch_op_id, branch_id, action, date, uid, username, directory)
+            VALUES ('%d', '%d', '%d', '%d', '%d', '%s', '%s')",
+            $branch['branch_op_id'], $branch_id, $branch['action'],
+            $branch['date'], $branch['uid'], $branch['username'],
+            $branch['directory']);
+
+  // Auto-add branch info from $branch['[xxx]_specific'] into the database.
+  $backends = versioncontrol_get_backends();
+  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS,
+                         $backends[$branch['repository']['vcs']]['flags']);
+
+  _versioncontrol_insert_branch_or_tag_operation(
+    $branch, $branched_items, 'branch', $is_autoadd
+  );
+  return $branch;
 }
 
 /**
- * Code that is shared between _versioncontrol_fill_commit() and the
- * branch/tag access functions: fill up Drupal user id and repository
- * in case they are not given.
+ * Insert a tag operation into the database, and call the necessary hooks.
+ *
+ * @param $tag
+ *   A structured array that consists of the following elements:
+ *
+ *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'action': Specifies what happened to the tag. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
+ *             VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   'date': The time when the tagging was done, given as Unix timestamp.
+ *   'uid': The Drupal user id of the committer. Passing this is optional -
+ *          if it isn't set, this function will determine the uid.
+ *   'username': The system specific VCS username of the committer.
+ *   'repository': The repository where the tagging occurred,
+ *                 given as a structured array, like the return value
+ *                 of versioncontrol_get_repository().
+ *                 You can either pass this or 'repo_id'.
+ *   'repo_id': The repository where the tagging occurs, given as a simple
+ *              integer id. You can either pass this or 'repository'.
+ *   '[xxx]_specific': An array of VCS specific additional tag operation
+ *                     info. How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *                     If the backend has registered itself with the
+ *                     VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS option,
+ *                     all items of this array will automatically be inserted
+ *                     into the {versioncontrol_[xxx]_tag_operations} table.
+ *
+ * @param $tagged_items
+ *   An array of all items that are affected by the tagging operation.
+ *   Compared to standard item arrays, the ones in here don't need the
+ *   'revision' element to be set and can optionally contain a 'source branch'
+ *   element that specifies the original branch of this item.
+ *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
+ *
+ * @return
+ *   The finalized tag operation array, with all of the 'tag_op_id',
+ *   'repository', 'uid' and 'directory' properties filled in, and 'repo_id'
+ *   removed if it existed before. In case of an error, NULL is returned
+ *   instead of the tag operation array.
  */
-function _versioncontrol_fill_uid_and_repository($object) {
-  // If not already there, retrieve the full repository object.
-  if (!isset($object['repository'])) {
-    $repository = versioncontrol_get_repository($object['repo_id']);
-    unset($object['repo_id']);
-    if (isset($repository)) {
-      $object['repository'] = $repository;
-    }
+function versioncontrol_insert_tag_operation($tag, $tagged_items) {
+  $tag = _versioncontrol_fill_branch_or_tag($tag, $tagged_items);
+  if (!isset($tag['repository'])) {
+    return NULL;
   }
 
-  // If not already there, retrieve the Drupal user id of the committer.
-  if (!isset($object['uid'])) {
-    $uid = versioncontrol_get_account_uid_for_username(
-      $object['username'], $object['repository']['repo_id'], TRUE
-    );
-    // If no uid could be retrieved, blame the commit on user 0 (anonymous).
-    $object['uid'] = isset($uid) ? $uid : 0;
+  // Ok, everything's there, insert the tag into the database.
+  $tag['tag_op_id'] = db_next_id('{versioncontrol_tag_operations}_tag_op_id');
+
+  db_query("INSERT INTO {versioncontrol_tag_operations}
+            (tag_op_id, repo_id, tag_name, action, date, uid, username, directory)
+            VALUES ('%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s')",
+            $tag['tag_op_id'], $tag['repository']['repo_id'], $tag['tag_name'],
+            $tag['action'], $tag['date'], $tag['uid'], $tag['username'],
+            $tag['directory']);
+
+  $backends = versioncontrol_get_backends();
+  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS,
+                         $backends[$tag['repository']['vcs']]['flags']);
+
+  _versioncontrol_insert_branch_or_tag_operation(
+    $tag, $tagged_items, 'tag', $is_autoadd
+  );
+  return $tag;
+}
+
+/**
+ * Code that is shared between the branch and tag insertion functions.
+ */
+function _versioncontrol_insert_branch_or_tag_operation($branch_or_tag, $items, $type, $is_autoadd) {
+  $vcs = $branch_or_tag['repository']['vcs'];
+
+  // Auto-add additional info from $branch_or_tag['[xxx]_specific']
+  // into the database.
+  if ($is_autoadd) {
+    $table_name = 'versioncontrol_'. $vcs .'_'. $type .'_operations';
+    $elements = $branch_or_tag[$vcs .'_specific'];
+    $elements[$type .'_op_id'] = $branch_or_tag[$type .'_op_id'];
+    _versioncontrol_db_insert_additions($table_name, $elements);
   }
-  return $object;
+
+  // Provide an opportunity for the backend to add its own stuff.
+  // Calls [xxx]_branch_operation() or [xxx]_tag_operation().
+  if (versioncontrol_backend_implements($vcs, $type .'_operation')) {
+    _versioncontrol_call_backend($vcs, $type .'_operation',
+                                 array('insert', $branch_or_tag, $items));
+  }
+
+  // Everything's done, let the world know about it!
+  // Calls hook_versioncontrol_branch_operation()
+  // or hook_versioncontrol_tag_operation().
+  module_invoke_all('versioncontrol_'. $type .'_operation',
+                    'insert', $branch_or_tag, $items);
 }
 
 /**
@@ -358,20 +485,193 @@ function versioncontrol_delete_commit($commit) {
   $commit_actions = versioncontrol_get_commit_actions($commit);
 
   // Announce deletion of the commit before anything has happened.
-  module_invoke_all('versioncontrol_commit',
-    'delete', $commit, $commit_actions
-  );
+  module_invoke_all('versioncontrol_commit', 'delete', $commit, $commit_actions);
 
   // Provide an opportunity for the backend to delete its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'commit')) {
-    _versioncontrol_call_backend(
-      $commit['repository']['vcs'], 'commit', array('delete', $commit, $commit_actions)
-    );
+  if (versioncontrol_backend_implements($commit['repository']['vcs'], 'commit')) {
+    _versioncontrol_call_backend($commit['repository']['vcs'], 'commit',
+                                 array('delete', $commit, $commit_actions));
   }
 
   db_query("DELETE FROM {versioncontrol_commits}
             WHERE commit_id = '%d'", $commit['commit_id']);
 }
+
+/**
+ * Delete a branch operation from the database, and call the necessary hooks.
+ *
+ * @param $branch
+ *   The array containing the branch operation that is to be deleted.
+ *   It's a single branch operation array like the return value
+ *   of versioncontrol_get_branch_operation().
+ */
+function versioncontrol_delete_branch_operation($branch) {
+  $branched_items = versioncontrol_get_branched_items($branch);
+
+  _versioncontrol_delete_branch_or_tag_operation(
+    $branch, $branched_items, 'branch'
+  );
+}
+
+/**
+ * Delete a tag operation from the database, and call the necessary hooks.
+ *
+ * @param $tag
+ *   The array containing the tag operation that is to be deleted.
+ *   It's a single tag operation array like one the return value
+ *   of versioncontrol_get_tag_operation().
+ */
+function versioncontrol_delete_tag_operation($tag) {
+  $tagged_items = versioncontrol_get_tagged_items($tag);
+
+  _versioncontrol_delete_branch_or_tag_operation(
+    $tag, $tagged_items, 'tag'
+  );
+}
+
+/**
+ * Code that is shared between the branch and tag deletion functions.
+ */
+function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, $type) {
+  // Announce deletion of the commit before anything has happened.
+  // Calls hook_versioncontrol_branch_operation()
+  // or hook_versioncontrol_tag_operation().
+  module_invoke_all('versioncontrol_'. $type .'_operation',
+                    'delete', $branch_or_tag, $items);
+
+  $vcs = $branch_or_tag['repository']['vcs'];
+
+  // Provide an opportunity for the backend to delete its own stuff.
+  // Calls [xxx]_branch_operation() or [xxx]_tag_operation().
+  if (versioncontrol_backend_implements($vcs, $type .'_operation')) {
+    _versioncontrol_call_backend($vcs, $type .'_operation',
+                                 array('delete', $branch_or_tag, $items));
+  }
+
+  // Auto-delete additional tag info from $tag['repository']['[xxx]_specific']
+  // from the database.
+  $backends = versioncontrol_get_backends();
+  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS,
+                         $backends[$vcs]['flags']);
+  if ($is_autoadd) {
+    $table_name = 'versioncontrol_'. $vcs .'_'. $type .'_operations';
+    _versioncontrol_db_delete_additions(
+      $table_name, $type .'_op_id', $branch_or_tag[$type .'_op_id']
+    );
+  }
+
+  db_query("DELETE FROM {versioncontrol_'. $type .'_operations}
+            WHERE ". $type ."_op_id = '%d'", $branch_or_tag[$type .'_op_id']);
+}
+
+
+/**
+ * Code that is shared between versioncontrol_has_commit_access()
+ * and versioncontrol_insert_commit(): fill up a commit array's missing values.
+ *
+ * @return
+ *   The completed commit array. Check on isset($commit['repository'])
+ *   before proceeding.
+ */
+function _versioncontrol_fill_commit($commit, $commit_actions) {
+  $commit = _versioncontrol_fill_uid_and_repository($commit);
+  $paths = _versioncontrol_get_commit_action_paths($commit);
+  $commit['directory'] = _versioncontrol_get_common_directory($paths);
+  return $commit;
+}
+
+function _versioncontrol_fill_branch_or_tag($branch, $items) {
+  $branch = _versioncontrol_fill_uid_and_repository($branch);
+  $paths = _versioncontrol_get_item_paths($items);
+  $commit['directory'] = _versioncontrol_get_common_directory($paths);
+  return $commit;
+}
+
+function _versioncontrol_get_commit_action_paths($commit) {
+  $paths = array();
+
+  // gather the paths of all current and source items
+  foreach ($commit_actions as $path => $action) {
+    if (isset($action['current item'])) {
+      $paths[] = $action['current item']['path'];
+    }
+    // Don't get items twice that were only modified have the same path.
+    if ($action['type'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
+      foreach($action['source items'] as $item) {
+        $paths[] = $item['path'];
+      }
+    }
+  }
+  return $paths;
+}
+
+function _versioncontrol_get_item_paths($items) {
+  $paths = array();
+  foreach ($items as $path => $item) {
+    $paths[] = $item['path'];
+  }
+  return $paths;
+}
+
+/**
+ * Code that is shared between _versioncontrol_fill_commit() and the
+ * branch/tag access functions: fill up Drupal user id and repository
+ * in case they are not given.
+ */
+function _versioncontrol_fill_uid_and_repository($object) {
+  // If not already there, retrieve the full repository object.
+  if (!isset($object['repository']) && isset($object['repo_id'])) {
+    $object['repository'] = versioncontrol_get_repository($object['repo_id']);
+    unset($object['repo_id']);
+  }
+
+  // If not already there, retrieve the Drupal user id of the committer.
+  if (!isset($object['uid'])) {
+    $uid = versioncontrol_get_account_uid_for_username(
+      $object['username'], $object['repository']['repo_id'], TRUE
+    );
+    // If no uid could be retrieved, blame the commit on user 0 (anonymous).
+    $object['uid'] = isset($uid) ? $uid : 0;
+  }
+  return $object;
+}
+
+/**
+ * Retrieve the deepest-level directory in the repository that is common
+ * to all the given paths, e.g. '/src' if the $paths argument contains
+ * '/src/subdir/code.php' and '/src/README.txt', or '/' if it contains
+ * '/src/README.txt' and '/doc'.
+ *
+ * @param $paths
+ *   The paths of all items of which the common directory should be retrieved.
+ *
+ * @return
+ *   The common directory path of all items in the $commit_actions array,
+ *   as mentioned above.
+ */
+function _versioncontrol_get_common_directory($paths) {
+  if (empty($paths)) {
+    return '/';
+  }
+
+  $dirparts = explode('/', dirname(array_pop($paths)));
+
+  foreach ($paths as $path) {
+    $new_dirparts = array();
+    $current_dirparts = explode('/', dirname($path));
+    $mincount = min(count($dirparts), count($current_dirparts));
+
+    for ($i = 0; $i < $mincount; $i++) {
+      if ($dirparts[$i] == $current_dirparts[$i]) {
+        $new_dirparts[] = $dirparts[$i];
+      }
+    }
+    $dirparts = $new_dirparts;
+  }
+
+  return implode('/', $dirparts);
+}
+
 
 /**
  * Insert a VCS user account into the database,
@@ -555,20 +855,19 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
 
   // Auto-add repository info from $repository['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
+  $vcs = $repository['vcs'];
   $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
-                         $backends[$repository['vcs']]['flags']);
+                         $backends[$vcs]['flags']);
   if ($is_autoadd) {
-    $table_name = 'versioncontrol_'. $repository['vcs'] .'_repositories';
-    $elements = $repository[$repository['vcs'] .'_specific'];
+    $table_name = 'versioncontrol_'. $vcs .'_repositories';
+    $elements = $repository[$vcs .'_specific'];
     $elements['repo_id'] = $repository['repo_id'];
     _versioncontrol_db_insert_additions($table_name, $elements);
   }
 
   // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
-    _versioncontrol_call_backend(
-      $repository['vcs'], 'repository', array('insert', $repository)
-    );
+  if (versioncontrol_backend_implements($vcs, 'repository')) {
+    _versioncontrol_call_backend($vcs, 'repository', array('insert', $repository));
   }
 
   // Everything's done, let the world know about it!
@@ -629,20 +928,19 @@ function versioncontrol_update_repository($repository, $repository_urls) {
 
   // Auto-add commit info from $commit['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
+  $vcs = $repository['vcs'];
   $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
-                         $backends[$repository['vcs']]['flags']);
+                         $backends[$vcs]['flags']);
   if ($is_autoadd) {
-    $table_name = 'versioncontrol_'. $repository['vcs'] .'_repositories';
-    $elements = $repository[$repository['vcs'] .'_specific'];
+    $table_name = 'versioncontrol_'. $vcs .'_repositories';
+    $elements = $repository[$vcs .'_specific'];
     $elements['repo_id'] = $repository['repo_id'];
     _versioncontrol_db_update_additions($table_name, 'repo_id', $elements);
   }
 
   // Provide an opportunity for the backend to add its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
-    _versioncontrol_call_backend(
-      $repository['vcs'], 'repository', array('update', $repository)
-    );
+  if (versioncontrol_backend_implements($vcs, 'repository')) {
+    _versioncontrol_call_backend($vcs, 'repository', array('update', $repository));
   }
 
   // Everything's done, let the world know about it!
@@ -660,11 +958,26 @@ function versioncontrol_update_repository($repository, $repository_urls) {
  *   versioncontrol_get_repository().
  */
 function versioncontrol_delete_repository($repository) {
+  // Delete tags.
+  $tags = versioncontrol_get_tag_operations(array('repo_ids' => array($repository['repo_id'])));
+  foreach ($tags as $tag) {
+    versioncontrol_delete_tag_operation($tag);
+  }
+  // Delete branches.
+  $branches = versioncontrol_get_branch_operations(array('repo_ids' => array($repository['repo_id'])));
+  foreach ($branches as $branch) {
+    versioncontrol_delete_branch_operation($branch);
+  }
+  db_query("DELETE FROM {versioncontrol_cvs_branches}
+            WHERE repo_id = '%d'", $repository['repo_id']);
+
+  // Delete commits.
   $commits = versioncontrol_get_commits(array('repo_ids' => array($repository['repo_id'])));
   foreach ($commits as $commit) {
     versioncontrol_delete_commit($commit);
   }
 
+  // Delete accounts.
   $accounts = versioncontrol_get_accounts(
     array('repo_ids' => array($repository['repo_id'])), TRUE
   );
@@ -677,27 +990,105 @@ function versioncontrol_delete_repository($repository) {
   // Announce deletion of the repository before anything has happened.
   module_invoke_all('versioncontrol_repository', 'delete', $repository);
 
+  $vcs = $repository['vcs'];
+
   // Provide an opportunity for the backend to delete its own stuff.
-  if (versioncontrol_backend_implements($repository['vcs'], 'repository')) {
-    _versioncontrol_call_backend(
-      $repository['vcs'], 'repository', array('delete', $repository)
-    );
+  if (versioncontrol_backend_implements($vcs, 'repository')) {
+    _versioncontrol_call_backend($vcs, 'repository', array('delete', $repository));
   }
 
   // Auto-delete repository info from $repository['[xxx]_specific'] from the database.
   $backends = versioncontrol_get_backends();
   $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
-                         $backends[$repository['vcs']]['flags']);
+                         $backends[$vcs]['flags']);
   if ($is_autoadd) {
-    $table_name = 'versioncontrol_'. $repository['vcs'] .'_repositories';
+    $table_name = 'versioncontrol_'. $vcs .'_repositories';
     _versioncontrol_db_delete_additions($table_name, 'repo_id', $repository['repo_id']);
   }
 
+  // Phew, everything's cleaned up. Finally, delete the repository.
   db_query("DELETE FROM {versioncontrol_repositories} WHERE repo_id = '%d'",
            $repository['repo_id']);
   // TODO: abstract out repository URLs into separate backends
   db_query("DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = '%d'",
            $repository['repo_id']);
+}
+
+
+/**
+ * Retrieve the branch name and repository for a given branch id.
+ *
+ * @return
+ *   A structured array consisting of the 'branch_id, 'repo_id' and 'name'
+ *   elements, or NULL if there is no branch for this branch id.
+ */
+function versioncontrol_get_branch($branch_id) {
+  static $branch_cache = array();
+
+  if (isset($branch_cache[$branch_id])) {
+    if ($branch_cache[$branch_id] === FALSE) {
+      return NULL; // there's no branch for this id
+    }
+    return $branch_cache[$branch_id]; // return the cached branch array
+  }
+
+  $result = db_query("SELECT branch_id, repo_id, name
+                      FROM {versioncontrol_branches}
+                      WHERE branch_id = '%d'", $branch_id);
+
+  while ($branch = db_fetch_array($result)) {
+    $branch_cache[$branch_id] = $branch;
+    return $branch;
+  }
+  $branch_cache[$branch_id] = FALSE;
+  return NULL;
+}
+
+/**
+ * Retrieve the branch id for a given branch name from a specific repository.
+ *
+ * @return
+ *   The branch id of the requested branch, or NULL if there is no branch
+ *   for this name and repository.
+ */
+function versioncontrol_get_branch_id($branch_name, $repo_id) {
+  static $branch_cache = array();
+
+  if (isset($branch_cache[$repo_id][$branch_name])) {
+    if ($branch_cache[$repo_id][$branch_name] === FALSE) {
+      return NULL; // there's no branch for this name and repository
+    }
+    return $branch_cache[$repo_id][$branch_name]; // return the cached branch id
+  }
+
+  $result = db_query("SELECT branch_id
+                      FROM {versioncontrol_branches}
+                      WHERE repo_id = '%d' AND name = '%s'",
+                      $repo_id, $branch_name);
+
+  while ($branch = db_fetch_object($result)) {
+    $branch_cache[$repo_id][$branch_name] = $branch->branch_id;
+    return $branch->branch_id;
+  }
+  $branch_cache[$repo_id][$branch_name] = FALSE;
+  return NULL;
+}
+
+/**
+ * Retrieve the branch id for a given branch name from a specific repository,
+ * and create a new branch entry if no such branch exists yet.
+ *
+ * @return
+ *   The branch id of the requested branch.
+ */
+function versioncontrol_ensure_branch($branch_name, $repo_id) {
+  $branch_id = versioncontrol_get_branch_id($branch_name, $repo_id);
+  if (!isset($branch_id)) {
+    $branch_id = db_next_id('{versioncontrol_branches}_branch_id');
+    db_query("INSERT INTO {versioncontrol_branches} (branch_id, repo_id, name)
+              VALUES ('%d', '%d', '%s')", $branch_id, $repo_id, $branch_name);
+  }
+  return $branch_id;
 }
 
 

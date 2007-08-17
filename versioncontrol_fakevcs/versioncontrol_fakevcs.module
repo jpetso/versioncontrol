@@ -1131,9 +1131,7 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
  */
 function versioncontrol_fakevcs_repository($op, $repository) {
   if ($op == 'delete') {
-    db_query("DELETE FROM {versioncontrol_fakevcs_branches}
-              WHERE repo_id = '%d'", $repository['repo_id']);
-    db_query("DELETE FROM {versioncontrol_fakevcs_tags}
+    db_query("DELETE FROM {versioncontrol_fakevcs_repository_ponies}
               WHERE repo_id = '%d'", $repository['repo_id']);
   }
 }

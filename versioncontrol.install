@@ -59,6 +59,39 @@ function versioncontrol_install() {
         tracker varchar(255) NOT NULL default '',
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_branches} (
+        branch_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default '0',
+        branch_name varchar(255) NOT NULL default '',
+        PRIMARY KEY (branch_id),
+        UNIQUE KEY (repo_id, name)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_branch_operations} (
+        branch_op_id int unsigned NOT NULL default '0',
+        branch_id int unsigned NOT NULL default '0',
+        action tinyint unsigned NOT NULL default '0',
+        date bigint NOT NULL default '0',
+        uid int unsigned NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        directory varchar(255) NOT NULL default '',
+        PRIMARY KEY (branch_op_id),
+        KEY (branch_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_tag_operations} (
+        tag_op_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default '0',
+        tag_name varchar(255) NOT NULL default '',
+        action tinyint unsigned NOT NULL default '0',
+        date bigint NOT NULL default '0',
+        uid int unsigned NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        directory varchar(255) NOT NULL default '',
+        PRIMARY KEY (tag_op_id),
+        KEY (repo_id, name)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
       break;
 
     case 'pgsql':

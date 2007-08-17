@@ -312,31 +312,30 @@ function _commit_restrictions_item_error_message($item) {
 
 /**
  * Implementation of hook_versioncontrol_branch_access():
- * Determine if the given branch may be assigned to a directory.
- *
- * @param $op
- *   'add' if the branch is being created, 'move' if it's being renamed,
- *   or 'delete' if it is slated for deletion.
+ * Determine if the given branch may be assigned to a set of items.
  *
  * @param $branch
  *   A structured array that consists of the following elements:
  *
- *   'name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'action': Specifies what is going to happen with the branch. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the branch is being created,
+ *             VERSIONCONTROL_ACTION_MOVED if it's being renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
  *   'uid': The Drupal user id of the committer.
  *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the branching occurs, given as a
- *                 structured array, like a single element of what is returned
- *                 by versioncontrol_get_repositories().
+ *   'repository': The repository where the branching occurs,
+ *                 given as a structured array, like the return value
+ *                 of versioncontrol_get_repository().
  *   'directory': The deepest-level directory in the repository that is common
  *                to all of the branched items.
  *
  * @param $branched_items
- *   All items that are affected by the branching operation, given as
- *   a structured array in this element. Array keys are the item paths,
- *   and array values are item arrays. Compared to standard item arrays,
- *   the ones in here don't need the 'revision' element to be set and can
- *   optionally contain a 'source branch' element that specifies the original
- *   branch of this item. (For $op == 'delete', 'source branch' is never set.)
+ *   An array of all items that are affected by the branching operation.
+ *   Compared to standard item arrays, the ones in here don't need the
+ *   'revision' element to be set and can optionally contain a 'source branch'
+ *   element that specifies the original branch of this item.
+ *   (For $op == 'delete', 'source branch' is never set.)
  *
  * @return
  *   An array with error messages (without trailing newlines) if the branch
@@ -344,19 +343,23 @@ function _commit_restrictions_item_error_message($item) {
  *   or TRUE if the branch may be assigned no matter what other
  *   branch access callbacks say.
  */
-function commit_restrictions_versioncontrol_branch_access($op, $branch, $branched_items) {
+function commit_restrictions_versioncontrol_branch_access($branch, $branched_items) {
+  if ($branch['action'] == VERSIONCONTROL_ACTION_DELETED) {
+    return array(); // even invalid tags should be allowed to be deleted
+  }
+
   $restrictions = _commit_restrictions_load($branch['repository']['repo_id']);
 
   if (!empty($restrictions['valid_branches'])) {
     foreach ($restrictions['valid_branches'] as $valid_branch_regexp) {
-      if (preg_match($valid_branch_regexp, $branch['name'])) {
+      if (preg_match($valid_branch_regexp, $branch['branch_name'])) {
         return array();
       }
     }
     // no branch regexps match this branch, so deny it
     $error_message = t(
       "** ERROR: the !name branch is not allowed in this repository.",
-      array('!name' => $branch['name'])
+      array('!name' => $branch['branch_name'])
     );
     return array($error_message);
   }
@@ -365,32 +368,30 @@ function commit_restrictions_versioncontrol_branch_access($op, $branch, $branche
 
 /**
  * Implementation of hook_versioncontrol_tag_access():
- * Determine if the given tag may be assigned to a directory.
- *
- * @param $op
- *   'add' if the tag is being created, 'move' if it's being renamed,
- *   or 'delete' if it is slated for deletion.
+ * Determine if the given tag may be assigned to a set of items.
  *
  * @param $tag
  *   A structured array that consists of the following elements:
  *
- *   'name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'action': Specifies what is going to happen with the tag. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the tag is being created,
+ *             VERSIONCONTROL_ACTION_MOVED if it's being renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
  *   'uid': The Drupal user id of the committer.
  *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the tagging occurs, given as a
- *                 structured array, like a single element of what is returned
- *                 by versioncontrol_get_repositories().
+ *   'repository': The repository where the tagging occurs,
+ *                 given as a structured array, like the return value
+ *                 of versioncontrol_get_repository().
  *   'directory': The deepest-level directory in the repository that is common
  *                to all of the tagged items.
  *
  * @param $tagged_items
- *   All items that are affected by the tagging operation, given as
- *   a structured array in this element. Array keys are the item paths,
- *   and array values are item arrays. Compared to standard item arrays,
- *   the ones in here don't need the 'revision' element to be set and
- *   can optionally contain a 'source branch' element that specifies
- *   the original branch of this item. (For $op == 'move' or $op == 'delete',
- *   'source branch' is never set.)
+ *   An array of all items that are affected by the tagging operation.
+ *   Compared to standard item arrays, the ones in here don't need the
+ *   'revision' element to be set and can optionally contain a 'source branch'
+ *   element that specifies the original branch of this item.
+ *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
  *
  * @return
  *   An array with error messages (without trailing newlines) if the tag
@@ -398,19 +399,23 @@ function commit_restrictions_versioncontrol_branch_access($op, $branch, $branche
  *   or TRUE if the tag may be assigned no matter what other
  *   tag access callbacks say.
  */
-function commit_restrictions_versioncontrol_tag_access($op, $tag, $tagged_items) {
+function commit_restrictions_versioncontrol_tag_access($tag, $tagged_items) {
+  if ($tag['action'] == VERSIONCONTROL_ACTION_DELETED) {
+    return array(); // even invalid tags should be allowed to be deleted
+  }
+
   $restrictions = _commit_restrictions_load($tag['repository']['repo_id']);
 
   if (!empty($restrictions['valid_tags'])) {
     foreach ($restrictions['valid_tags'] as $valid_tag_regexp) {
-      if (preg_match($valid_tag_regexp, $tag['name'])) {
+      if (preg_match($valid_tag_regexp, $tag['tag_name'])) {
         return array();
       }
     }
     // no branch regexps match this branch, so deny it
     $error_message = t(
       "** ERROR: the !name tag is not allowed in this repository.",
-      array('!name' => $tag['name'])
+      array('!name' => $tag['tag_name'])
     );
     return array($error_message);
   }
