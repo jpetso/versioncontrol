@@ -7,6 +7,9 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: an empty array means "the whole repository was tagged"
+// TODO: create versioncontrol_get_branched_items()
+// TODO: create versioncontrol_get_tagged_items()
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -24,7 +27,8 @@ define('VERSIONCONTROL_ITEM_FILE_DELETED',    2);
 define('VERSIONCONTROL_FILE_TEXT',            0);
 define('VERSIONCONTROL_FILE_BINARY',          1);
 
-// VCS actions for a single item (file or directory) in a commit.
+// VCS actions for a single item (file or directory) in a commit,
+// or for branches and tags.
 define('VERSIONCONTROL_ACTION_ADDED',         0);
 define('VERSIONCONTROL_ACTION_MODIFIED',      1);
 define('VERSIONCONTROL_ACTION_MOVED',         2);
@@ -32,10 +36,12 @@ define('VERSIONCONTROL_ACTION_COPIED',        3);
 define('VERSIONCONTROL_ACTION_MERGED',        4);
 define('VERSIONCONTROL_ACTION_DELETED',       5);
 
-// Flags that backends can set to specify if Version Control API should do
-// work for them.
-define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES', 0);
-define('VERSIONCONTROL_FLAG_AUTOADD_COMMITS',      1);
+// Flags that backends can set to specify if Version Control API
+// should do work for them.
+define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      0);
+define('VERSIONCONTROL_FLAG_AUTOADD_COMMITS',           1);
+define('VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS',    2);
+define('VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS', 3);
 
 // The admin pages.
 include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol.admin.inc');

@@ -380,7 +380,9 @@ function versioncontrol_insert_branch_operation($branch, $branched_items) {
   if (!isset($branch['repository'])) {
     return NULL;
   }
-  $branch_id = versioncontrol_ensure_branch($branch['branch_name'], $branch['repo_id']);
+  $branch_id = versioncontrol_ensure_branch(
+    $branch['branch_name'], $branch['repository']['repo_id']
+  );
 
   // Ok, everything's there, insert the branch into the database.
   $branch['branch_op_id'] = db_next_id('{versioncontrol_branch_operations}_branch_op_id');
@@ -1099,7 +1101,7 @@ function versioncontrol_get_branch_id($branch_name, $repo_id) {
 
   $result = db_query("SELECT branch_id
                       FROM {versioncontrol_branches}
-                      WHERE repo_id = '%d' AND name = '%s'",
+                      WHERE repo_id = '%d' AND branch_name = '%s'",
                       $repo_id, $branch_name);
 
   while ($branch = db_fetch_object($result)) {
@@ -1121,7 +1123,7 @@ function versioncontrol_ensure_branch($branch_name, $repo_id) {
   $branch_id = versioncontrol_get_branch_id($branch_name, $repo_id);
   if (!isset($branch_id)) {
     $branch_id = db_next_id('{versioncontrol_branches}_branch_id');
-    db_query("INSERT INTO {versioncontrol_branches} (branch_id, repo_id, name)
+    db_query("INSERT INTO {versioncontrol_branches} (branch_id, repo_id, branch_name)
               VALUES ('%d', '%d', '%s')", $branch_id, $repo_id, $branch_name);
   }
   return $branch_id;
