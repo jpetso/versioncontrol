@@ -597,7 +597,7 @@ function _versioncontrol_get_commit_action_paths($commit) {
     }
     // Don't get items twice that were only modified have the same path.
     if ($action['type'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
-      foreach($action['source items'] as $item) {
+      foreach ($action['source items'] as $item) {
         $paths[] = $item['path'];
       }
     }

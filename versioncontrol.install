@@ -17,14 +17,6 @@ function versioncontrol_install() {
   switch ($GLOBALS['db_type']) {
     case 'mysqli':
     case 'mysql':
-      db_query("CREATE TABLE {versioncontrol_accounts} (
-        uid int unsigned NOT NULL default '0',
-        repo_id int unsigned NOT NULL default '0',
-        username varchar(64) NOT NULL default '',
-        PRIMARY KEY (uid, repo_id),
-        UNIQUE KEY (repo_id, username)
-      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-
       db_query("CREATE TABLE {versioncontrol_commits} (
         commit_id int unsigned NOT NULL default '0',
         repo_id int unsigned NOT NULL default '0',
@@ -40,32 +32,12 @@ function versioncontrol_install() {
         KEY date (date)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
-      db_query("CREATE TABLE {versioncontrol_repositories} (
-        repo_id int unsigned NOT NULL default '0',
-        name varchar(255) NOT NULL default '',
-        vcs varchar(8) NOT NULL default '',
-        root varchar(255) NOT NULL default '',
-        url_backend varchar(64) NOT NULL default '',
-        PRIMARY KEY (repo_id),
-        UNIQUE KEY name (name)
-      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-
-      db_query("CREATE TABLE {versioncontrol_repository_urls} (
-        repo_id int unsigned NOT NULL default '0',
-        commit_view varchar(255) NOT NULL default '',
-        file_view varchar(255) NOT NULL default '',
-        directory_view varchar(255) NOT NULL default '',
-        diff varchar(255) NOT NULL default '',
-        tracker varchar(255) NOT NULL default '',
-        PRIMARY KEY (repo_id)
-      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-
       db_query("CREATE TABLE {versioncontrol_branches} (
         branch_id int unsigned NOT NULL default '0',
         repo_id int unsigned NOT NULL default '0',
         branch_name varchar(255) NOT NULL default '',
         PRIMARY KEY (branch_id),
-        UNIQUE KEY (repo_id, name)
+        UNIQUE KEY (repo_id, branch_name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_branch_operations} (
@@ -90,7 +62,35 @@ function versioncontrol_install() {
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         PRIMARY KEY (tag_op_id),
-        KEY (repo_id, name)
+        KEY (repo_id, tag_name)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_repositories} (
+        repo_id int unsigned NOT NULL default '0',
+        name varchar(255) NOT NULL default '',
+        vcs varchar(8) NOT NULL default '',
+        root varchar(255) NOT NULL default '',
+        url_backend varchar(64) NOT NULL default '',
+        PRIMARY KEY (repo_id),
+        UNIQUE KEY name (name)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_repository_urls} (
+        repo_id int unsigned NOT NULL default '0',
+        commit_view varchar(255) NOT NULL default '',
+        file_view varchar(255) NOT NULL default '',
+        directory_view varchar(255) NOT NULL default '',
+        diff varchar(255) NOT NULL default '',
+        tracker varchar(255) NOT NULL default '',
+        PRIMARY KEY (repo_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_accounts} (
+        uid int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        PRIMARY KEY (uid, repo_id),
+        UNIQUE KEY (repo_id, username)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
       break;
 
@@ -104,8 +104,11 @@ function versioncontrol_install() {
  * Implementation of hook_uninstall().
  */
 function versioncontrol_uninstall() {
-  db_query("DROP TABLE {versioncontrol_accounts}");
   db_query("DROP TABLE {versioncontrol_commits}");
+  db_query("DROP TABLE {versioncontrol_branches}");
+  db_query("DROP TABLE {versioncontrol_branch_operations}");
+  db_query("DROP TABLE {versioncontrol_tag_operations}");
   db_query("DROP TABLE {versioncontrol_repositories}");
   db_query("DROP TABLE {versioncontrol_repository_urls}");
+  db_query("DROP TABLE {versioncontrol_accounts}");
 }
