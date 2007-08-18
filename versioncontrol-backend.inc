@@ -126,10 +126,12 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  *
  * @param $branched_items
  *   An array of all items that are affected by the branching operation.
- *   Compared to standard item arrays, the ones in here don't need the
- *   'revision' element to be set and can optionally contain a 'source branch'
+ *   Compared to standard item arrays, the ones in here may not have the
+ *   'revision' element set and can optionally contain a 'source branch'
  *   element that specifies the original branch of this item.
  *   (For $op == 'delete', 'source branch' is never set.)
+ *   An empty $branched_items array means that the whole repository has been
+ *   branched.
  *
  * @return
  *   TRUE if the branch may be assigned, or FALSE if not.
@@ -175,10 +177,12 @@ function versioncontrol_has_branch_access($branch, $branched_items) {
  *
  * @param $tagged_items
  *   An array of all items that are affected by the tagging operation.
- *   Compared to standard item arrays, the ones in here don't need the
- *   'revision' element to be set and can optionally contain a 'source branch'
+ *   Compared to standard item arrays, the ones in here may not have the
+ *   'revision' element set and can optionally contain a 'source branch'
  *   element that specifies the original branch of this item.
  *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
+ *   An empty $tagged_items array means that the whole repository has been
+ *   tagged.
  *
  * @return
  *   TRUE if the tag may be assigned, or FALSE if not.
@@ -270,8 +274,11 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   'username': The system specific VCS username of the committer.
  *   'message': The commit message.
  *   'revision': The VCS specific repository-wide revision identifier,
- *               like NULL in CVS, '27491' in Subversion or some SHA-1 key
+ *               like '' in CVS, '27491' in Subversion or some SHA-1 key
  *               in various distributed version control systems.
+ *               If there is no such revision (which may be the case for
+ *               version control systems that don't support atomic commits)
+ *               then the 'revision' element is an empty string.
  *   '[xxx]_specific': An array of VCS specific additional commit information.
  *                     How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
@@ -364,10 +371,13 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
  *
  * @param $branched_items
  *   An array of all items that are affected by the branching operation.
- *   Compared to standard item arrays, the ones in here don't need the
- *   'revision' element to be set and can optionally contain a 'source branch'
- *   element that specifies the original branch of this item.
- *   (For $op == 'delete', 'source branch' is never set.)
+ *   Compared to standard item arrays, the ones in here can optionally contain
+ *   a 'source branch' element that specifies the original branch name
+ *   of this item. (For $op == 'delete', 'source branch' is never set.)
+ *   Note that the 'revision' element - which is optional for
+ *   versioncontrol_has_branch_access() - is compulsory for items in here.
+ *   An empty $branched_items array means that the whole repository has been
+ *   branched.
  *
  * @return
  *   The finalized branch operation array, with all of the 'branch_op_id',
@@ -436,10 +446,13 @@ function versioncontrol_insert_branch_operation($branch, $branched_items) {
  *
  * @param $tagged_items
  *   An array of all items that are affected by the tagging operation.
- *   Compared to standard item arrays, the ones in here don't need the
- *   'revision' element to be set and can optionally contain a 'source branch'
- *   element that specifies the original branch of this item.
- *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
+ *   Compared to standard item arrays, the ones in here can optionally contain
+ *   a 'source branch' element that specifies the original branch name
+ *   of this item. (For $op == 'move' or $op == 'delete', 'source branch' is
+ *   never set.) Note that the 'revision' element - which is optional for
+ *   versioncontrol_has_tag_access() - is compulsory for items in here.
+ *   An empty $tagged_items array means that the whole repository has been
+ *   tagged.
  *
  * @return
  *   The finalized tag operation array, with all of the 'tag_op_id',

@@ -7,7 +7,6 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: an empty array means "the whole repository was tagged"
 // TODO: create versioncontrol_get_branched_items()
 // TODO: create versioncontrol_get_tagged_items()
 
@@ -667,8 +666,11 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *                the files '/src/subdir/code.php' and '/src/README.txt'.
  *   'message': The commit message.
  *   'revision': The VCS specific repository-wide revision identifier,
- *               like NULL in CVS, '27491' in Subversion or some SHA-1 key
+ *               like '' in CVS, '27491' in Subversion or some SHA-1 key
  *               in various distributed version control systems.
+ *               If there is no such revision (which may be the case for
+ *               version control systems that don't support atomic commits)
+ *               then the 'revision' element is an empty string.
  *   '[xxx]_specific': An array of VCS specific additional commit information.
  *                     How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
@@ -719,7 +721,7 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
       'username'   => $row->username,
       'directory'  => $row->directory,
       'message'    => $row->message,
-      'revision'   => empty($row->revision) ? NULL : $row->revision,
+      'revision'   => $row->revision,
       $row->vcs .'_specific' => array(),
     );
   }
@@ -1027,6 +1029,36 @@ function _versioncontrol_page_commits($commits, $page, $limit) {
 }
 
 
+/**
+ * Convenience function for retrieving one single branch operation
+ * by branch op id.
+ *
+ * @return
+ *   A single branch operation array that consists of the following elements:
+ *
+ *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
+ *   'action': Specifies what happened to the branch. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
+ *             VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   'date': The time when the branching was done, given as Unix timestamp.
+ *   'uid': The Drupal user id of the committer.
+ *   'username': The system specific VCS username of the committer.
+ *   'repository': The repository where the branching occurred,
+ *                 given as a structured array, like the return value
+ *                 of versioncontrol_get_repository().
+ *   'directory': The deepest-level directory in the repository that is common
+ *                to all the branched items, e.g. '/src' if the files
+ *                '/src/subdir/code.php' and '/src/README.txt' were branched.
+ *   '[xxx]_specific': An array of VCS specific additional branch operation info.
+ *                     How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *                     The 'branch_id' element will already be included in
+ *                     this array for the convenience of VCS backends.
+ *
+ *   If no branch operation corresponds to the given branch op id,
+ *   NULL is returned.
+ */
 function versioncontrol_get_branch_operation($branch_op_id) {
   $branches = versioncontrol_get_branch_operations(
     array('branch_op_ids' => array($branch_op_id))
@@ -1038,6 +1070,32 @@ function versioncontrol_get_branch_operation($branch_op_id) {
   return NULL; // in case of empty($branch_ops)
 }
 
+/**
+ * Convenience function for retrieving one single tag operation by tag op id.
+ *
+ * @return
+ *   A single tag operation array that consists of the following elements:
+ *
+ *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   'action': Specifies what happened to the tag. This is
+ *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
+ *             VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   'date': The time when the tagging was done, given as Unix timestamp.
+ *   'uid': The Drupal user id of the committer.
+ *   'username': The system specific VCS username of the committer.
+ *   'repository': The repository where the tagging occurred,
+ *                 given as a structured array, like the return value
+ *                 of versioncontrol_get_repository().
+ *   'directory': The deepest-level directory in the repository that is common
+ *                to all the tagged items, e.g. '/src' if the files
+ *                '/src/subdir/code.php' and '/src/README.txt' were tagged.
+ *   '[xxx]_specific': An array of VCS specific additional tag operation info.
+ *                     How this array looks like is defined by the
+ *                     corresponding backend module (versioncontrol_[xxx]).
+ *
+ *   If no tag operation corresponds to the given tag op id, NULL is returned.
+ */
 function versioncontrol_get_tag_operation($tag_op_id) {
   $tags = versioncontrol_get_tag_operations(
     array('tag_op_ids' => array($tag_op_id))
@@ -1112,6 +1170,8 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *   '[xxx]_specific': An array of VCS specific additional branch operation info.
  *                     How this array looks like is defined by the
  *                     corresponding backend module (versioncontrol_[xxx]).
+ *                     The 'branch_id' element will already be included in
+ *                     this array for the convenience of VCS backends.
  *
  *   If not a single branch operation matches these constraints,
  *   an empty array is returned.
@@ -1176,8 +1236,9 @@ function versioncontrol_get_branch_operations($constraints = array()) {
       'uid'          => $row->uid,
       'username'     => $row->username,
       'directory'    => $row->directory,
-      '_internal_'   => array('branch_id' => $row->branch_id),
-      $row->vcs .'_specific' => array(),
+      $row->vcs .'_specific' => array(
+        'branch_id' => $row->branch_id,
+      ),
     );
   }
 
@@ -1558,7 +1619,7 @@ function versioncontrol_is_account_approved($uid, $repo_id) {
  *   or if the commit cannot be viewed for any reason.
  */
 function versioncontrol_get_url_commit_view($commit) {
-  if (!isset($commit['revision'])) {
+  if (empty($commit['revision'])) {
     return '';
   }
   $urls = _versioncontrol_get_repository_urls($commit['repository']);
@@ -1724,7 +1785,8 @@ function _versioncontrol_get_repository_urls($repository) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -1767,7 +1829,8 @@ function versioncontrol_get_affected_item($commit_action) {
  *   'path': The path of the directory at the time of the commit.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -1789,6 +1852,76 @@ function versioncontrol_get_commit_directory_item($commit) {
 function versioncontrol_get_commit_branches($commit) {
   return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_commit_branches', array($commit)
+  );
+}
+
+/**
+ * Retrieve the set of items that were affected by a branch operation.
+ *
+ * @param $branch
+ *   The branch operation whose items should be retrieved.
+ *
+ * @return
+ *   An array of all items that were affected by the branching operation.
+ *   An empty result array means that the whole repository has been branched.
+ *   Item values are structured arrays and consist of elements
+ *   with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the item at the specific revision.
+ *   'revision': The (file-level) revision when the item was changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is
+ *               an empty string.
+ *   'source branch': Optional, may be set by the backend if the source branch
+ *                    (the one that this one branched off) can be retrieved.
+ *                    If given, this is a string with the original branch name.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
+ *
+ *   A real-life example of such a result array can be found
+ *   in the FakeVCS example module.
+ */
+function versioncontrol_get_branched_items($branch) {
+  return _versioncontrol_call_backend(
+    $branch['repository']['vcs'], 'get_branched_items', array($branch)
+  );
+}
+
+/**
+ * Retrieve the set of items that were affected by a tag operation.
+ *
+ * @param $tag
+ *   The tag operation whose items should be retrieved.
+ *
+ * @return
+ *   An array of all items that were affected by the tagging operation.
+ *   An empty result array means that the whole repository has been tagged.
+ *   Item values are structured arrays and consist of elements
+ *   with the following keys:
+ *
+ *   'type': Specifies the item type, which is either
+ *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   'path': The path of the item at the specific revision.
+ *   'revision': The (file-level) revision when the item was changed.
+ *               If there is no such revision (which may be the case for
+ *               directory items) then the 'revision' element is
+ *               an empty string.
+ *   'source tag': Optional, may be set by the backend if the source tag
+ *                    (the one that this one tagged off) can be retrieved.
+ *                    If given, this is a string with the original tag name.
+ *   '[xxx]_specific': May be set by the backend to remember additional
+ *                     item info. ("[xxx]" is the unique string identifier
+ *                     of the respective version control system.)
+ *
+ *   A real-life example of such a result array can be found
+ *   in the FakeVCS example module.
+ */
+function versioncontrol_get_tagged_items($tag) {
+  return _versioncontrol_call_backend(
+    $tag['repository']['vcs'], 'get_tagged_items', array($tag)
   );
 }
 
@@ -1846,7 +1979,8 @@ function versioncontrol_get_current_item_branch($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -1893,7 +2027,8 @@ function versioncontrol_get_all_item_branches($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -1954,7 +2089,8 @@ function versioncontrol_get_all_item_tags($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -2000,7 +2136,8 @@ function versioncontrol_get_item_history($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)

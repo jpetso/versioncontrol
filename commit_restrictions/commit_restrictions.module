@@ -332,10 +332,12 @@ function _commit_restrictions_item_error_message($item) {
  *
  * @param $branched_items
  *   An array of all items that are affected by the branching operation.
- *   Compared to standard item arrays, the ones in here don't need the
- *   'revision' element to be set and can optionally contain a 'source branch'
+ *   Compared to standard item arrays, the ones in here may not have the
+ *   'revision' element set and can optionally contain a 'source branch'
  *   element that specifies the original branch of this item.
  *   (For $op == 'delete', 'source branch' is never set.)
+ *   An empty $branched_items array means that the whole repository has been
+ *   branched.
  *
  * @return
  *   An array with error messages (without trailing newlines) if the branch
@@ -388,10 +390,12 @@ function commit_restrictions_versioncontrol_branch_access($branch, $branched_ite
  *
  * @param $tagged_items
  *   An array of all items that are affected by the tagging operation.
- *   Compared to standard item arrays, the ones in here don't need the
- *   'revision' element to be set and can optionally contain a 'source branch'
+ *   Compared to standard item arrays, the ones in here may not have the
+ *   'revision' element set and can optionally contain a 'source branch'
  *   element that specifies the original branch of this item.
  *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
+ *   An empty $tagged_items array means that the whole repository has been
+ *   tagged.
  *
  * @return
  *   An array with error messages (without trailing newlines) if the tag

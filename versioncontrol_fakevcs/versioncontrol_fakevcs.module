@@ -227,7 +227,8 @@ versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_constraints = 
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -407,7 +408,8 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
  *   'path': The path of the directory at the time of the commit.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -422,14 +424,14 @@ function versioncontrol_fakevcs_get_commit_directory_item($commit) {
     'username' => 'jpetso',
     'directory' => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
     'message' => 'All kinds of demonstrative changes.',
-    'revision' => NULL, // for this commit, let's assume this is a CVS repository
+    'revision' => '', // for this commit, let's assume this is a CVS repository
     'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
   );
 
   return array(
     'type' => VERSIONCONTROL_ITEM_DIRECTORY,
     'path' => $commit['directory'],
-    'revision' => NULL,
+    'revision' => '',
     'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
   );
 }
@@ -528,7 +530,8 @@ function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -600,7 +603,8 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -616,14 +620,14 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item) {
     'DRUPAL-5--1-1' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol',
-      'revision' => NULL, // Right, it's a directory in CVS -> unversioned.
-                          // Files of course would indeed get a 'revision' entry.
+      'revision' => '', // Right, it's a directory in CVS -> unversioned.
+                        // Files of course would indeed get a 'revision' entry.
       'fakevcs_specific' => array('tag' => 'DRUPAL-5--1-1'),
     ),
     'DRUPAL-5--1-2' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol',
-      'revision' => NULL,
+      'revision' => '',
       'fakevcs_specific' => array('tag' => 'DRUPAL-5--1-2'),
     ),
   );
@@ -688,7 +692,8 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -762,7 +767,8 @@ function versioncontrol_get_item_history($repository, $item) {
  *   'path': The path of the item at the specific revision.
  *   'revision': The (file-level) revision when the item was last changed.
  *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is NULL.
+ *               directory items) then the 'revision' element is
+ *               an empty string.
  *   '[xxx]_specific': May be set by the backend to remember additional
  *                     item info. ("[xxx]" is the unique string identifier
  *                     of the respective version control system.)
@@ -812,12 +818,12 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     ),
   );
 
-  // Or the same thing in CVS - note that 'revision' is NULL for directories,
-  // as CVS doesn't support versioned directories.
+  // Or the same thing in CVS - note that 'revision' is an empty string
+  // for directories, as CVS doesn't support versioned directories.
   $directory_item = array(
     'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
     'path'     => '/contributions/modules/versioncontrol',
-    'revision' => NULL,
+    'revision' => '',
   );
   // $repository is some CVS repository and $recursive == TRUE.
 
@@ -825,7 +831,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     '/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol',
-      'revision' => NULL, // CVS doesn't track directory-level revisions
+      'revision' => '', // CVS doesn't track directory-level revisions
     ),
     '/contributions/modules/versioncontrol/versioncontrol.module' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
@@ -850,7 +856,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     '/contributions/modules/versioncontrol/fakevcs_backend' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol/fakevcs_backend',
-      'revision' => NULL,
+      'revision' => '',
     ),
     '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE_DELETED, // only for non-atomic-commit VCSs (= CVS)
@@ -860,7 +866,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision' => NULL,
+      'revision' => '',
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
       'type'     => VERSIONCONTROL_ITEM_FILE,
@@ -874,7 +880,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
   $directory_item = array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision' => NULL,
+      'revision' => '',
       'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
     ),
   // $repository is some CVS repository and $recursive == FALSE.
@@ -883,7 +889,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
       'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision' => NULL,
+      'revision' => '',
       'fakevcs_specific' => array('selected branch' => 'DRUPAL-5'),
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
