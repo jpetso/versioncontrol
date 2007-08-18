@@ -12,6 +12,21 @@
  */
 
 /**
+ * Set an error if the repository for a commit or branch/tag operation
+ * can't be retrieved.
+ *
+ * @param $type
+ *   The translated string for 'commit', 'branch' or 'tag'.
+ */
+function _versioncontrol_set_repository_error($type) {
+  _versioncontrol_access_errors(array(t(
+'** ERROR: Version Control API cannot determine a repository
+** for the !commit-branch-or-tag information given by the VCS backend.',
+    array('!commit-branch-or-tag' => $type)
+  )));
+}
+
+/**
  * Determine if a commit may be executed or not.
  * Call this inside a pre-commit hook.
  *
@@ -56,7 +71,8 @@
 function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NULL) {
   $commit = _versioncontrol_fill_commit($commit, $commit_actions);
   if (!isset($commit['repository'])) {
-    return NULL;
+    _versioncontrol_set_repository_error(t('commit'));
+    return FALSE;
   }
 
   $error_messages = array();
@@ -121,6 +137,12 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  *   by calling versioncontrol_get_access_errors().
  */
 function versioncontrol_has_branch_access($branch, $branched_items) {
+  $branch = _versioncontrol_fill_uid_and_repository($branch);
+  if (!isset($branch['repository'])) {
+    _versioncontrol_set_repository_error(t('branch'));
+    return FALSE;
+  }
+
   return _versioncontrol_has_branch_or_tag_access(
     'versioncontrol_branch_access', $branch, $branched_items
   );
@@ -164,6 +186,12 @@ function versioncontrol_has_branch_access($branch, $branched_items) {
  *   by calling versioncontrol_get_access_errors().
  */
 function versioncontrol_has_tag_access($tag, $tagged_items) {
+  $tag = _versioncontrol_fill_uid_and_repository($tag);
+  if (!isset($tag['repository'])) {
+    _versioncontrol_set_repository_error(t('tag'));
+    return FALSE;
+  }
+
   return _versioncontrol_has_branch_or_tag_access(
     'versioncontrol_tag_access', $tag, $tagged_items
   );
@@ -174,7 +202,6 @@ function versioncontrol_has_tag_access($tag, $tagged_items) {
  * internally, so let's share the code in a common function.
  */
 function _versioncontrol_has_branch_or_tag_access($hook, $branch_or_tag, $items) {
-  $branch_or_tag = _versioncontrol_fill_uid_and_repository($branch_or_tag);
   $branch_or_tag['directory'] = _versioncontrol_get_common_directory($items);
   $error_messages = array();
 
@@ -567,7 +594,7 @@ function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, 
 
 /**
  * Code that is shared between versioncontrol_has_commit_access()
- * and versioncontrol_insert_commit(): fill up a commit array's missing values.
+ * and versioncontrol_insert_commit(): Fill up a commit array's missing values.
  *
  * @return
  *   The completed commit array. Check on isset($commit['repository'])
@@ -575,19 +602,28 @@ function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, 
  */
 function _versioncontrol_fill_commit($commit, $commit_actions) {
   $commit = _versioncontrol_fill_uid_and_repository($commit);
-  $paths = _versioncontrol_get_commit_action_paths($commit);
+  $paths = _versioncontrol_get_commit_action_paths($commit_actions);
   $commit['directory'] = _versioncontrol_get_common_directory($paths);
   return $commit;
 }
 
-function _versioncontrol_fill_branch_or_tag($branch, $items) {
-  $branch = _versioncontrol_fill_uid_and_repository($branch);
+/**
+ * Code that is shared between versioncontrol_has_{branch,tag}_access()
+ * and versioncontrol_insert_{branch,tag}_operation():
+ * Fill up a branch/tag operation array's missing values.
+ *
+ * @return
+ *   The completed branch/tag array.
+ *   Check on isset($branch_or_tag['repository']) before proceeding.
+ */
+function _versioncontrol_fill_branch_or_tag($branch_or_tag, $items) {
+  $branch_or_tag = _versioncontrol_fill_uid_and_repository($branch_or_tag);
   $paths = _versioncontrol_get_item_paths($items);
-  $commit['directory'] = _versioncontrol_get_common_directory($paths);
-  return $commit;
+  $branch_or_tag['directory'] = _versioncontrol_get_common_directory($paths);
+  return $branch_or_tag;
 }
 
-function _versioncontrol_get_commit_action_paths($commit) {
+function _versioncontrol_get_commit_action_paths($commit_actions) {
   $paths = array();
 
   // gather the paths of all current and source items
@@ -596,7 +632,7 @@ function _versioncontrol_get_commit_action_paths($commit) {
       $paths[] = $action['current item']['path'];
     }
     // Don't get items twice that were only modified have the same path.
-    if ($action['type'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
+    if ($action['action'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
       foreach ($action['source items'] as $item) {
         $paths[] = $item['path'];
       }
@@ -607,7 +643,7 @@ function _versioncontrol_get_commit_action_paths($commit) {
 
 function _versioncontrol_get_item_paths($items) {
   $paths = array();
-  foreach ($items as $path => $item) {
+  foreach ($items as $item) {
     $paths[] = $item['path'];
   }
   return $paths;
@@ -1019,8 +1055,8 @@ function versioncontrol_delete_repository($repository) {
  * Retrieve the branch name and repository for a given branch id.
  *
  * @return
- *   A structured array consisting of the 'branch_id, 'repo_id' and 'name'
- *   elements, or NULL if there is no branch for this branch id.
+ *   A structured array consisting of the 'branch_id, 'repo_id' and
+ *   'branch_name' elements, or NULL if there is no branch for this branch id.
  */
 function versioncontrol_get_branch($branch_id) {
   static $branch_cache = array();
@@ -1032,7 +1068,7 @@ function versioncontrol_get_branch($branch_id) {
     return $branch_cache[$branch_id]; // return the cached branch array
   }
 
-  $result = db_query("SELECT branch_id, repo_id, name
+  $result = db_query("SELECT branch_id, repo_id, branch_name
                       FROM {versioncontrol_branches}
                       WHERE branch_id = '%d'", $branch_id);
 

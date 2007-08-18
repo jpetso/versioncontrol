@@ -718,6 +718,10 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
     );
   }
 
+  if (empty($commits)) {
+    return array();
+  }
+
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
 
   foreach ($selected_backends as $vcs => $backend) {
@@ -1171,6 +1175,10 @@ function versioncontrol_get_branch_operations($constraints = array()) {
     );
   }
 
+  if (empty($branches)) {
+    return array();
+  }
+
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
 
   foreach ($selected_backends as $vcs => $backend) {
@@ -1310,6 +1318,10 @@ function versioncontrol_get_tag_operations($constraints = array()) {
       'directory'  => $row->directory,
       $row->vcs .'_specific' => array(),
     );
+  }
+
+  if (empty($tags)) {
+    return array();
   }
 
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
@@ -1727,9 +1739,9 @@ function versioncontrol_get_commit_actions($commit) {
  * when the corresponding commit has not yet been inserted into the database.
  */
 function versioncontrol_get_affected_item($commit_action) {
-  return isset($action['current item'])
-         ? $action['current item']     // new revision of the file, or
-         : $action['source items'][0]; // the deleted item
+  return isset($commit_action['current item'])
+         ? $commit_action['current item']     // new revision of the file, or
+         : $commit_action['source items'][0]; // the deleted item
 }
 
 /**
