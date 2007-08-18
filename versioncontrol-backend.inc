@@ -551,7 +551,7 @@ function versioncontrol_delete_branch_operation($branch) {
   $branched_items = versioncontrol_get_branched_items($branch);
 
   _versioncontrol_delete_branch_or_tag_operation(
-    $branch, $branched_items, 'branch'
+    $branch, $branched_items, 'branch', VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS
   );
 }
 
@@ -567,14 +567,14 @@ function versioncontrol_delete_tag_operation($tag) {
   $tagged_items = versioncontrol_get_tagged_items($tag);
 
   _versioncontrol_delete_branch_or_tag_operation(
-    $tag, $tagged_items, 'tag'
+    $tag, $tagged_items, 'tag', VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS
   );
 }
 
 /**
  * Code that is shared between the branch and tag deletion functions.
  */
-function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, $type) {
+function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, $type, $autoadd_flag) {
   // Announce deletion of the commit before anything has happened.
   // Calls hook_versioncontrol_branch_operation()
   // or hook_versioncontrol_tag_operation().
@@ -593,8 +593,7 @@ function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, 
   // Auto-delete additional tag info from $tag['repository']['[xxx]_specific']
   // from the database.
   $backends = versioncontrol_get_backends();
-  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS,
-                         $backends[$vcs]['flags']);
+  $is_autoadd = in_array($autoadd_flag, $backends[$vcs]['flags']);
   if ($is_autoadd) {
     $table_name = 'versioncontrol_'. $vcs .'_'. $type .'_operations';
     _versioncontrol_db_delete_additions(

@@ -7,8 +7,6 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: create versioncontrol_get_branched_items()
-// TODO: create versioncontrol_get_tagged_items()
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -1036,6 +1034,8 @@ function _versioncontrol_page_commits($commits, $page, $limit) {
  * @return
  *   A single branch operation array that consists of the following elements:
  *
+ *   'branch_op_id': The unique identifier (a simple integer)
+ *                   of this branch operation.
  *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
  *   'action': Specifies what happened to the branch. This is
  *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
@@ -1076,6 +1076,8 @@ function versioncontrol_get_branch_operation($branch_op_id) {
  * @return
  *   A single tag operation array that consists of the following elements:
  *
+ *   'tag_op_id': The unique identifier (a simple integer)
+ *                of this tag operation.
  *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
  *   'action': Specifies what happened to the tag. This is
  *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
@@ -1153,6 +1155,8 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *   An array of branch operations, reversely sorted by the time of the branching.
  *   Each element contains a structured array with the following keys:
  *
+ *   'branch_op_id': The unique identifier (a simple integer)
+ *                   of this branch operation.
  *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
  *   'action': Specifies what happened to the branch. This is
  *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
@@ -1305,6 +1309,8 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  *   An array of tag operations, reversely sorted by the time of the tagging.
  *   Each element contains a structured array with the following keys:
  *
+ *   'tag_op_id': The unique identifier (a simple integer)
+ *                of this tag operation.
  *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
  *   'action': Specifies what happened to the tag. This is
  *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
@@ -1859,7 +1865,8 @@ function versioncontrol_get_commit_branches($commit) {
  * Retrieve the set of items that were affected by a branch operation.
  *
  * @param $branch
- *   The branch operation whose items should be retrieved.
+ *   The branch operation whose items should be retrieved. This is an array
+ *   like the one returned by versioncontrol_get_branch_operation().
  *
  * @return
  *   An array of all items that were affected by the branching operation.
@@ -1894,7 +1901,8 @@ function versioncontrol_get_branched_items($branch) {
  * Retrieve the set of items that were affected by a tag operation.
  *
  * @param $tag
- *   The tag operation whose items should be retrieved.
+ *   The tag operation whose items should be retrieved. This is an array
+ *   like the one returned by versioncontrol_get_tag_operation().
  *
  * @return
  *   An array of all items that were affected by the tagging operation.
@@ -1946,6 +1954,27 @@ function versioncontrol_get_tagged_items($tag) {
 function versioncontrol_get_current_item_branch($repository, $item) {
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_current_item_branch', array($repository, $item)
+  );
+}
+
+/**
+ * Retrieve the current tag operation that has been applied to this item.
+ * If no specific tag operation is known or applicable for this item,
+ * NULL is returned.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose current branch should be retrieved.
+ *
+ * @return
+ *   A tag operation array like the return value
+ *   of versioncontrol_get_tag_operation(), or NULL if no tag
+ *   is known or applicable.
+ */
+function versioncontrol_get_current_item_tag($repository, $item) {
+  return _versioncontrol_call_backend(
+    $repository['vcs'], 'get_current_item_tag', array($repository, $item)
   );
 }
 
