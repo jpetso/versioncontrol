@@ -23,11 +23,11 @@ Jakob Petsovits <jpetso at gmx DOT at>
 
 CREDITS
 -------
-A good amount of code in Commit Log was taken from the CVS integration
-module on drupal.org, where the adapted sections were committed by:
-
-Derek Wright ("dww", http://drupal.org/user/46549)
-Karthik ("Zen", http://drupal.org/user/21209)
+A good share of code in Commit Log was taken from the CVS integration module
+on drupal.org, its authors deserve a lot of credits and may also hold copyright
+for parts of this module.
 
 This module was originally created as part of Google Summer of Code 2007,
-so Google also deserves some credits for making this possible.
+so Google deserves some credits for making this possible. Thanks also
+to Derek Wright (dww) and Andy Kirkham (AjK) for mentoring
+the Summer of Code project.

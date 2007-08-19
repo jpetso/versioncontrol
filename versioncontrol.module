@@ -48,11 +48,37 @@ include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol-backe
 
 
 /**
- * Implementation of hook_user().
+ * Implementation of hook_user():
+ * Register additional user account edit tabs,
+ * and delete VCS accounts when the associated user account is deleted.
  */
 function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
-  if ($type == 'categories') {
-    return _versioncontrol_user_account_edit_items($user, 'categories');
+  switch ($type) {
+    case 'categories':
+      return _versioncontrol_user_account_edit_items($user, 'categories');
+      break;
+
+    case 'delete':
+      $accounts = versioncontrol_get_accounts(array('uids' => array($user->uid)));
+      $accounts_flat = array();
+      $repo_ids = array();
+
+      foreach ($accounts as $uid => $usernames_by_repository) {
+        foreach ($usernames_by_repository as $repo_id => $username) {
+          $accounts_flat[] = array('uid' => $uid, 'username' => $username, 'repo_id' => $repo_id);
+          $repo_ids[] = $repo_id;
+        }
+      }
+      $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
+
+      foreach ($accounts_flat as $account) {
+        if (isset($repositories[$account['repo_id']])) {
+          versioncontrol_delete_account(
+            $account['uid'], $account['username'], $repositories[$account['repo_id']]
+          );
+        }
+      }
+      break;
   }
 }
 
@@ -79,6 +105,21 @@ function versioncontrol_menu($may_cache) {
         'type' => MENU_NORMAL_ITEM,
       );
     }
+
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-settings',
+      'title' => t('Version control settings'),
+      'description' => t('Configure settings for Version Control API and related modules.'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('versioncontrol_admin_account_authorization_settings'),
+      'access' => $admin_access,
+      'type' => MENU_NORMAL_ITEM,
+    );
+    $items[] = array(
+      'path' => 'admin/project/versioncontrol-settings/authorization',
+      'title' => t('Account authorization'),
+      'type' => MENU_DEFAULT_LOCAL_TASK,
+    );
 
     $items[] = array(
       'path' => 'admin/project/versioncontrol-repositories',
@@ -123,12 +164,22 @@ function versioncontrol_menu($may_cache) {
       'path' => 'admin/project/versioncontrol-accounts/list',
       'title' => t('List'),
       'type' => MENU_DEFAULT_LOCAL_TASK,
+      'weight' => 0,
+    );
+
+    $items[] = array(
+      'path' => 'versioncontrol/register', // [."/$uid" [."/$repo_id"]]
+      'title' => t('Get commit access'),
+      'callback' => 'drupal_get_form',
+      'callback arguments' => array('versioncontrol_account_register_form'),
+      'access' => $user_access,
+      'type' => MENU_SUGGESTED_ITEM,
     );
 
     // autocomplete callback for Drupal usernames that have access to
     // the repository given in arg(3).
     $items[] = array(
-      'path' => 'versioncontrol/user/autocomplete', // .'/$repo_id/$string'
+      'path' => 'versioncontrol/user/autocomplete', // ."/$repo_id/$string"
       'title' => t('Version control user autocomplete'),
       'callback' => 'versioncontrol_user_autocomplete',
       'access' => $user_access,
@@ -173,6 +224,7 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
 
   $user_access = user_access('use version control systems');
   $admin_access = user_access('administer version control systems');
+  $account_access = ($user_access && $uid == $user->uid) || $admin_access;
 
   // Cache the items, we don't want this being done twice.
   if (isset($items)) {
@@ -186,9 +238,19 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
 
   $uid = arg(1);
   $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
-  $repositories = versioncontrol_get_repositories();
+  if (empty($accounts)) {
+    $items = array();
+    $categories = array();
+    return array();
+  }
 
-  $account_access = ($user_access && $uid == $user->uid) || $admin_access;
+  $repo_ids = array();
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    foreach ($usernames_by_repository as $repo_id => $username) {
+      $repo_ids[] = $repo_id;
+    }
+  }
+  $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
 
   // The form for editing an account.
   foreach ($accounts as $uid => $usernames_by_repository) {
@@ -196,10 +258,10 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
       if (isset($repositories[$repo_id])) {
         $items[] = array(
           'path' => 'user/'. $uid .'/edit/versioncontrol/'. $repo_id,
-          'title' => $repositories[$repo_id]['name'],
+          'title' => check_plain($repositories[$repo_id]['name']),
           'callback' => 'drupal_get_form',
           'callback arguments' => array(
-            'versioncontrol_user_account_edit_form',
+            'versioncontrol_account_edit_form',
             $uid, $username, $repositories[$repo_id]
           ),
           'access' => $account_access,
@@ -208,68 +270,10 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
         );
         $categories[] = array(
           'name' => 'versioncontrol/'. $repo_id,
-          'title' => $repositories[$repo_id]['name'],
-          'weight' => 99,
-        );
-        // Let only the ones without accounts for this user survive.
-        unset($repositories[$repo_id]);
-      }
-    }
-  }
-  // From here on, $repositories only holds those where the user
-  // doesn't yet have an account but can register or apply for one.
-
-  // The indirection form for creating (or applying for) a VCS account.
-  if (!empty($repositories)) {
-    if (count($repositories) > 1) {
-      $callback = array('versioncontrol_user_account_register_form',
-                        $uid, $accounts, $repositories);
-      $title = t('Get commit access');
-    }
-    else { // there's exactly one repository choice left
-      foreach ($repositories as $repo_id => $repository) {
-        $callback = array('versioncontrol_user_account_edit_form',
-                          $uid, '', $repository);
-        $title = t('@repository', array('@repository' => $repository['name']));
-        unset($repositories[$repo_id]);
-      }
-    }
-    $items[] = array(
-      'path' => 'user/'. $uid .'/edit/versioncontrol/register',
-      'title' => $title,
-      'callback' => 'drupal_get_form',
-      'callback arguments' => $callback,
-      'access' => $account_access,
-      'type' => MENU_LOCAL_TASK,
-      'weight' => 100,
-    );
-    $categories[] = array(
-      'name' => 'versioncontrol/register',
-      'title' => $title,
-      'weight' => 100,
-    );
-
-    if (is_numeric(arg(4))) {
-      // The form for creating an account.
-      if (isset($repositories[arg(4)])) {
-        $items[] = array(
-          'path' => 'user/'. $uid .'/edit/versioncontrol/'. arg(4) .'/register',
-          'title' => $repositories[arg(4)]['name'],
-          'callback' => 'drupal_get_form',
-          'callback arguments' => array(
-            'versioncontrol_user_account_edit_form',
-            $uid, '', $repositories[arg(4)]
-          ),
-          'access' => $account_access,
-          'type' => MENU_LOCAL_TASK,
+          'title' => check_plain($repositories[$repo_id]['name']),
           'weight' => 99,
         );
       }
-      $categories[] = array(
-        'name' => 'versioncontrol/'. arg(4) .'/register',
-        'title' => $repositories[arg(4)]['name'],
-        'weight' => 99,
-      );
     }
   }
 
@@ -385,6 +389,37 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
 function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constraints = array()) {
   $function = 'versioncontrol_'. $vcs .'_'. $function;
   return $function($objects, $constraints);
+}
+
+/**
+ * Determine all user account authorization methods
+ * (site-wide approval, per-repository approval, ...)
+ * by invoking hook_versioncontrol_authorization_methods().
+ * The default method (no authorization required) is not included.
+ *
+ * @return
+ *   A structured array with the unique string identifier of the method as keys
+ *   and the user-visible description (wrapped in t()) as values.
+ */
+function versioncontrol_get_authorization_methods() {
+  static $methods;
+
+  if (!isset($methods)) {
+    $methods = module_invoke_all('versioncontrol_authorization_methods');
+  }
+  return $methods;
+}
+
+function versioncontrol_get_current_authorization_method() {
+  $current_method = variable_get('versioncontrol_authorization_method', 'none');
+  $methods = versioncontrol_get_authorization_methods();
+
+  if ($current_method != 'none' && !isset($methods[$current_method])) {
+    // A (currently) non-existing method is given - reset this to 'none'.
+    variable_set('versioncontrol_authorization_method', 'none');
+    $current_method = 'none';
+  }
+  return $current_method;
 }
 
 

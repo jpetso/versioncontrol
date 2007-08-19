@@ -19,10 +19,10 @@ include_once(drupal_get_path('module', 'versioncontrol_fakevcs') .'/versioncontr
  * Implementation of hook_versioncontrol_backends().
  *
  * @return
- *   A structured array containing information about this known backends.
- *   Array key is the unique string identifier of the version control system.
- *   The corresponding array values are again structured arrays and consist
- *   of elements with the following keys:
+ *   A structured array containing information about this backend, wrapped
+ *   in a structured array. Array key is the unique string identifier of
+ *   the backend. The corresponding array values are again structured arrays
+ *   and consist of elements with the following keys:
  *
  *   'name': The user-visible name of the VCS.
  *   'description': A short description of the backend, if possible not longer
@@ -33,10 +33,10 @@ include_once(drupal_get_path('module', 'versioncontrol_fakevcs') .'/versioncontr
  *                   combination of VERSIONCONTROL_CAPABILITY_* values. If no
  *                   additional capabilities are supported by the backend,
  *                   this array will be empty.
- *   'autoadd': An array listing which tables should be managed by
- *              Version Control API instead of doing it manually in the backend.
- *              If no array additions should be automatically managed,
- *              this array will be empty.
+ *   'flags': An array listing which tables should be managed by
+ *            Version Control API instead of doing it manually in the backend.
+ *            If no array additions should be automatically managed,
+ *            this array will be empty.
  */
 versioncontrol_fakevcs_versioncontrol_backends() {
   // Our example VCS is called FakeVCS, and supports all possible capabilities.

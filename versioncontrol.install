@@ -104,6 +104,8 @@ function versioncontrol_install() {
  * Implementation of hook_uninstall().
  */
 function versioncontrol_uninstall() {
+  variable_del('versioncontrol_authorization_method');
+
   db_query("DROP TABLE {versioncontrol_commits}");
   db_query("DROP TABLE {versioncontrol_branches}");
   db_query("DROP TABLE {versioncontrol_branch_operations}");

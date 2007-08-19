@@ -23,3 +23,15 @@ Commit Restrictions depends on the Version Control API module.
 AUTHOR
 ------
 Jakob Petsovits <jpetso at gmx DOT at>
+
+
+CREDITS
+-------
+Example regexps and error messages in this module were taken from the
+CVS integration module on drupal.org, its authors may hold copyright for
+certain parts of this module.
+
+This module was originally created as part of Google Summer of Code 2007,
+so Google deserves some credits for making this possible. Thanks also
+to Derek Wright (dww) and Andy Kirkham (AjK) for mentoring
+the Summer of Code project.
