@@ -85,6 +85,12 @@ function versioncontrol_install() {
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      db_query("CREATE TABLE {versioncontrol_repository_internal_data} (
+        repo_id int unsigned NOT NULL default '0',
+        registration_message text,
+        PRIMARY KEY (repo_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
       db_query("CREATE TABLE {versioncontrol_accounts} (
         uid int unsigned NOT NULL default '0',
         repo_id int unsigned NOT NULL default '0',
@@ -105,8 +111,8 @@ function versioncontrol_install() {
  */
 function versioncontrol_uninstall() {
   variable_del('versioncontrol_authorization_method');
-  variable_del('versioncontrol_register_message_unauthorized');
-  variable_del('versioncontrol_register_message_authorized');
+  variable_del('versioncontrol_registration_message_unauthorized');
+  variable_del('versioncontrol_registration_message_authorized');
 
   db_query("DROP TABLE {versioncontrol_commits}");
   db_query("DROP TABLE {versioncontrol_branches}");

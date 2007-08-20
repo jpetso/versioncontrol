@@ -147,27 +147,27 @@ function versioncontrol_admin_account_authorization_settings() {
   $form['versioncontrol_register_form'] = array(
     '#type' => 'fieldset',
     '#title' => t('Account registration form strings'),
-    '#description' => t('The following messages are shown on the !repository-selection-page (if there\'s more than one repository to choose from) that leads to the account registration form.', array('!repository-selection-page' => l('repository selection page', 'versioncontrol/register'))),
+    '#description' => t('The following messages are shown on the !repository-selection-page (if there\'s more than one repository to choose from) that leads to the account registration form.', array('!repository-selection-page' => l(t('repository selection page'), 'versioncontrol/register/demo'))),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
     '#weight' => -17,
   );
-  $form['versioncontrol_register_form']['versioncontrol_register_message_unauthorized'] = array(
+  $form['versioncontrol_register_form']['versioncontrol_registration_message_unauthorized'] = array(
     '#type' => 'textarea',
     '#title' => t('Message to unauthorized users'),
     '#description' => t('Message to show to anonymous users and to users without the \'use version control systems\' permission.'),
     '#default_value' => variable_get(
-      'versioncontrol_register_message_unauthorized',
-      $presets['versioncontrol_register_message_unauthorized']
+      'versioncontrol_registration_message_unauthorized',
+      $presets['versioncontrol_registration_message_unauthorized']
     ),
   );
-  $form['versioncontrol_register_form']['versioncontrol_register_message_authorized'] = array(
+  $form['versioncontrol_register_form']['versioncontrol_registration_message_authorized'] = array(
     '#type' => 'textarea',
     '#title' => t('Message to applying users'),
     '#description' => t('Message to show to users who are applying for commit access.'),
     '#default_value' => variable_get(
-      'versioncontrol_register_message_authorized',
-      $presets['versioncontrol_register_message_authorized']
+      'versioncontrol_registration_message_authorized',
+      $presets['versioncontrol_registration_message_authorized']
     ),
   );
 
@@ -184,14 +184,19 @@ function versioncontrol_account_register_form() {
   $presets = _versioncontrol_get_admin_presets();
   $form = array();
 
-  $uid = is_numeric(arg(2)) ? arg(2) : $user->uid;
+  if (arg(2) == 'demo') { // demo mode for showing the page to the admin
+    $uid = -1;
+  }
+  else {
+    $uid = is_numeric(arg(2)) ? arg(2) : $user->uid;
+  }
   $user_access = user_access('use version control systems');
   $admin_access = user_access('administer version control systems');
 
   if (!$user_access || $user->uid == 0) {
     $message = variable_get(
-      'versioncontrol_register_message_unauthorized',
-      $presets['versioncontrol_register_message_unauthorized']
+      'versioncontrol_registration_message_unauthorized',
+      $presets['versioncontrol_registration_message_unauthorized']
     );
     $form['no_registration'] = array(
       '#type' => 'markup',
@@ -215,6 +220,10 @@ function versioncontrol_account_register_form() {
     }
   }
 
+  if (arg(2) == 'demo') { // demo mode for showing the page to the admin
+    $account_repo_ids = array();
+  }
+
   $repository_names = array();
   foreach ($repositories as $repo_id => $repository) {
     if (in_array($repo_id, $account_repo_ids)) {
@@ -234,6 +243,10 @@ function versioncontrol_account_register_form() {
     foreach ($repositories as $repo_id => $repository) {
       $only_repo_id = $repo_id;
     }
+  }
+
+  if (arg(2) == 'demo') { // demo mode for showing the page to the admin
+    unset($only_repo_id);
   }
 
   if (is_numeric(arg(3)) || isset($only_repo_id)) {
@@ -264,8 +277,8 @@ function versioncontrol_account_register_form() {
   $form['#id'] = 'vcs-account-indirection-form';
 
   $message = variable_get(
-    'versioncontrol_register_message_authorized',
-    $presets['versioncontrol_register_message_authorized']
+    'versioncontrol_registration_message_authorized',
+    $presets['versioncontrol_registration_message_authorized']
   );
   if (!empty($message)) {
     $form['overview'] = array(
@@ -275,6 +288,7 @@ function versioncontrol_account_register_form() {
     $form['overview']['overview'] = array(
       '#type' => 'markup',
       '#value' => $message,
+      '#weight' => -10,
     );
   }
 
@@ -286,6 +300,7 @@ function versioncontrol_account_register_form() {
   $form['repository'] = array(
     '#type' => 'fieldset',
     '#title' => t('Select repository'),
+    '#weight' => 0,
   );
   $form['repository']['repo_id'] = array(
     '#type' => 'select',
@@ -293,11 +308,14 @@ function versioncontrol_account_register_form() {
     '#options' => $repository_names,
     '#default_value' => $first_repo_id,
   );
-  $form['repository']['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Create account'),
-    '#weight' => 100,
-  );
+
+  if (arg(2) != 'demo') { // demo mode for showing the page to the admin
+    $form['repository']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Create account'),
+      '#weight' => 100,
+    );
+  }
   return $form;
 }
 
@@ -354,6 +372,26 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     '#value' => $vcs_name,
   );
 
+  if (empty($username)) {
+    $result = db_query("SELECT registration_message
+                        FROM {versioncontrol_repository_internal_data}
+                        WHERE repo_id = '%d'", $repository['repo_id']);
+    while ($row = db_fetch_object($result)) {
+      $registration_message = $row->registration_message;
+    }
+    if (!empty($registration_message)) {
+      $form['overview'] = array(
+        '#type' => 'fieldset',
+        '#title' => t('Overview'),
+        '#weight' => -10,
+      );
+      $form['overview']['overview'] = array(
+        '#type' => 'markup',
+        '#value' => $registration_message,
+      );
+    }
+  }
+
   $form['account'] = array(
     '#type' => 'fieldset',
     '#title' => t('@vcs account settings', array('@vcs' => $vcs_name)),
@@ -404,11 +442,13 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     );
   }
 
-  $form['submit'] = array(
-    '#type' => 'submit',
-    '#value' => t('Submit'),
-    '#weight' => 100,
-  );
+  if (arg(2) != 'demo') { // demo mode for showing the page to the admin
+    $form['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Submit'),
+      '#weight' => 100,
+    );
+  }
   return $form;
 }
 
@@ -640,6 +680,32 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#description' => t('The location of the repository\'s root directory.'),
   );
 
+  $result = db_query("SELECT registration_message
+                      FROM {versioncontrol_repository_internal_data}
+                      WHERE repo_id = '%d'", $repo_id);
+  while ($row = db_fetch_object($result)) {
+    $current_registration_message = $row->registration_message;
+  }
+  if (!isset($current_registration_message)) {
+    $presets = _versioncontrol_get_admin_presets();
+    $current_registration_message = $presets['versioncontrol_registration_message_repository'];
+  }
+
+  $form['repository_messages'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account registration'),
+    '#description' => t('The following message is shown on the !account-registration-page for this repository.', array('!account-registration-page' => l(t('account registration page'), 'versioncontrol/register/demo/'. $repo_id))),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 2,
+  );
+  $form['repository_messages']['registration_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message to registering users'),
+    '#description' => t('Message to show to users that are in the process of creating an account in this repository.'),
+    '#default_value' => $current_registration_message,
+  );
+
   if (isset($repository)) {
     $repo_urls = _versioncontrol_get_repository_urls($repository);
   }
@@ -726,8 +792,8 @@ function versioncontrol_admin_repository_edit_validate($form_id, $form_values) {
 function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
   // Reconstruct the repository from the $form_values that were passed.
   $repository = array();
-  $vcs_specific = array();
   $repository_urls = array();
+  $backends = versioncontrol_get_backends();
 
   foreach ($form_values as $key => $value) {
     if (in_array($key, array('repo_id', 'vcs', 'root'))) {
@@ -739,6 +805,9 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
     else if (in_array($key, array('commit_view', 'file_view', 'directory_view', 'diff', 'tracker'))) {
       $repository_urls[$key] = $form_values[$key];
     }
+    else if ($key == 'registration_message') {
+      $registration_message = $form_values[$key];
+    }
   }
   $repository['url_backend'] = 'versioncontrol_default_urls'; // hardcoded for now
 
@@ -749,10 +818,25 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
 
   if ($repository['repo_id'] > 0) {
     versioncontrol_update_repository($repository, $repository_urls);
+    db_query("UPDATE {versioncontrol_repository_internal_data}
+              SET registration_message = '%s'
+              WHERE repo_id = '%d'",
+              $registration_message, $repository['repo_id']);
+
+    drupal_set_message(t('The %repository repository has been updated.',
+                       array('%repository' => $repository['name'])));
   }
   else {
-    versioncontrol_insert_repository($repository, $repository_urls);
+    $repository = versioncontrol_insert_repository($repository, $repository_urls);
+    db_query("INSERT INTO {versioncontrol_repository_internal_data}
+              (repo_id, registration_message)
+              VALUES ('%d', '%s')",
+              $repository['repo_id'], $registration_message);
+
+    drupal_set_message(t('The %repository repository has been added.',
+                       array('%repository' => $repository['name'])));
   }
+
   return 'admin/project/versioncontrol-repositories';
 }
 
@@ -787,6 +871,9 @@ function versioncontrol_admin_repository_delete_confirm($repo_id) {
 function versioncontrol_admin_repository_delete_confirm_submit($form_id, $form_values) {
   $repository = versioncontrol_get_repository($form_values['repo_id']);
   versioncontrol_delete_repository($repository);
+  drupal_set_message(t('The %repository repository has been deleted.',
+                      array('%repository' => $repository['name'])));
+
   drupal_goto('admin/project/versioncontrol-repositories');
 }
 
@@ -797,14 +884,24 @@ function versioncontrol_admin_repository_delete_confirm_submit($form_id, $form_v
 function _versioncontrol_get_admin_presets() {
   $presets = array();
 
-  $presets['versioncontrol_register_message_unauthorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+  $presets['versioncontrol_registration_message_unauthorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
 <p>To request access to the Drupal CVS repository you must <a href="!register">create an account</a> and <a href="!login">login</a>. Come back to this page after you have logged on.</p>',
     array('!register' => url('user/register'), '!login' => url('user/login'))
   );
 
-  $presets['versioncontrol_register_message_authorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+  $presets['versioncontrol_registration_message_authorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
 <p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
 <p>If you are an open source software developer, themer, translator or documentation writer, please choose one of Drupal\'s repositories from the selection below in order to request commit access to this repository. Prior to applying, please ensure that:
+<ul>
+  <li>you have a concrete idea as to what you intend to contribute.</li>
+  <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
+</ul></p>',
+    array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
+  );
+
+  $presets['versioncontrol_registration_message_repository'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to create an account in Drupal\'s CVS repository. Prior to registering, please ensure that:
 <ul>
   <li>you have a concrete idea as to what you intend to contribute.</li>
   <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>

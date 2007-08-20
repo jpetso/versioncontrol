@@ -761,6 +761,11 @@ function versioncontrol_insert_account($uid, $username, $repository, $additional
   module_invoke_all('versioncontrol_account',
     'insert', $uid, $username, $repository, $additional_data
   );
+
+  watchdog('special',
+            'Version Control API: added '. $username .' account '.
+            'in repository '. $repository['name'],
+            l('view', 'admin/project/versioncontrol-accounts'));
 }
 
 /**
@@ -815,6 +820,11 @@ function versioncontrol_update_account($uid, $username, $repository, $additional
   module_invoke_all('versioncontrol_account',
     'update', $uid, $username, $repository, $additional_data
   );
+
+  watchdog('special',
+            'Version Control API: updated '. $username .' account '.
+            'in repository '. $repository['name'],
+            l('view', 'admin/project/versioncontrol-accounts'));
 }
 
 /**
@@ -851,6 +861,11 @@ function versioncontrol_delete_account($uid, $username, $repository) {
   db_query("DELETE FROM {versioncontrol_accounts}
             WHERE uid = '%d' AND repo_id = '%d'",
             $uid, $repository['repo_id']);
+
+  watchdog('special',
+            'Version Control API: deleted '. $username .' account '.
+            'in repository '. $repository['name'],
+            l('view', 'admin/project/versioncontrol-accounts'));
 }
 
 /**
@@ -861,7 +876,6 @@ function versioncontrol_delete_account($uid, $username, $repository) {
  *   It's a single repository array like the one returned by
  *   versioncontrol_get_repository(), so it consists of the following elements:
  *
- *   'repo_id': The unique repository id.
  *   'name': The user-visible name of the repository.
  *   'vcs': The unique string identifier of the version control system
  *          that powers this repository.
@@ -882,6 +896,9 @@ function versioncontrol_delete_account($uid, $username, $repository) {
  * @param $repository_urls
  *   An array of repository viewer URLs. How this array looks like is
  *   defined by the corresponding URL backend.
+ *
+ * @return
+ *   The finalized repository array, including the 'repo_id' element.
  */
 function versioncontrol_insert_repository($repository, $repository_urls) {
   $repository['repo_id'] = db_next_id('{versioncontrol_repositories}_repo_id');
@@ -922,6 +939,12 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
 
   // Everything's done, let the world know about it!
   module_invoke_all('versioncontrol_repository', 'insert', $repository);
+
+  watchdog('special',
+            'Version Control API: added repository '. $repository['name'],
+            l('view', 'admin/project/versioncontrol-repositories'));
+
+  return $repository;
 }
 
 /**
@@ -995,6 +1018,10 @@ function versioncontrol_update_repository($repository, $repository_urls) {
 
   // Everything's done, let the world know about it!
   module_invoke_all('versioncontrol_repository', 'update', $repository);
+
+  watchdog('special',
+            'Version Control API: updated repository '. $repository['name'],
+            l('view', 'admin/project/versioncontrol-repositories'));
 }
 
 /**
@@ -1018,7 +1045,7 @@ function versioncontrol_delete_repository($repository) {
   foreach ($branches as $branch) {
     versioncontrol_delete_branch_operation($branch);
   }
-  db_query("DELETE FROM {versioncontrol_cvs_branches}
+  db_query("DELETE FROM {versioncontrol_branches}
             WHERE repo_id = '%d'", $repository['repo_id']);
 
   // Delete commits.
@@ -1062,6 +1089,10 @@ function versioncontrol_delete_repository($repository) {
   // TODO: abstract out repository URLs into separate backends
   db_query("DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = '%d'",
            $repository['repo_id']);
+
+  watchdog('special',
+            'Version Control API: deleted repository '. $repository['name'],
+            l('view', 'admin/project/versioncontrol-repositories'));
 }
 
 
