@@ -14,6 +14,82 @@
 
 
 /**
+ * Form callback for "admin/project/versioncontrol-settings/authorization":
+ * Provide a form for account authorization selection and settings.
+ */
+function versioncontrol_admin_account_authorization_settings() {
+  $form = array();
+  $options = array_merge(
+    array('none' => t('No approval required')),
+    versioncontrol_get_authorization_methods()
+  );
+  $presets = _versioncontrol_get_admin_presets();
+
+  $form['#id'] = 'vcs-account-authorization-settings-form';
+
+  $form['versioncontrol_authorization_method'] = array(
+    '#type' => 'select',
+    '#title' => t('Account authorization mode'),
+    '#description' => t('Determines the way that users gain access to VCS repositories.'),
+    '#options' => $options,
+    '#default_value' => versioncontrol_get_current_authorization_method(),
+    '#weight' => -10,
+  );
+
+  $form['versioncontrol_register_form'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account registration form strings'),
+    '#description' => t('The following messages are shown on the !repository-selection-page that leads to the account registration form.', array('!repository-selection-page' => l(t('repository selection page'), 'versioncontrol/register/demo'))),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 0,
+  );
+  $form['versioncontrol_register_form']['versioncontrol_registration_message_unauthorized'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message to unauthorized users'),
+    '#description' => t('Message to show to anonymous users and to users without the \'use version control systems\' permission.'),
+    '#default_value' => variable_get(
+      'versioncontrol_registration_message_unauthorized',
+      $presets['versioncontrol_registration_message_unauthorized']
+    ),
+  );
+  $form['versioncontrol_register_form']['versioncontrol_registration_message_authorized'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message to registering users'),
+    '#description' => t('Message to show to users who are in the process of selecting a repository in order to create a VCS account. If there\'s only one repository on this site, users will never get to see this message.'),
+    '#default_value' => variable_get(
+      'versioncontrol_registration_message_authorized',
+      $presets['versioncontrol_registration_message_authorized']
+    ),
+  );
+
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Save configuration'),
+    '#weight' => 100,
+  );
+
+  return $form;
+}
+
+/**
+ * Submit handler for the authorization settings form.
+ * system_settings_form() is left out because it's nasty for modules that
+ * hook into this form and don't want to use automatic variable saving.
+ */
+function versioncontrol_admin_account_authorization_settings_submit($form_id, $form_values) {
+  $value_names = array(
+    'versioncontrol_authorization_method',
+    'versioncontrol_registration_message_unauthorized',
+    'versioncontrol_registration_message_authorized',
+  );
+  foreach ($value_names as $name) {
+    variable_set($name, $form_values[$name]);
+  }
+}
+
+
+/**
  * Form callback for "admin/project/versioncontrol-accounts":
  * A list of accounts with filtering possibilities.
  */
@@ -118,60 +194,6 @@ function versioncontrol_admin_account_list() {
     '#value' => theme('table', $header, $rows)
   );
   return $form;
-}
-
-
-/**
- * Form callback for "admin/project/versioncontrol-settings/authorization":
- * Provide a form for account authorization selection and settings.
- */
-function versioncontrol_admin_account_authorization_settings() {
-  $form = array();
-  $options = array_merge(
-    array('none' => t('No approval required')),
-    versioncontrol_get_authorization_methods()
-  );
-  $presets = _versioncontrol_get_admin_presets();
-
-  $form['#id'] = 'vcs-account-authorization-settings-form';
-
-  $form['versioncontrol_authorization_method'] = array(
-    '#type' => 'select',
-    '#title' => t('Account authorization mode'),
-    '#description' => t('Determines the way that users gain access to VCS repositories.'),
-    '#options' => $options,
-    '#default_value' => versioncontrol_get_current_authorization_method(),
-    '#weight' => -20,
-  );
-
-  $form['versioncontrol_register_form'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Account registration form strings'),
-    '#description' => t('The following messages are shown on the !repository-selection-page (if there\'s more than one repository to choose from) that leads to the account registration form.', array('!repository-selection-page' => l(t('repository selection page'), 'versioncontrol/register/demo'))),
-    '#collapsible' => TRUE,
-    '#collapsed' => TRUE,
-    '#weight' => -17,
-  );
-  $form['versioncontrol_register_form']['versioncontrol_registration_message_unauthorized'] = array(
-    '#type' => 'textarea',
-    '#title' => t('Message to unauthorized users'),
-    '#description' => t('Message to show to anonymous users and to users without the \'use version control systems\' permission.'),
-    '#default_value' => variable_get(
-      'versioncontrol_registration_message_unauthorized',
-      $presets['versioncontrol_registration_message_unauthorized']
-    ),
-  );
-  $form['versioncontrol_register_form']['versioncontrol_registration_message_authorized'] = array(
-    '#type' => 'textarea',
-    '#title' => t('Message to applying users'),
-    '#description' => t('Message to show to users who are applying for commit access.'),
-    '#default_value' => variable_get(
-      'versioncontrol_registration_message_authorized',
-      $presets['versioncontrol_registration_message_authorized']
-    ),
-  );
-
-  return system_settings_form($form);
 }
 
 
@@ -485,6 +507,12 @@ function versioncontrol_account_edit_form_validate($form_id, $form_values) {
     );
   }
   else {
+    // Check for unallowed characters. (Only alphanumeric ones are allowed.)
+    if (ereg("[^[:alnum:]]", $username)) {
+      form_set_error('account_name',
+        t('The specified @vcs username is invalid.', array('@vcs' => $vcs_name))
+      );
+    }
     // Check for duplicates.
     $existing_uid = versioncontrol_get_account_uid_for_username($username, $repository, TRUE);
     if ($existing_uid && $uid != $existing_uid) {
@@ -701,7 +729,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
 
   $form['repository_messages'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Account registration'),
+    '#title' => t('Account registration form strings'),
     '#description' => t('The following message is shown on the !account-registration-page for this repository.', array('!account-registration-page' => l(t('account registration page'), 'versioncontrol/register/demo/'. $repo_id))),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
@@ -801,7 +829,6 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
   // Reconstruct the repository from the $form_values that were passed.
   $repository = array();
   $repository_urls = array();
-  $backends = versioncontrol_get_backends();
 
   foreach ($form_values as $key => $value) {
     if (in_array($key, array('repo_id', 'vcs', 'root'))) {

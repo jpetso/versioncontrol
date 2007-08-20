@@ -28,7 +28,7 @@ function commit_restrictions_form_alter($form_id, &$form) {
         '#title' => t('Commit restrictions'),
         '#collapsible' => TRUE,
         '#collapsed' => TRUE,
-        '#weight' => 4,
+        '#weight' => 6,
       );
       $form['directory_restrictions']['allowed_paths'] = array(
         '#type' => 'textfield',
@@ -57,7 +57,7 @@ function commit_restrictions_form_alter($form_id, &$form) {
         '#title' => t('Branch and tag restrictions'),
         '#collapsible' => TRUE,
         '#collapsed' => TRUE,
-        '#weight' => 5,
+        '#weight' => 7,
       );
       $form['branch_tag_restrictions']['valid_branches'] = array(
         '#type' => 'textfield',
@@ -123,19 +123,21 @@ function commit_restrictions_versioncontrol_extract_repository_data($form_values
  *   repository array like the one returned by versioncontrol_get_repository(),
  *   so it consists of the following elements:
  *
- *   'repo_id': The unique repository id.
- *   'name': The user-visible name of the repository.
- *   'vcs': The unique string identifier of the version control system
- *          that powers this repository.
- *   'root': The root directory of the repository. In most cases,
- *           this will be a local directory (e.g. '/var/repos/drupal'),
- *           but it may also be some specialized string for remote repository
- *           access. How this string may look like depends on the backend.
- *   'url_backend': The prefix (excluding the trailing underscore)
- *                  for URL backend retrieval functions.
- *   '[xxx]_specific': An array of VCS specific additional repository
- *                     information. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'repo_id': The unique repository id.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *            that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *             this will be a local directory (e.g. '/var/repos/drupal'),
+ *             but it may also be some specialized string for remote repository
+ *             access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *                    for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *                       information. How this array looks like is defined by the
+ *                       corresponding backend module (versioncontrol_[xxx]).
+ *   - '???': Any other additions that modules added by implementing
+ *            versioncontrol_extract_repository_data().
  */
 function commit_restrictions_versioncontrol_repository($op, $repository) {
   $restrictions = $repository['commit_restrictions'];
@@ -147,7 +149,7 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
       // fall through
 
     case 'insert':
-      if (isset($restrictions) && ($op == 'add' || $op == 'move')) {
+      if (isset($restrictions)) {
         db_query("INSERT INTO {commit_restrictions}
                   (repo_id, allowed_paths, forbidden_paths,
                    deny_undefined_paths, valid_branches, valid_tags)
