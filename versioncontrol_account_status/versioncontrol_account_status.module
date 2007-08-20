@@ -1,0 +1,912 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Version Control Account Status - Require users to submit a motivation text
+ * and meet approval of version control administrators before their VCS account
+ * is enabled.
+ *
+ * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ */
+
+// Status values for VCS access applications.
+define('VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED', 0); // not in the database
+define('VERSIONCONTROL_ACCOUNT_STATUS_QUEUED',    1); // not yet looked at
+define('VERSIONCONTROL_ACCOUNT_STATUS_PENDING',   2); // needs more info from the applicant
+define('VERSIONCONTROL_ACCOUNT_STATUS_APPROVED',  3); // evaluated and approved
+define('VERSIONCONTROL_ACCOUNT_STATUS_DECLINED',  4); // evaluated, but not approved
+define('VERSIONCONTROL_ACCOUNT_STATUS_DISABLED',  5); // was approved, but has been revoked
+
+// Special repo_id value which means "all repositories" in this module.
+define('VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL',    0);
+
+/**
+ * Implementation of hook_versioncontrol_authorization_methods().
+ *
+ * @return
+ *   A structured array containing information about authorization methods
+ *   provided by this module, wrapped in a structured array. Array keys are
+ *   the unique string identifiers of each authorization method, and
+ *   array values are the user-visible method descriptions (wrapped in t()).
+ */
+function versioncontrol_account_status_versioncontrol_authorization_methods() {
+  return array(
+    'versioncontrol_account_status_global' => t('Site-wide account approval'),
+    'versioncontrol_account_status_repository' => t('Per-repository account approval'),
+  );
+}
+
+/**
+ * Retrieve a list of necessary requirements that each applicant must agree to
+ * in order to get the application approved. This list can be altered by
+ * hooking into hook_versioncontrol_account_status_conditions_alter(&$conditions)
+ * (sorry for the long function name) so that it's a breeze to replace
+ * the standard precondition with site specific ones.
+ *
+ * @return
+ *   An array of conditions that are afterwards transformed into form elements.
+ *   Each condition will be shown to the user together with "No"/"Yes"
+ *   radio buttons. All the elements must be marked with "Yes" by the user
+ *   in order to get the application submitted.
+ *   The array key of each element will be the array key of the corresponding
+ *   form element, and the value is the again a structured array that contains
+ *   the following user-visible (translated) strings:
+ *   - 'description': The statement that is shown on the application form.
+ *   - 'error': The error message that is shown if the user stays with "No".
+ */
+function _versioncontrol_account_status_get_conditions($default_condition_description, $default_condition_error) {
+  $conditions = array(
+    'policy' => array(
+      'description' => $default_condition_description,
+      'error' => $default_condition_error,
+    ),
+  );
+  foreach (module_implements('versioncontrol_account_status_conditions_alter') as $module) {
+    $function = $module .'_versioncontrol_account_status_conditions_alter';
+    $function($conditions);
+  }
+  return $conditions;
+}
+
+/**
+ * Return information about the VCS account status of a given user,
+ * either globally or for a given repository.
+ *
+ * @param $uid
+ *   The Drupal user id of the user whose account status data
+ *   should be retrieved.
+ * @param $repo_id
+ *   A valid repository id if the status should be retrieved for a single
+ *   repository, or VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL if the user's
+ *   site-wide status data should be retrieved.
+ *
+ * @return
+ *   A structured array of account status data,
+ *   containing the following elements:
+ *
+ *   - 'uid': The user id that was passed to this function.
+ *   - 'repo_id': The repository id that was passed to this function.
+ *   - 'motivation': The motivation text that the user submitted.
+ *                   If no motivation text has been submitted yet,
+ *                   this is an empty string.
+ *   - 'status': One of the status constants:
+ *     - VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED:
+ *         There is no status data yet for this user and repository,
+ *         which means that the user hasn't applied for approval yet.
+ *     - VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
+ *         The user has applied for an approval, but the VCS administrator
+ *         hasn't yet looked at the application.
+ *     - VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
+ *         The administrator needs more information from the applicant
+ *         in order to properly evaluate the application.
+ *     - VERSIONCONTROL_ACCOUNT_STATUS_APPROVED:
+ *         The application has been evaluated and approved,
+ *         and the user may have access to the repository.
+ *     - VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
+ *         The application has been evaluated and disapproved.
+ *         The user can, however, reapply.
+ *     - VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
+ *         The application had been approved in the past, but was revoked.
+ *         The user doesn't have repository access anymore.
+ */
+function versioncontrol_account_status_get($uid, $repo_id) {
+  $result = db_query("SELECT uid, repo_id, motivation, status
+                      FROM {versioncontrol_account_status_users}
+                      WHERE uid = '%d' AND repo_id = '%d'", $uid, $repo_id);
+
+  while ($data = db_fetch_array($result)) {
+    return $data;
+  }
+  // If there is no entry, return a default result value.
+  return array(
+    'uid' => $uid,
+    'repo_id' => $repo_id,
+    'motivation' => '',
+    'status' => VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED,
+  );
+}
+
+/**
+ * Store VCS account status information in the database.
+ *
+ * @param $data
+ *   A structured array in the same format as the result value
+ *   of versioncontrol_account_status_get().
+ */
+function versioncontrol_account_status_set($status_data) {
+  db_query("DELETE FROM {versioncontrol_account_status_users}
+            WHERE uid = '%d' AND repo_id = '%d'",
+            $status_data['uid'], $status_data['repo_id']);
+  db_query("INSERT INTO {versioncontrol_account_status_users}
+            (uid, repo_id, motivation, status)
+            VALUES ('%d', '%d', '%s', '%d')",
+            $status_data['uid'], $status_data['repo_id'],
+            $status_data['motivation'], $status_data['status']);
+}
+
+
+/**
+ * Implementation of hook_form_alter():
+ * Change the form according to the user's account status.
+ */
+function versioncontrol_account_status_form_alter($form_id, &$form) {
+  switch ($form['#id']) {
+    case 'versioncontrol-settings-form':
+      versioncontrol_account_status_global_settings_form_alter($form_id, $form);
+      break;
+
+    case 'vcs-repository-form':
+      $selected_auth_method = versioncontrol_get_current_authorization_method();
+      if ($selected_auth_method == 'versioncontrol_account_status_repository') {
+        versioncontrol_account_status_repository_settings_form_alter($form_id, $form);
+      }
+      break;
+
+    case 'vcs-account-form':
+    case 'vcs-account-indirection-form':
+      $selected_auth_method = versioncontrol_get_current_authorization_method();
+      if ($selected_auth_method == 'versioncontrol_account_status_global') {
+        versioncontrol_account_status_form_alter_account(
+          $form_id, &$form, VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL
+        );
+      }
+      else if ($selected_auth_method == 'versioncontrol_account_status_repository') {
+        if ($form['#id'] == 'vcs-account-indirection-form') {
+          break;
+        }
+        versioncontrol_account_status_form_alter_account(
+          $form_id, &$form, $form['#repository']['repo_id']
+        );
+      }
+      break;
+  }
+}
+
+
+/**
+ * Implementation of hook_form_alter() for Version Control API's
+ * account authorization settings form.
+ */
+function versioncontrol_account_status_global_settings_form_alter($form_id, &$form) {
+  $form['#validate']['versioncontrol_account_status_global_settings_form_validate'] = array();
+
+  $form['versioncontrol_account_status_application_form'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Site-wide commit access application form strings'),
+    '#description' => t('If site-wide account approval is enabled, the following messages are shown on the application form (which replaces the account registration forms until the account is approved).'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 1,
+  );
+  $form['versioncontrol_account_status_email_form'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Site-wide commit access application e-mail messages'),
+    '#description' => t('The following messages are templates for
+      e-mail messages sent to users who have applied for commit access.
+      The following variables are substituted (where available)
+      when the message is sent.
+      <ul>
+        <li>%account-name - The Drupal username of the applicant.</li>
+        <li>%user-account-url - The URL of the applicant\'s user page.</li>
+        <li>%register-account-url - The URL where the user can register new VCS accounts.</li>
+        <li>%admin-message - Additional guidelines specified by the repository administrator.</li>
+        <li>%admin-name - The Drupal username of the repository administrator.</li>
+        <li>%motivation-message - The motivation message of the applicant.</li>
+        <li>%client-information - The applicant\'s IP and browser related information.</li>
+      </ul>'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 2,
+  );
+
+  $strings = _versioncontrol_account_status_get_strings(VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL);
+  versioncontrol_account_status_settings_form_alter($form_id, &$form, $strings);
+}
+
+/**
+ * Implementation of hook_form_alter() for Version Control API's
+ * repository settings form.
+ */
+function versioncontrol_account_status_repository_settings_form_alter($form_id, &$form) {
+  $backends = versioncontrol_get_backends();
+  $vcs_name = $backend[$form['#vcs']]['name'];
+
+  // Hide the "Account registration form strings" field set,
+  // as it is never used when per-repository approval is enabled.
+  $form['registration_message'] = array(
+    '#type' => 'value',
+    '#value' => $form['repository_messages']['registration_message']['#default_value'],
+  );
+  unset($form['repository_messages']);
+
+  $form['versioncontrol_account_status_application_form'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account application form strings'),
+    '#description' => t('If site-wide account approval is enabled, the following messages are shown on the application form (which replaces the account registration forms until the account is approved).'),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 2,
+  );
+  $form['versioncontrol_account_status_email_form'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account application e-mail messages'),
+    '#description' => t('The following messages are templates for
+      e-mail messages sent to users who have applied for a @vcs account.
+      The following variables are substituted (where available)
+      when the message is sent.
+      <ul>
+        <li>%account-name - The Drupal username of the applicant.</li>
+        <li>%user-account-url - The URL of the applicant\'s user page.</li>
+        <li>%manage-account-url - The URL where the user can manage his VCS account for the appropriate repository.</li>
+        <li>%vcs-name - The name of the version control system, for example "CVS" or "Subversion".</li>
+        <li>%repository-name - The name of the repository for the applied account.</li>
+        <li>%admin-message - Additional guidelines specified by the repository administrator.</li>
+        <li>%admin-name - The Drupal username of the repository administrator.</li>
+        <li>%motivation-message - The motivation message of the applicant.</li>
+        <li>%client-information - The applicant\'s IP and browser related information.</li>
+      </ul>', array('@vcs' => $vcs_name)
+    ),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => 3,
+  );
+
+  $repo_id = $form['#repository']['repo_id'];
+  if ($repo_id == 0) { // new repository
+    $strings = _versioncontrol_account_status_get_presets();
+  }
+  else {
+    $strings = _versioncontrol_account_status_get_strings($repo_id);
+  }
+  versioncontrol_account_status_settings_form_alter($form_id, &$form, $strings);
+}
+
+/**
+ * Insert the actual value widgets for the previously inserted fieldsets.
+ */
+function versioncontrol_account_status_settings_form_alter($form_id, &$form, $strings) {
+  // Markup strings
+  $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_application_message'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message to applying users'),
+    '#description' => t('Message to show to authenticated users who are applying for a CVS account.'),
+    '#default_value' => $strings['application_message'],
+  );
+  $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_default_condition_description'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Required pledge'),
+    '#description' => t('A statement that the user needs to answer with "Yes" in order to proceed with the application. (If more of these statements are required, you can add those with a custom module.)'),
+    '#default_value' => $strings['default_condition_description'],
+    '#size' => 100,
+  );
+  $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_default_condition_error'] = array(
+    '#type' => 'textfield',
+    '#title' => t('Error message for the required pledge'),
+    '#description' => t('The error text that is shown when the user doesn\'t select "Yes" for the above statement.'),
+    '#default_value' => $strings['default_condition_error'],
+    '#size' => 100,
+  );
+  $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_motivation_description'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Motivation message description'),
+    '#description' => t('Text to display below the motivation field of an application.'),
+    '#default_value' => $strings['motivation_description'],
+  );
+
+  // Email strings
+  $form['versioncontrol_account_status_email_form']['versioncontrol_account_status_user_notification_email'] = array(
+    '#type' => 'textarea',
+    '#title' => t('"Application received" e-mail message'),
+    '#description' => t('The message to send to users whose application has been received.'),
+    '#default_value' => $strings['user_notification_email'],
+  );
+  $form['versioncontrol_account_status_email_form']['versioncontrol_account_status_admin_notification_email'] = array(
+    '#type' => 'textarea',
+    '#title' => t('"New application" e-mail message'),
+    '#description' => t('The message sent to the administrator when a user has submitted an application.'),
+    '#default_value' => $strings['admin_notification_email'],
+  );
+  $form['versioncontrol_account_status_email_form']['versioncontrol_account_status_approved_email'] = array(
+    '#type' => 'textarea',
+    '#title' => t('"Account approved" e-mail message'),
+    '#description' => t('The message to send to users whose accounts have been approved.'),
+    '#default_value' => $strings['approved_email'],
+  );
+  $form['versioncontrol_account_status_email_form']['versioncontrol_account_status_pending_email'] = array(
+    '#type' => 'textarea',
+    '#title' => t('"Account pending" e-mail message'),
+    '#description' => t('The message to send to users whose accounts cannot be approved yet.'),
+    '#default_value' => $strings['pending_email'],
+  );
+  $form['versioncontrol_account_status_email_form']['versioncontrol_account_status_declined_email'] = array(
+    '#type' => 'textarea',
+    '#title' => t('CVS account declined e-mail message'),
+    '#description' => t('The message to send to users whose accounts have been declined.'),
+    '#default_value' => $strings['declined_email'],
+  );
+  $form['versioncontrol_account_status_email_form']['versioncontrol_account_status_disabled_email'] = array(
+    '#type' => 'textarea',
+    '#title' => t('CVS account disabled e-mail message'),
+    '#description' => t('The message to send to users whose accounts have been disabled.'),
+    '#default_value' => $strings['disabled_email'],
+  );
+}
+
+/**
+ * Submit handler for the string values that were inserted into the
+ * authorization settings form.
+ */
+function versioncontrol_account_status_global_settings_form_submit($form_id, $form_values) {
+  $repo_id = VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL;
+  $value_names = _versioncontrol_account_status_get_value_names();
+  $strings = array();
+
+  foreach ($value_names as $name) {
+    $strings[$name] = $form_values['versioncontrol_account_status_'. $name];
+  }
+  _versioncontrol_account_status_set_strings($repo_id, $strings);
+}
+
+/**
+ * Implementation of hook_versioncontrol_extract_repository_data():
+ * Extract message and email strings from
+ * the repository editing/adding form's submitted values.
+ */
+function versioncontrol_account_status_versioncontrol_extract_repository_data($form_values) {
+  $value_names = _versioncontrol_account_status_get_value_names();
+  $strings = array();
+
+  foreach ($value_names as $name) {
+    $strings[$name] = $form_values['versioncontrol_account_status_'. $name];
+  }
+  return array(
+    'versioncontrol_account_status' => array(
+      'strings' => $strings,
+    ),
+  );
+}
+
+/**
+ * Implementation of hook_versioncontrol_repository():
+ * Manage (insert, update or delete) additional repository data in the database.
+ *
+ * @param $op
+ *   Either 'insert' when the repository has just been created, or 'update'
+ *   when repository name, root, URL backend or module specific data change,
+ *   or 'delete' if it will be deleted after this function has been called.
+ *
+ * @param $repository
+ *   The repository array containing the repository. It's a single
+ *   repository array like the one returned by versioncontrol_get_repository(),
+ *   so it consists of the following elements:
+ *
+ *   - 'repo_id': The unique repository id.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *            that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *             this will be a local directory (e.g. '/var/repos/drupal'),
+ *             but it may also be some specialized string for remote repository
+ *             access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *                    for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *                       information. How this array looks like is defined by the
+ *                       corresponding backend module (versioncontrol_[xxx]).
+ *   - '???': Any other additions that modules added by implementing
+ *            versioncontrol_extract_repository_data().
+ */
+function versioncontrol_account_status_versioncontrol_repository($op, $repository) {
+  $strings = $repository['versioncontrol_account_status']['strings'];
+
+  switch ($op) {
+    case 'update':
+    case 'insert':
+      _versioncontrol_account_status_set_strings($repository['repo_id'], $strings);
+      break;
+
+    case 'delete':
+      db_query("DELETE FROM {versioncontrol_account_status_strings}
+                WHERE repo_id = '%d'", $repository['repo_id']);
+      break;
+  }
+}
+
+function _versioncontrol_account_status_get_value_names() {
+  return array(
+    'application_message',
+    'default_condition_description',
+    'default_condition_error',
+    'motivation_description',
+    'user_notification_email',
+    'admin_notification_email',
+    'approved_email',
+    'pending_email',
+    'declined_email',
+    'disabled_email',
+  );
+}
+
+
+/**
+ * Implementation of hook_form_alter() for the indirection and
+ * register/edit account forms.
+ */
+function versioncontrol_account_status_form_alter_account($form_id, &$form, $repo_id) {
+  global $user;
+
+  $is_edit_form = isset($form['account']);
+  $is_indirection_form = !$is_edit_form;
+
+  $uid = $form['uid']['#value'];
+  $data = versioncontrol_account_status_get($uid, $repo_id);
+
+  $admin_access = user_access('administer version control systems');
+  if ($admin_access) {
+    versioncontrol_account_status_form_alter_account_edit($form, $data, $admin_access);
+  }
+
+  switch ($data['status']) {
+    case VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
+    case VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
+      $form = versioncontrol_account_status_pending_form($data);
+      break;
+
+    case VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED:
+    case VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
+    case VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
+    case VERSIONCONTROL_ACCOUNT_STATUS_APPROVED:
+      if ($is_indirection_form && $data['status'] == VERSIONCONTROL_ACCOUNT_STATUS_APPROVED) {
+        break; // not necessary, it's shown on the register/edit page anyhow
+      }
+      else {
+        versioncontrol_account_status_form_alter_account_edit($form, $data, $admin_access);
+      }
+      break;
+
+    default: // does not happen, but I cannot live without a default branch
+      break;
+  }
+}
+
+function versioncontrol_account_status_pending_form($status_data) {
+  $form = array();
+
+  $form['pending'] = array(
+    '#type' => 'markup',
+    '#values' => t('Your application has been received and is currently pending review.'),
+    '#prefix' => '<p>',
+    '#suffix' => '</p>',
+  );
+  if (module_exists('contact')) {
+    $form['contact'] = array(
+      '#type' => 'markup',
+      '#values' => t('If there has been an undue delay in the processing of your application, please use the !contact-form to get in touch with us.', array('!contact-form' => l(t('contact form'), 'contact'))),
+      '#prefix' => '<p>',
+      '#suffix' => '</p>',
+    );
+  }
+
+  return $form;
+}
+
+function versioncontrol_account_status_form_alter_account_edit(&$form, $status_data, $admin_access) {
+  global $user;
+
+  if (!valid_email_address($user->mail)) {
+    drupal_set_message(t('You need to provide a valid e-mail address to request commit access. Please edit your user information.'), 'error');
+    drupal_goto('user/'. $user->uid .'/edit');
+  }
+
+  $form['versioncontrol_account_status_repo_id'] = array(
+    '#type' => 'value',
+    '#value' => $status_data['repo_id'],
+  );
+  $form['versioncontrol_account_status_uid'] = array(
+    '#type' => 'value',
+    '#value' => $status_data['uid'],
+  );
+
+  $is_edit_form = isset($form['account']);
+  $is_indirection_form = !$is_edit_form;
+
+  $status = $status_data['status'];
+  $strings = _versioncontrol_account_status_get_strings($status_data['repo_id']);
+
+  if ($status == VERSIONCONTROL_ACCOUNT_STATUS_DECLINED || $status == VERSIONCONTROL_ACCOUNT_STATUS_DISABLED) {
+    $form['reapplication'] = array(
+      '#type' => 'value',
+      '#value' => TRUE,
+    );
+
+    $form['reapplication_message'] = array(
+      '#type' => 'item',
+      '#value' => t('If you are interested in reapplying for commit access, please amend your application accordingly and resubmit.'),
+      '#prefix' => '<p><em>',
+      '#suffix' => '</em></p>',
+      '#weight' => -100,
+    );
+    // Since disabled accounts (possibly with a commit history) are also
+    // eligible for reapplication, the username field is set to disabled.
+    if ($is_edit_form) {
+      $form['account']['account_name']['#disabled'] = TRUE;
+    }
+  }
+
+  $form['overview'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Overview'),
+    '#weight' => -100,
+  );
+  $form['overview']['overview'] = array(
+    '#type' => 'markup',
+    '#value' => $strings['application_message'],
+  );
+
+  $conditions = _versioncontrol_account_status_get_conditions(
+    $strings['default_condition_description'], $strings['default_condition_error']
+  );
+
+  $form['motivation'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Motivation'),
+    '#weight' => 2,
+  );
+  foreach ($conditions as $element_name => $texts) {
+    $form['motivation'][$element_name] = array(
+      '#type' => 'radios',
+      '#title' => $texts['description'],
+      '#default_value' => 0,
+      '#options' => array(0 => t('No'), 1 => t('Yes')),
+    );
+  }
+  $form['motivation']['motivation'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Motivation'),
+    '#default_value' => $status_data['motivation'],
+    '#cols' => 60,
+    '#rows' => 9,
+    '#description' => $strings['motivation_description'],
+    '#required' => TRUE,
+  );
+
+  if ($is_edit_form && !$admin_access) {
+    $selected_auth_method = versioncontrol_get_current_authorization_method();
+
+    if ($selected_auth_method == 'versioncontrol_account_status_global') {
+      unset($form['account']);
+      unset($form['submit']);
+      // Replace the validation and submit handlers
+      $form['#validate'] = array('versioncontrol_account_status_account_edit_validate' => array());
+      $form['#submit'] = array('versioncontrol_account_status_account_edit_submit' => array());
+    }
+    else if ($selected_auth_method == 'versioncontrol_account_status_repository') {
+      if (isset($form['submit'])) {
+        $form['submit']['#value'] = t(
+          'Request @vcs account', array('@vcs' => $form['vcs_name']['#value'])
+        );
+      }
+      // Add our validation and submit handlers, but leave the original ones
+      $form['#validate']['versioncontrol_account_status_account_edit_validate'] = array();
+      $form['#submit']['versioncontrol_account_status_account_edit_submit'] = array();
+    }
+  }
+  else if ($is_indirection_form && !$admin_access) {
+    unset($form['repository']);
+    $form['motivation']['submit'] = array(
+      '#type' => 'submit',
+      '#value' => t('Request commit access'),
+      '#weight' => 100,
+    );
+    // Replace the validation and submit handlers
+    $form['#validate'] = array('versioncontrol_account_status_account_edit_validate' => array());
+    $form['#submit'] = array('versioncontrol_account_status_account_edit_submit' => array());
+  }
+  else if ($admin_access) {
+    if (isset($form['repository'])) { // on the indirection form
+      $form['repository']['submit']['#value'] = t('Save account status and create account');
+    }
+    // Add our validation and submit handlers, but leave the original ones
+    $form['#validate']['versioncontrol_account_status_account_edit_validate'] = array();
+    $form['#submit']['versioncontrol_account_status_account_edit_submit'] = array();
+  }
+}
+
+/**
+ * The validation handler for the application form (wherever it occurs).
+ */
+function versioncontrol_account_status_account_edit_validate($form_id, $form_values) {
+  $strings = _versioncontrol_account_status_get_strings(
+    $form_values['versioncontrol_account_status_repo_id']
+  );
+  $conditions = _versioncontrol_account_status_get_conditions(
+    $strings['default_condition_description'], $strings['default_condition_error']
+  );
+  foreach ($conditions as $element_name => $texts) {
+    if ($form_values[$element_name] != 1) {
+      form_set_error($element_name, $texts['error']);
+    }
+  }
+}
+
+/**
+ * The submit handler for the application form (wherever it occurs).
+ * 
+ */
+function versioncontrol_account_status_account_edit_submit($form_id, $form_values) {
+  global $user;
+
+  $applicant_uid = $form['versioncontrol_account_status_uid'];
+  $repo_id = $form_values['versioncontrol_account_status_repo_id'];
+  $data = versioncontrol_account_status_get($applicant_uid, $repo_id);
+  $data['motivation'] = $form_values['motivation'];
+
+  // TODO: only send if the user submitted this by himself
+
+  $strings = _versioncontrol_account_status_get_strings($repo_id);
+  $applicant_user = user_load(array('uid' => $applicant_uid));
+
+  // Send an e-mail to the CVS administrators.
+  $from = "$user->name <$user->mail>";
+
+  $client_information = array();
+  $client_information[] = @gethostbyaddr($_SERVER["REMOTE_ADDR"]);
+  if ($_SERVER['HTTP_X_FORWARDED_FOR']) {
+    $client_information[] = @gethostbyaddr($_SERVER['HTTP_X_FORWARDED_FOR']);
+  }
+  $client_information[] = $_SERVER['HTTP_USER_AGENT'];
+
+  $message_variables = array(
+    '%account-name' => $applicant_user->name,
+    '%user-account-url' => url('user/'. $applicant_user->uid, NULL, NULL, TRUE),
+    '%motivation-message' => wordwrap($form_values['motivation'], 72),
+    '%client-information' => implode("\n", $client_information)
+  );
+
+  $data['status'] = VERSIONCONTROL_ACCOUNT_STATUS_QUEUED;
+  versioncontrol_account_status_set($data);
+  $subject = isset($form_values['reapplication'])
+             ? t('CVS account request [reapplication]')
+             : t('CVS account request');
+
+  $message = strtr($strings['admin_notification_email'], $message_variables);
+  drupal_mail(
+    'versioncontrol_email_submit_admin',
+    variable_get('versioncontrol_email_address', 'versioncontrol@example.com'),
+    t('VCS account request'),
+    $message, $from,
+    array('X-Mailer' => 'Drupal')
+  );
+}
+
+/**
+ * Return the admin-defined strings for the given repository id (which may
+ * also be VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL), or an array of preset strings
+ * if the admin hasn't defined any yet.
+ */
+function _versioncontrol_account_status_get_strings($repo_id) {
+  $result = db_query("SELECT application_message, default_condition_description,
+                             default_condition_error, motivation_description,
+                             user_notification_email, admin_notification_email,
+                             approved_email, pending_email, declined_email,
+                             disabled_email
+                      FROM {versioncontrol_account_status_strings}
+                      WHERE repo_id = '%d'", $repo_id);
+  while ($strings = db_fetch_array($result)) {
+    return $strings;
+  }
+
+  // If no entry was found, return the default values.
+  $strings = _versioncontrol_account_status_get_presets();
+
+  if ($repo_id == VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL) {
+    $strings['application_message'] = $strings['application_message_global'];
+    $strings['approved_email'] = $strings['approved_email_global'];
+  }
+  else {
+    $strings['application_message'] = $strings['application_message_repository'];
+    $strings['approved_email'] = $strings['approved_email_repository'];
+  }
+  unset($strings['application_message_global']);
+  unset($strings['application_message_repository']);
+  unset($strings['approved_email_global']);
+  unset($strings['approved_email_repository']);
+
+  return $strings;
+}
+
+/**
+ * Store a set of admin-defined strings for the given repository id (which may
+ * also be VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL) in the database.
+ */
+function _versioncontrol_account_status_set_strings($repo_id, $strings) {
+  db_query("DELETE FROM {versioncontrol_account_status_strings}
+            WHERE repo_id = '%d'", $repo_id);
+
+  db_query(
+    "INSERT INTO {versioncontrol_account_status_strings}
+      (repo_id, application_message, default_condition_description,
+      default_condition_error, motivation_description, user_notification_email,
+      admin_notification_email, approved_email, pending_email, declined_email,
+      disabled_email)
+      VALUES ('%d', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s', '%s')",
+    $repo_id, $strings['application_message'], $strings['default_condition_description'],
+    $strings['default_condition_error'], $strings['motivation_description'],
+    $strings['user_notification_email'], $strings['admin_notification_email'],
+    $strings['approved_email'], $strings['pending_email'],
+    $strings['declined_email'], $strings['disabled_email']
+  );
+}
+
+/**
+ * Return preset values that are used in the application forms.
+ */
+function _versioncontrol_account_status_get_presets() {
+  $presets = array();
+
+  $presets['application_message_global'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below in order to request permission to create accounts for all repositories known to this site. Prior to applying, please ensure that:
+<ul>
+  <li>you have a concrete idea as to what you intend to contribute.</li>
+  <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
+</ul></p>',
+    array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
+  );
+
+  $presets['application_message_repository'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to request access to Drupal\'s CVS repository. Prior to applying, please ensure that:
+<ul>
+  <li>you have a concrete idea as to what you intend to contribute.</li>
+  <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
+</ul></p>',
+    array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
+  );
+
+  $presets['default_condition_description'] = t('I will adhere to both commit policies and licensing policies of this project');
+
+  $presets['default_condition_error'] = t('Your application cannot be considered: you need to agree with our policies in order to gain commit access.');
+
+  $presets['motivation_description'] = t('A message providing information about yourself and your planned contributions.
+<ul>
+  <li>Describe what modules, themes, or translations you want to maintain and why. Please provide as much information as possible along with appropriate links if available.</li>
+  <li>If your contributions implement existing functionality explain why you want to duplicate it or why you cannot extend any of the existing projects.</li>
+  <li>If you have been asked to co-maintain an existing module, please link to an issue where the current maintainer explicitly states so.</li>
+  <li>The more information, the better.</li>
+</ul>
+<strong>Failure to provide a well written motivation message will result in your
+application being denied.</strong>');
+
+
+  // For email strings, arguments are supplanted when the mail is sent.
+
+  $presets['user_notification_email'] = t('%account-name,
+  Your application for commit access has been received and will be processed as soon as possible.
+
+Kind regards,
+Drupal CVS administrator.');
+
+  $presets['admin_notification_email'] = t('User:
+  %user-account-url
+
+Motivation:
+  %motivation-message
+
+Client information:
+  %client-information');
+
+  $presets['approved_email_global'] = t('%account-name,
+  We are pleased to inform you that your request for commit access has been approved. You can now register repository accounts at %register-account-url.
+
+%admin-message
+Useful links:
+* http://cvs.drupal.org/viewcvs/drupal/contributions : The README.txt and FAQ.txt contain important guidelines on how to use your account.
+* http://drupal.org/handbook/cvs : The CVS handbook details all that you need to know to use the Drupal CVS repositories.
+* http://drupal.org/contributors-guide : The contributors guide should provide all pertinent information on contributing to Drupal.
+* http://drupal.org/mailing-lists : It is recommended that you subscribe to the appropriate Drupal mailing lists.
+
+Please do not hesitate to contact us if you have any questions. Welcome on board!
+
+Kind regards,
+%admin-name.
+
+--------------------
+User:
+  %user-account-url
+
+Motivation message:
+  %motivation-message');
+
+  $presets['approved_email_repository'] = t('%account-name,
+  We are pleased to inform you that your %vcs-name account request has been approved. It will be activated within one or two hours.
+
+%admin-message
+Useful links:
+* http://cvs.drupal.org/viewcvs/drupal/contributions : The README.txt and FAQ.txt contain important guidelines on how to use your account.
+* http://drupal.org/handbook/cvs : The CVS handbook details all that you need to know to use the Drupal CVS repositories.
+* http://drupal.org/contributors-guide : The contributors guide should provide all pertinent information on contributing to Drupal.
+* http://drupal.org/mailing-lists : It is recommended that you subscribe to the appropriate Drupal mailing lists.
+* %manage-account-url : Manage your %vcs-name password.
+
+Please do not hesitate to contact us if you have any questions. Welcome on board!
+
+Kind regards,
+%admin-name.
+
+--------------------
+User:
+  %user-account-url
+
+Motivation message:
+  %motivation-message');
+
+  $presets['pending_email'] = t('%account-name,
+  We cannot approve your CVS account yet. Please answer the questions below and reply at your earliest convenience.
+
+%admin-message
+Kind regards,
+%admin-name.
+
+--------------------
+User:
+  %user-account-url
+
+Motivation message:
+  %motivation-message');
+
+  $presets['declined_email'] = t('%account-name,
+  We are sorry to inform you that your request for commit access has been declined due to the reasons outlined below.
+
+%admin-message
+Please do not hesitate to contact us if you would like to discuss this further, as we can still review our position.
+
+Kind regards,
+%admin-name.
+
+--------------------
+User:
+  %user-account-url
+
+Motivation message:
+  %motivation-message');
+
+  $presets['disabled_email'] = t('%account-name,
+  We are sorry to inform you that your commit access permissions have been revoked due to the reasons outlined below.
+
+%admin-message
+Please do not hesitate to contact us if you would like to discuss this further, as we can still review our position.
+
+Kind regards,
+%admin-name.
+
+--------------------
+User:
+  %user-account-url
+
+Motivation message:
+  %motivation-message');
+
+  return $presets;
+}

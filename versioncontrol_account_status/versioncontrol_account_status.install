@@ -1,0 +1,56 @@
+<?php
+// $Id$
+/**
+ * @file
+ * Version Control Account Status - Require users to submit a motivation text
+ * and meet approval of version control administrators before their VCS account
+ * is enabled.
+ *
+ * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ */
+
+/**
+ * Implementation of hook_install().
+ */
+function versioncontrol_account_status_install() {
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      db_query("CREATE TABLE {versioncontrol_account_status_users} (
+        uid int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default '0',
+        motivation text,
+        status tinyint NOT NULL default '0',
+        PRIMARY KEY (uid, repo_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_account_status_strings} (
+        repo_id int unsigned NOT NULL default '0',
+        application_message text,
+        default_condition_description text,
+        default_condition_error text,
+        motivation_description text,
+        user_notification_email text,
+        admin_notification_email text,
+        approved_email text,
+        pending_email text,
+        declined_email text,
+        disabled_email text,
+        PRIMARY KEY (repo_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      break;
+
+    case 'pgsql':
+      break;
+  }
+}
+
+
+/**
+ * Implementation of hook_uninstall().
+ */
+function versioncontrol_account_status_uninstall() {
+  db_query("DROP TABLE {versioncontrol_account_status_users}");
+  db_query("DROP TABLE {versioncontrol_account_status_strings}");
+}
