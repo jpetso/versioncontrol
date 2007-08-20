@@ -131,6 +131,7 @@ function versioncontrol_admin_account_authorization_settings() {
     array('none' => t('No approval required')),
     versioncontrol_get_authorization_methods()
   );
+  $presets = _versioncontrol_get_admin_presets();
 
   $form['#id'] = 'vcs-account-authorization-settings-form';
 
@@ -143,6 +144,33 @@ function versioncontrol_admin_account_authorization_settings() {
     '#weight' => -20,
   );
 
+  $form['versioncontrol_register_form'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Account registration form strings'),
+    '#description' => t('The following messages are shown on the !repository-selection-page (if there\'s more than one repository to choose from) that leads to the account registration form.', array('!repository-selection-page' => l('repository selection page', 'versioncontrol/register'))),
+    '#collapsible' => TRUE,
+    '#collapsed' => TRUE,
+    '#weight' => -17,
+  );
+  $form['versioncontrol_register_form']['versioncontrol_register_message_unauthorized'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message to unauthorized users'),
+    '#description' => t('Message to show to anonymous users and to users without the \'use version control systems\' permission.'),
+    '#default_value' => variable_get(
+      'versioncontrol_register_message_unauthorized',
+      $presets['versioncontrol_register_message_unauthorized']
+    ),
+  );
+  $form['versioncontrol_register_form']['versioncontrol_register_message_authorized'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Message to applying users'),
+    '#description' => t('Message to show to users who are applying for commit access.'),
+    '#default_value' => variable_get(
+      'versioncontrol_register_message_authorized',
+      $presets['versioncontrol_register_message_authorized']
+    ),
+  );
+
   return system_settings_form($form);
 }
 
@@ -153,11 +181,24 @@ function versioncontrol_admin_account_authorization_settings() {
  */
 function versioncontrol_account_register_form() {
   global $user;
+  $presets = _versioncontrol_get_admin_presets();
   $form = array();
 
   $uid = is_numeric(arg(2)) ? arg(2) : $user->uid;
+  $user_access = user_access('use version control systems');
   $admin_access = user_access('administer version control systems');
 
+  if (!$user_access || $user->uid == 0) {
+    $message = variable_get(
+      'versioncontrol_register_message_unauthorized',
+      $presets['versioncontrol_register_message_unauthorized']
+    );
+    $form['no_registration'] = array(
+      '#type' => 'markup',
+      '#value' => $message,
+    );
+    return $form;
+  }
   if (!$admin_access && $uid != $current_user->uid) {
     drupal_access_denied();
     return $form;
@@ -198,18 +239,8 @@ function versioncontrol_account_register_form() {
   if (is_numeric(arg(3)) || isset($only_repo_id)) {
     $repo_id = isset($only_repo_id) ? $only_repo_id : arg(3);
     if (in_array($repo_id, $account_repo_ids)) {
-      drupal_set_title(t('Account already exists'));
-      $form['no_registration'] = array(
-        '#type' => 'markup',
-        '#value' => t('You already have an account for @repository. Go to your !user-account-page to configure repository account settings.', array(
-          '@repository' => $repositories[$repo_id]['name'],
-          '!user-account-page' => l(
-            t('user account page'), 'user/'. $uid .'/edit/versioncontrol/'. $repo_id)
-          )
-        ),
-        '#prefix' => '<p>',
-        '#suffix' => '</p>',
-      );
+      drupal_set_message(t('You already have a registered account.'));
+      drupal_goto('user/'. $user->uid .'/edit/versioncontrol/'. $repo_id);
       return $form;
     }
     else if (isset($repositories[$repo_id])) {
@@ -232,20 +263,39 @@ function versioncontrol_account_register_form() {
 
   $form['#id'] = 'vcs-account-indirection-form';
 
+  $message = variable_get(
+    'versioncontrol_register_message_authorized',
+    $presets['versioncontrol_register_message_authorized']
+  );
+  if (!empty($message)) {
+    $form['overview'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Overview'),
+    );
+    $form['overview']['overview'] = array(
+      '#type' => 'markup',
+      '#value' => $message,
+    );
+  }
+
   $form['uid'] = array(
     '#type' => 'value',
     '#value' => $uid,
   );
 
-  $form['repo_id'] = array(
+  $form['repository'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Select repository'),
+  );
+  $form['repository']['repo_id'] = array(
     '#type' => 'select',
-    '#title' => t('Create account in repository'),
+    '#title' => t('Create user account in'),
     '#options' => $repository_names,
     '#default_value' => $first_repo_id,
   );
-  $form['submit'] = array(
+  $form['repository']['submit'] = array(
     '#type' => 'submit',
-    '#value' => t('Create user account'),
+    '#value' => t('Create account'),
     '#weight' => 100,
   );
   return $form;
@@ -304,6 +354,12 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     '#value' => $vcs_name,
   );
 
+  $form['account'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('@vcs account settings', array('@vcs' => $vcs_name)),
+    '#weight' => 0,
+  );
+
   if (empty($username) || $admin_access) {
     $user = user_load(array('uid' => $uid));
 
@@ -327,7 +383,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
       $description = t('Your @vcs username. This field can only be edited by administrators and is used to link your @vcs messages to your user account.', array('@vcs' => $vcs_name));
     }
 
-    $form['account_name'] = array(
+    $form['account']['account_name'] = array(
       '#type' => 'textfield',
       '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
       '#description' => $description,
@@ -338,7 +394,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     );
   }
   else {
-    $form['account_name'] = array(
+    $form['account']['account_name'] = array(
       '#type' => 'item',
       '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
       '#description' => t('The @vcs username associated with this account.',
@@ -350,9 +406,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
 
   $form['submit'] = array(
     '#type' => 'submit',
-    '#value' => empty($username)
-                ? t('Create user account')
-                : ('Save account settings'),
+    '#value' => t('Submit'),
     '#weight' => 100,
   );
   return $form;
@@ -734,4 +788,29 @@ function versioncontrol_admin_repository_delete_confirm_submit($form_id, $form_v
   $repository = versioncontrol_get_repository($form_values['repo_id']);
   versioncontrol_delete_repository($repository);
   drupal_goto('admin/project/versioncontrol-repositories');
+}
+
+
+/**
+ * Return preset values that are used in the administration forms.
+ */
+function _versioncontrol_get_admin_presets() {
+  $presets = array();
+
+  $presets['versioncontrol_register_message_unauthorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>To request access to the Drupal CVS repository you must <a href="!register">create an account</a> and <a href="!login">login</a>. Come back to this page after you have logged on.</p>',
+    array('!register' => url('user/register'), '!login' => url('user/login'))
+  );
+
+  $presets['versioncontrol_register_message_authorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
+<p>If you are an open source software developer, themer, translator or documentation writer, please choose one of Drupal\'s repositories from the selection below in order to request commit access to this repository. Prior to applying, please ensure that:
+<ul>
+  <li>you have a concrete idea as to what you intend to contribute.</li>
+  <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
+</ul></p>',
+    array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
+  );
+
+  return $presets;
 }

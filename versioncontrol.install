@@ -105,6 +105,8 @@ function versioncontrol_install() {
  */
 function versioncontrol_uninstall() {
   variable_del('versioncontrol_authorization_method');
+  variable_del('versioncontrol_register_message_unauthorized');
+  variable_del('versioncontrol_register_message_authorized');
 
   db_query("DROP TABLE {versioncontrol_commits}");
   db_query("DROP TABLE {versioncontrol_branches}");

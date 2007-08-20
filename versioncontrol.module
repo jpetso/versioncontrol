@@ -172,7 +172,7 @@ function versioncontrol_menu($may_cache) {
       'title' => t('Get commit access'),
       'callback' => 'drupal_get_form',
       'callback arguments' => array('versioncontrol_account_register_form'),
-      'access' => $user_access,
+      'access' => TRUE, // access checking is done in the callback
       'type' => MENU_SUGGESTED_ITEM,
     );
 
@@ -1373,13 +1373,13 @@ function versioncontrol_get_tag_operations($constraints = array()) {
   // Filter by a set of common constraints whose code is shared with the
   // commit and branch retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, 'tag_op_id', 'to', 'r');
+    _versioncontrol_construct_common_constraints($constraints, 'tag_op_id', 't', 'r');
 
   // Filter by branch names.
   if (isset($constraints['tag_names'])) {
     $or_constraints = array();
     foreach ($constraints['tag_names'] as $tag_name) {
-      $or_constraints[] = "to.name = '%s'";
+      $or_constraints[] = "t.name = '%s'";
       $params[] = $tag_name;
     }
     if (!empty($or_constraints)) {
@@ -1389,13 +1389,13 @@ function versioncontrol_get_tag_operations($constraints = array()) {
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
-  $result = db_query('SELECT to.tag_op_id, to.tag_name, to.action, to.date,
-                             to.uid, to.username, to.directory, r.repo_id, r.vcs
-                      FROM {versioncontrol_tag_operations} to
+  $result = db_query('SELECT t.tag_op_id, t.tag_name, t.action, t.date,
+                             t.uid, t.username, t.directory, r.repo_id, r.vcs
+                      FROM {versioncontrol_tag_operations} t
                        INNER JOIN {versioncontrol_repositories} r
-                        ON to.repo_id = r.repo_id
+                        ON t.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY to.date DESC', $params);
+                      ORDER BY t.date DESC', $params);
 
   $tags = array();
   $tag_op_ids_by_backend = array();
