@@ -488,7 +488,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
       '#type' => 'submit',
       '#value' => $is_new_account
                   ? t('Create @vcs account', array('@vcs' => $vcs_name))
-                  : t('Submit'),
+                  : t('Update @vcs account', array('@vcs' => $vcs_name)),
       '#weight' => 100,
     );
   }
@@ -561,7 +561,7 @@ function versioncontrol_account_edit_form_submit($form_id, $form_values) {
   if (empty($form_values['original_username'])) {
     versioncontrol_insert_account($uid, $username, $repository, $additional_data);
     $message = drupal_set_message(t(
-      'The @vcs account %username has been created.',
+      'The @vcs account %username has been registered.',
       array('@vcs' => $vcs_name, '%username' => $username)
     ));
   }

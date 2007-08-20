@@ -123,7 +123,6 @@ function versioncontrol_fakevcs_account_form_alter($form_id, &$form) {
   }
   $form['account']['account_password'] = array(
     '#type' => 'password_confirm',
-    '#title' => t('FakeVCS password'),
     '#description' => $description,
   );
   $form['#validate']['versioncontrol_fakevcs_account_form_validate'] = array();
