@@ -14,10 +14,10 @@
 
 
 /**
- * Form callback for "admin/project/versioncontrol-settings/authorization":
- * Provide a form for account authorization selection and settings.
+ * Form callback for "admin/project/versioncontrol-settings/general":
+ * Provide a form for settings of Version Control API itself.
  */
-function versioncontrol_admin_account_authorization_settings() {
+function versioncontrol_admin_settings() {
   $form = array();
   $options = array_merge(
     array('none' => t('No approval required')),
@@ -25,7 +25,15 @@ function versioncontrol_admin_account_authorization_settings() {
   );
   $presets = _versioncontrol_get_admin_presets();
 
-  $form['#id'] = 'vcs-account-authorization-settings-form';
+  $form['#id'] = 'versioncontrol-settings-form';
+
+  $form['versioncontrol_email_address'] = array(
+    '#type' => 'textfield',
+    '#title' => t('E-mail address'),
+    '#default_value' => variable_get('versioncontrol_email_address', 'versioncontrol@example.com'),
+    '#description' => t('The e-mail address of the VCS administrator.'),
+    '#weight' => -10,
+  );
 
   $form['versioncontrol_authorization_method'] = array(
     '#type' => 'select',
@@ -33,7 +41,7 @@ function versioncontrol_admin_account_authorization_settings() {
     '#description' => t('Determines the way that users gain access to VCS repositories.'),
     '#options' => $options,
     '#default_value' => versioncontrol_get_current_authorization_method(),
-    '#weight' => -10,
+    '#weight' => -1,
   );
 
   $form['versioncontrol_register_form'] = array(
@@ -77,8 +85,9 @@ function versioncontrol_admin_account_authorization_settings() {
  * system_settings_form() is left out because it's nasty for modules that
  * hook into this form and don't want to use automatic variable saving.
  */
-function versioncontrol_admin_account_authorization_settings_submit($form_id, $form_values) {
+function versioncontrol_admin_settings_submit($form_id, $form_values) {
   $value_names = array(
+    'versioncontrol_email_address',
     'versioncontrol_authorization_method',
     'versioncontrol_registration_message_unauthorized',
     'versioncontrol_registration_message_authorized',
