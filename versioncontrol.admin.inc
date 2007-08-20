@@ -284,11 +284,11 @@ function versioncontrol_account_register_form() {
     $form['overview'] = array(
       '#type' => 'fieldset',
       '#title' => t('Overview'),
+      '#weight' => -100,
     );
     $form['overview']['overview'] = array(
       '#type' => 'markup',
       '#value' => $message,
-      '#weight' => -10,
     );
   }
 
@@ -300,7 +300,7 @@ function versioncontrol_account_register_form() {
   $form['repository'] = array(
     '#type' => 'fieldset',
     '#title' => t('Select repository'),
-    '#weight' => 0,
+    '#weight' => 10,
   );
   $form['repository']['repo_id'] = array(
     '#type' => 'select',
@@ -345,11 +345,13 @@ function versioncontrol_account_register_form_submit($form_id, $form_values) {
  */
 function versioncontrol_account_edit_form($uid, $username, $repository) {
   $form = array();
+  $is_new_account = empty($username);
   $backends = versioncontrol_get_backends();
   $vcs_name = $backends[$repository['vcs']]['name'];
   $admin_access = user_access('administer version control systems');
 
   $form['#id'] = 'vcs-account-form';
+  $form['#repository'] = $repository;
   $form['#vcs'] = $repository['vcs'];
   $form['#validate'] = array('versioncontrol_account_edit_form_validate' => array());
   $form['#submit'] = array('versioncontrol_account_edit_form_submit' => array());
@@ -372,7 +374,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     '#value' => $vcs_name,
   );
 
-  if (empty($username)) {
+  if ($is_new_account) {
     $result = db_query("SELECT registration_message
                         FROM {versioncontrol_repository_internal_data}
                         WHERE repo_id = '%d'", $repository['repo_id']);
@@ -383,7 +385,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
       $form['overview'] = array(
         '#type' => 'fieldset',
         '#title' => t('Overview'),
-        '#weight' => -10,
+        '#weight' => -100,
       );
       $form['overview']['overview'] = array(
         '#type' => 'markup',
@@ -398,15 +400,20 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     '#weight' => 0,
   );
 
-  if (empty($username) || $admin_access) {
+  if ($is_new_account || $admin_access) {
     $user = user_load(array('uid' => $uid));
 
     // Set a more appropriate title for account registrations.
-    if (empty($username)) {
+    if ($is_new_account) {
       drupal_set_title(t(
         'Create user account in @repository',
         array('@repository' => $repository['name'])
       ));
+
+      // Have a nice default value for the new VCS username.
+      $username = strtr(strtolower($user->name),
+        array(' ' => '', '@' => '', '.' => '', '-' => '', '_' => '', '.' => '')
+      );
     }
     else { // For the tab on the user edit page:
       // When someone else than the user goes here (the admin, that is),
@@ -418,7 +425,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
       $description = t('The @vcs username associated with the account of !user. This field is used to link commit messages to user accounts.', array('@vcs' => $vcs_name, '!user' => theme_username($user)));
     }
     else { // the account creation version
-      $description = t('Your @vcs username. This field can only be edited by administrators and is used to link your @vcs messages to your user account.', array('@vcs' => $vcs_name));
+      $description = t('Choose a username to access the @vcs repository with. @vcs usernames should be lowercase. Spaces or other special characters are not allowed.', array('@vcs' => $vcs_name));
     }
 
     $form['account']['account_name'] = array(
@@ -435,8 +442,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     $form['account']['account_name'] = array(
       '#type' => 'item',
       '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
-      '#description' => t('The @vcs username associated with this account.',
-                          array('@vcs' => $vcs_name)),
+      '#description' => t('Your @vcs username. This field can only be edited by administrators and is used to link your @vcs messages to your user account.', array('@vcs' => $vcs_name)),
       '#value' => $username,
       '#weight' => 0,
     );
@@ -445,7 +451,9 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
   if (arg(2) != 'demo') { // demo mode for showing the page to the admin
     $form['submit'] = array(
       '#type' => 'submit',
-      '#value' => t('Submit'),
+      '#value' => $is_new_account
+                  ? t('Create @vcs account', array('@vcs' => $vcs_name))
+                  : t('Submit'),
       '#weight' => 100,
     );
   }

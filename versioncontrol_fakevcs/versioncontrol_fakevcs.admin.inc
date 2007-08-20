@@ -115,10 +115,16 @@ function versioncontrol_fakevcs_versioncontrol_alter_repository_list($vcs, $repo
  * Add FakeVCS specific elements to the edit/register user account form.
  */
 function versioncontrol_fakevcs_account_form_alter($form_id, &$form) {
+  if (empty($form['original_username']['#value'])) { // creating the account
+    $description = t('Choose a password to access the FakeCVS repository with.');
+  }
+  else { // editing the account
+    $description = t('To change the current FakeVCS password, enter the new password in both fields.');
+  }
   $form['account']['account_password'] = array(
     '#type' => 'password_confirm',
     '#title' => t('FakeVCS password'),
-    '#description' => t('To change the current FakeVCS password, enter the new password in both fields.'),
+    '#description' => $description,
   );
   $form['#validate']['versioncontrol_fakevcs_account_form_validate'] = array();
 }
