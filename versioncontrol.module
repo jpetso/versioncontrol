@@ -171,8 +171,7 @@ function versioncontrol_menu($may_cache) {
     $items[] = array(
       'path' => 'versioncontrol/register', // [."/$uid" [."/$repo_id"]]
       'title' => t('Get commit access'),
-      'callback' => 'drupal_get_form',
-      'callback arguments' => array('versioncontrol_account_register_form'),
+      'callback' => 'versioncontrol_account_register_page',
       'access' => TRUE, // access checking is done in the callback
       'type' => MENU_SUGGESTED_ITEM,
     );
@@ -411,6 +410,11 @@ function versioncontrol_get_authorization_methods() {
   return $methods;
 }
 
+/**
+ * Retrieve the currently selected authorization method.
+ * This either 'none' or the unique string identifier
+ * of another module's authentication method.
+ */
 function versioncontrol_get_current_authorization_method() {
   $current_method = variable_get('versioncontrol_authorization_method', 'none');
   $methods = versioncontrol_get_authorization_methods();

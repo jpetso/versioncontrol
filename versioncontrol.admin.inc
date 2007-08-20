@@ -210,7 +210,7 @@ function versioncontrol_admin_account_list() {
  * Form callback for "versioncontrol/register":
  * Provide an indirection that leads to an account registration form.
  */
-function versioncontrol_account_register_form() {
+function versioncontrol_account_register_page() {
   global $user;
   $presets = _versioncontrol_get_admin_presets();
   $form = array();
@@ -225,19 +225,14 @@ function versioncontrol_account_register_form() {
   $admin_access = user_access('administer version control systems');
 
   if (!$user_access || $user->uid == 0) {
-    $message = variable_get(
+    return variable_get(
       'versioncontrol_registration_message_unauthorized',
       $presets['versioncontrol_registration_message_unauthorized']
     );
-    $form['no_registration'] = array(
-      '#type' => 'markup',
-      '#value' => $message,
-    );
-    return $form;
   }
-  if (!$admin_access && $uid != $current_user->uid) {
+  if (!$admin_access && $uid != $user->uid) {
     drupal_access_denied();
-    return $form;
+    return '';
   }
 
   $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
@@ -285,13 +280,22 @@ function versioncontrol_account_register_form() {
     if (in_array($repo_id, $account_repo_ids)) {
       drupal_set_message(t('You already have a registered account.'));
       drupal_goto('user/'. $user->uid .'/edit/versioncontrol/'. $repo_id);
-      return $form;
+      return '';
     }
     else if (isset($repositories[$repo_id])) {
-      return versioncontrol_account_edit_form($uid, '', $repositories[$repo_id]);
+      return drupal_get_form('versioncontrol_account_edit_form',
+                             $uid, '', $repositories[$repo_id]);
     }
   }
 
+  return drupal_get_form('versioncontrol_account_register_form',
+                         $uid, $repository_names, $first_repo_id);
+}
+
+/**
+ * The actual form for "versioncontrol/register".
+ */
+function versioncontrol_account_register_form($uid, $repository_names, $first_repo_id) {
   if (empty($repository_names)) {
     drupal_set_title(t('No more registrations possible'));
     $form['no_registration'] = array(
