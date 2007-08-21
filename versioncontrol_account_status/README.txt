@@ -10,9 +10,26 @@ SHORT DESCRIPTION
 This module changes the VCS account form so that users need to submit
 a motivation text instead of directly registering their accounts.
 Until the account is dealt with by a version control administrator,
-accounts receive the "queued" status and can then be assigned any of the
-"pending", "approved", "declined" or "disabled" statuses.
-For all other statuses than "approved", repository access will be denied.
+accounts receive the "Queued" status. The administrator can assign any
+of the following account status values:
+
+VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
+  The user has applied for an approval, but the VCS administrator
+  hasn't yet looked at the application.
+VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
+  The administrator needs more information from the applicant
+  in order to properly evaluate the application.
+VERSIONCONTROL_ACCOUNT_STATUS_APPROVED:
+  The application has been evaluated and approved,
+  and the user may have access to the repository.
+VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
+  The application has been evaluated and disapproved.
+  The user can, however, reapply.
+VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
+  The application had been approved in the past, but was revoked.
+  The user doesn't have repository access anymore.
+
+For all other statuses than "Approved", repository access will be denied.
 
 Version Control Account Status depends on the Version Control API module.
 

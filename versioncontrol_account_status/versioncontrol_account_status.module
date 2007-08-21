@@ -212,10 +212,7 @@ function versioncontrol_account_status_global_settings_form_alter($form_id, &$fo
   $form['versioncontrol_account_status_email_form'] = array(
     '#type' => 'fieldset',
     '#title' => t('Site-wide commit access application e-mail messages'),
-    '#description' => t('The following messages are templates for
-      e-mail messages sent to users who have applied for commit access.
-      The following variables are substituted (where available)
-      when the message is sent.
+    '#description' => t('If site-wide account approval is enabled, the following e-mail messages sent to users who have applied for commit access. The following variables in these templates are substituted (where available) when the message is sent.
       <ul>
         <li>%account-name - The Drupal username of the applicant.</li>
         <li>%user-account-url - The URL of the applicant\'s user page.</li>
@@ -578,17 +575,6 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
     _versioncontrol_account_status_form_alter_reapplication($form);
   }
 
-  // An introductory message, probably outlining workings and policies.
-  $form['overview'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Overview'),
-    '#weight' => -90,
-  );
-  $form['overview']['overview'] = array(
-    '#type' => 'markup',
-    '#value' => $strings['application_message'],
-  );
-
   $conditions = _versioncontrol_account_status_get_conditions(
     $strings['default_condition_description'], $strings['default_condition_error']
   );
@@ -606,6 +592,18 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
       '#type' => 'value',
       '#value' => TRUE,
     );
+
+    // An introductory message, probably outlining workings and policies.
+    $form['overview'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Overview'),
+      '#weight' => -90,
+    );
+    $form['overview']['overview'] = array(
+      '#type' => 'markup',
+      '#value' => $strings['application_message'],
+    );
+
     foreach ($conditions as $element_name => $texts) {
       $form['motivation_fieldset'][$element_name] = array(
         '#type' => 'radios',
