@@ -858,7 +858,7 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
   }
 
   // Send an e-mail to the version control administrators.
-  $from = "$user->name <$user->mail>";
+  $from = "$applicant->name <$applicant->mail>";
   $message = strtr($strings['admin_notification_email'], $message_variables);
   drupal_mail(
     'versioncontrol_email_admin', $admin_mail,
