@@ -557,8 +557,14 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
     '#value' => $status_data['uid'],
   );
 
-  if ($status == VERSIONCONTROL_ACCOUNT_STATUS_DECLINED || $status == VERSIONCONTROL_ACCOUNT_STATUS_DISABLED) {
+  $is_reapplication = FALSE;
+
+  if (!$admin_access && in_array($status_data['status'], array(
+      VERSIONCONTROL_ACCOUNT_STATUS_DECLINED, VERSIONCONTROL_ACCOUNT_STATUS_DISABLED
+    ))) {
     $is_reapplication = TRUE;
+    // let the user try again.
+    $status_data['status'] = VERSIONCONTROL_ACCOUNT_STATUS_QUEUED;
   }
   $is_application = (empty($status_data['motivation']) || $is_reapplication);
 
@@ -576,7 +582,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
   $form['overview'] = array(
     '#type' => 'fieldset',
     '#title' => t('Overview'),
-    '#weight' => -100,
+    '#weight' => -90,
   );
   $form['overview']['overview'] = array(
     '#type' => 'markup',
@@ -804,7 +810,7 @@ function versioncontrol_account_status_application_submit($form_id, $form_values
   versioncontrol_account_status_set($data);
 
   if ($form_values['send_admin_message']) {
-    $extra_message = $form_values['admin_message'];
+    $admin_message = $form_values['admin_message'];
     _versioncontrol_account_status_send_status_update_mails($data, $admin_message);
   }
   if ($form_values['is_application']) {
