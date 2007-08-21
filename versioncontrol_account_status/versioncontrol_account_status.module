@@ -178,7 +178,7 @@ function versioncontrol_account_status_form_alter($form_id, &$form) {
       $selected_auth_method = versioncontrol_get_current_authorization_method();
       if ($selected_auth_method == 'versioncontrol_account_status_global') {
         versioncontrol_account_status_form_alter_account(
-          $form_id, &$form, VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL
+          $form_id, $form, VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL
         );
       }
       else if ($selected_auth_method == 'versioncontrol_account_status_repository') {
@@ -186,7 +186,7 @@ function versioncontrol_account_status_form_alter($form_id, &$form) {
           break;
         }
         versioncontrol_account_status_form_alter_account(
-          $form_id, &$form, $form['#repository']['repo_id']
+          $form_id, $form, $form['#repository']['repo_id']
         );
       }
       break;
@@ -231,7 +231,7 @@ function versioncontrol_account_status_global_settings_form_alter($form_id, &$fo
   );
 
   $strings = _versioncontrol_account_status_get_strings(VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL);
-  versioncontrol_account_status_settings_form_alter($form_id, &$form, $strings);
+  versioncontrol_account_status_settings_form_alter($form_id, $form, $strings);
 }
 
 /**
@@ -289,7 +289,7 @@ function versioncontrol_account_status_repository_settings_form_alter($form_id, 
   else {
     $strings = _versioncontrol_account_status_get_strings($repo_id);
   }
-  versioncontrol_account_status_settings_form_alter($form_id, &$form, $strings);
+  versioncontrol_account_status_settings_form_alter($form_id, $form, $strings);
 }
 
 /**
