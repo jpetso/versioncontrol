@@ -2019,6 +2019,31 @@ function versioncontrol_get_current_item_tag($repository, $item) {
 }
 
 /**
+ * Retrieve the parent (directory) item of a given item.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose parent should be retrieved.
+ * @param $parent_path
+ *   NULL if the direct parent of the given item should be retrieved,
+ *   or a parent path that is further up the directory tree.
+ *
+ * @return
+ *   The parent directory item at the same revision as the given item.
+ *   If $parent_path is not set and the item is already the topmost one
+ *   in the repository, the item is returned as is. It also stays the same
+ *   if $parent_path is given and the same as the path of the given item.
+ *   If the given directory path does not correspond to a parent item,
+ *   NULL is returned.
+ */
+function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL) {
+  return _versioncontrol_call_backend(
+    $repository['vcs'], 'get_parent_item', array($repository, $item, $parent_path)
+  );
+}
+
+/**
  * Retrieve all branches that exist for the given item, and how this item
  * is named there. The main branch ('HEAD', 'trunk', 'master' or however it is
  * called in the respective VCS) is also included in the result.

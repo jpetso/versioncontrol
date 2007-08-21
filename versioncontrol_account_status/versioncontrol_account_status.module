@@ -1050,21 +1050,21 @@ function _versioncontrol_account_status_get_presets() {
 
   $presets['application_message_global'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
 <p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
-<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below in order to request permission to create accounts for all repositories known to this site. Prior to applying, please ensure that:
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below in order to request permission to create accounts for all repositories known to this site. Prior to applying, please ensure that:</p>
 <ul>
   <li>you have a concrete idea as to what you intend to contribute.</li>
   <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
-</ul></p>',
+</ul>',
     array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
   );
 
   $presets['application_message_repository'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
 <p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
-<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to request access to Drupal\'s CVS repository. Prior to applying, please ensure that:
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to request access to Drupal\'s CVS repository. Prior to applying, please ensure that:</p>
 <ul>
   <li>you have a concrete idea as to what you intend to contribute.</li>
   <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
-</ul></p>',
+</ul>',
     array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
   );
 
@@ -1079,8 +1079,7 @@ function _versioncontrol_account_status_get_presets() {
   <li>If you have been asked to co-maintain an existing module, please link to an issue where the current maintainer explicitly states so.</li>
   <li>The more information, the better.</li>
 </ul>
-<strong>Failure to provide a well written motivation message will result in your
-application being denied.</strong>');
+<strong>Failure to provide a well written motivation message will result in your application being denied.</strong>');
 
 
   // For email strings, arguments are supplanted when the mail is sent.
@@ -1146,7 +1145,7 @@ Motivation message:
   %motivation-message');
 
   $presets['pending_email'] = t('%account-name,
-  We cannot approve your CVS account yet. Please answer the questions below and reply at your earliest convenience.
+  We cannot approve your %vcs-name account yet. Please answer the questions below and reply at your earliest convenience.
 
 %admin-message
 Kind regards,

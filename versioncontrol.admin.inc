@@ -939,21 +939,21 @@ function _versioncontrol_get_admin_presets() {
 
   $presets['versioncontrol_registration_message_authorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
 <p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
-<p>If you are an open source software developer, themer, translator or documentation writer, please choose one of Drupal\'s repositories from the selection below in order to request commit access to this repository. Prior to applying, please ensure that:
+<p>If you are an open source software developer, themer, translator or documentation writer, please choose one of Drupal\'s repositories from the selection below in order to request commit access to this repository. Prior to applying, please ensure that:</p>
 <ul>
   <li>you have a concrete idea as to what you intend to contribute.</li>
   <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
-</ul></p>',
+</ul>',
     array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
   );
 
   $presets['versioncontrol_registration_message_repository'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
 <p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
-<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to create an account in Drupal\'s CVS repository. Prior to registering, please ensure that:
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to create an account in Drupal\'s CVS repository. Prior to registering, please ensure that:</p>
 <ul>
   <li>you have a concrete idea as to what you intend to contribute.</li>
   <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
-</ul></p>',
+</ul>',
     array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
   );
 
