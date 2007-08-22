@@ -12,6 +12,31 @@
  */
 
 /**
+ * Check if the user who is attempting to execute a commit/tag/branch operation
+ * has commit access at all, and set an error if that is not the case.
+ *
+ * @param $object
+ *   The commit, branch operation or tag operation array containing
+ *   repository and uid of the account that is to be checked.
+ *
+ * @return
+ *   TRUE if the user may create a commit/branch/tag in this repository,
+ *   or FALSE otherwise.
+ */
+function _versioncontrol_has_account_access($object) {
+  if (variable_get('versioncontrol_allow_unauthorized_access', 0)) {
+    if (!versioncontrol_is_account_authorized($object['uid'], $object['repository']['repo_id'])) {
+      _versioncontrol_access_errors(array(t(
+        '** ERROR: !user does not have commit access to this repository.',
+        array('!user' => $object['username'], '!commit-branch-or-tag' => $type)
+      )));
+      return FALSE;
+    }
+  }
+  return TRUE;
+}
+
+/**
  * Set an error if the repository for a commit or branch/tag operation
  * can't be retrieved.
  *
@@ -72,6 +97,9 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
   $commit = _versioncontrol_fill_commit($commit, $commit_actions);
   if (!isset($commit['repository'])) {
     _versioncontrol_set_repository_error(t('commit'));
+    return FALSE;
+  }
+  if (!_versioncontrol_has_account_access($commit, t('commit'))) {
     return FALSE;
   }
 
@@ -144,6 +172,9 @@ function versioncontrol_has_branch_access($branch, $branched_items) {
     _versioncontrol_set_repository_error(t('branch'));
     return FALSE;
   }
+  if (!_versioncontrol_has_account_access($branch, t('branch'))) {
+    return FALSE;
+  }
 
   return _versioncontrol_has_branch_or_tag_access(
     'versioncontrol_branch_access', $branch, $branched_items
@@ -193,6 +224,9 @@ function versioncontrol_has_tag_access($tag, $tagged_items) {
   $tag = _versioncontrol_fill_uid_and_repository($tag);
   if (!isset($tag['repository'])) {
     _versioncontrol_set_repository_error(t('tag'));
+    return FALSE;
+  }
+  if (!_versioncontrol_has_account_access($tag, t('tag'))) {
     return FALSE;
   }
 
@@ -299,7 +333,7 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   In case of an error, NULL is returned instead of the commit array.
  */
 function versioncontrol_insert_commit($commit, $commit_actions) {
-  $commit = _versioncontrol_fill_commit($commit, $commit_actions);
+  $commit = _versioncontrol_fill_commit($commit, $commit_actions, TRUE);
   if (!isset($commit['repository'])) {
     return NULL;
   }
@@ -614,8 +648,8 @@ function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, 
  *   The completed commit array. Check on isset($commit['repository'])
  *   before proceeding.
  */
-function _versioncontrol_fill_commit($commit, $commit_actions) {
-  $commit = _versioncontrol_fill_uid_and_repository($commit);
+function _versioncontrol_fill_commit($commit, $commit_actions, $include_unauthorized = FALSE) {
+  $commit = _versioncontrol_fill_uid_and_repository($commit, $include_unauthorized);
   $paths = _versioncontrol_get_commit_action_paths($commit_actions);
   $commit['directory'] = _versioncontrol_get_common_directory($paths);
   return $commit;
@@ -668,7 +702,7 @@ function _versioncontrol_get_item_paths($items) {
  * branch/tag access functions: fill up Drupal user id and repository
  * in case they are not given.
  */
-function _versioncontrol_fill_uid_and_repository($object) {
+function _versioncontrol_fill_uid_and_repository($object, $include_unauthorized = FALSE) {
   // If not already there, retrieve the full repository object.
   if (!isset($object['repository']) && isset($object['repo_id'])) {
     $object['repository'] = versioncontrol_get_repository($object['repo_id']);
@@ -678,7 +712,7 @@ function _versioncontrol_fill_uid_and_repository($object) {
   // If not already there, retrieve the Drupal user id of the committer.
   if (!isset($object['uid'])) {
     $uid = versioncontrol_get_account_uid_for_username(
-      $object['username'], $object['repository']['repo_id'], TRUE
+      $object['username'], $object['repository']['repo_id'], $include_unauthorized
     );
     // If no uid could be retrieved, blame the commit on user 0 (anonymous).
     $object['uid'] = isset($uid) ? $uid : 0;

@@ -7,6 +7,7 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: admin interface checkbox for variable_get('versioncontrol_allow_unauthorized_access', 0)
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -1471,7 +1472,7 @@ function versioncontrol_get_tag_operations($constraints = array()) {
  *           You might want this if you combine multiple username and
  *           repository constraints, otherwise you can well do without.
  *
- * @param $include_non_approved
+ * @param $include_unauthorized
  *   If FALSE (which is the default), this function does not return accounts
  *   that are pending, queued, disabled, blocked, or otherwise non-approved.
  *   If TRUE, all accounts are returned, regardless of their status.
@@ -1482,7 +1483,7 @@ function versioncontrol_get_tag_operations($constraints = array()) {
  *   If not a single account matches these constraints,
  *   an empty array is returned.
  */
-function versioncontrol_get_accounts($constraints = array(), $include_non_approved = FALSE) {
+function versioncontrol_get_accounts($constraints = array(), $include_unauthorized = FALSE) {
   $and_constraints = array();
   $params = array();
 
@@ -1548,7 +1549,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_non_approv
   $accounts = array();
   while ($account = db_fetch_object($result)) {
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
       if (!isset($accounts[$account->uid])) {
         $accounts[$account->uid] = array();
       }
@@ -1567,7 +1568,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_non_approv
  *   The VCS specific username (a string) corresponding to the Drupal user.
  * @param $repo_id
  *   The repository id of the repository where the user has its VCS account.
- * @param $include_non_approved
+ * @param $include_unauthorized
  *   If FALSE (which is the default), this function does not return accounts
  *   that are pending, queued, disabled, blocked, or otherwise non-approved.
  *   If TRUE, all accounts are returned, regardless of their status.
@@ -1576,7 +1577,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_non_approv
  *   The Drupal user id that corresponds to the given username and repository,
  *   or NULL if no Drupal user could be associated to those.
  */
-function versioncontrol_get_account_uid_for_username($username, $repo_id, $include_non_approved = FALSE) {
+function versioncontrol_get_account_uid_for_username($username, $repo_id, $include_unauthorized = FALSE) {
   $result = db_query("SELECT uid, repo_id
                       FROM {versioncontrol_accounts}
                       WHERE username = '%s' AND repo_id = '%d'",
@@ -1584,7 +1585,7 @@ function versioncontrol_get_account_uid_for_username($username, $repo_id, $inclu
 
   while ($account = db_fetch_object($result)) {
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
       return $account->uid;
     }
   }
@@ -1600,7 +1601,7 @@ function versioncontrol_get_account_uid_for_username($username, $repo_id, $inclu
  *   The Drupal user id corresponding to the VCS account.
  * @param $repo_id
  *   The repository id of the repository where the user has its VCS account.
- * @param $include_non_approved
+ * @param $include_unauthorized
  *   If FALSE (which is the default), this function does not return accounts
  *   that are pending, queued, disabled, blocked, or otherwise non-approved.
  *   If TRUE, all accounts are returned, regardless of their status.
@@ -1609,7 +1610,7 @@ function versioncontrol_get_account_uid_for_username($username, $repo_id, $inclu
  *   The VCS username (a string) that corresponds to the given Drupal user
  *   and repository, or NULL if no VCS account could be associated to those.
  */
-function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_non_approved = FALSE) {
+function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_unauthorized = FALSE) {
   $result = db_query("SELECT uid, username, repo_id
                       FROM {versioncontrol_accounts}
                       WHERE uid = '%d' AND repo_id = '%d'",
@@ -1617,7 +1618,7 @@ function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_no
 
   while ($account = db_fetch_object($result)) {
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_non_approved || versioncontrol_is_account_approved($account->uid, $account->repo_id)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
       return $account->username;
     }
   }
@@ -1637,12 +1638,15 @@ function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_no
  *   (Note that a user can be disabled in one repository while staying approved
  *   in another one.)
  */
-function versioncontrol_is_account_approved($uid, $repo_id) {
+function versioncontrol_is_account_authorized($uid, $repo_id) {
+  if (!$uid) {
+    return FALSE;
+  }
   $approved = array();
-  foreach (module_implements('versioncontrol_is_account_approved') as $module) {
-    $function = $module .'_versioncontrol_is_account_approved';
+  foreach (module_implements('versioncontrol_is_account_authorized') as $module) {
+    $function = $module .'_versioncontrol_is_account_authorized';
 
-    // If at least one hook_versioncontrol_is_account_approved returns FALSE,
+    // If at least one hook_versioncontrol_is_account_authorized returns FALSE,
     // the account is assumed not to be approved.
     if ($function($uid, $repo_id) === FALSE) {
       return FALSE;
@@ -2350,7 +2354,7 @@ function versioncontrol_user_autocomplete($repo_id, $string) {
                             $repo_id, $string, 0, 10);
 
   while ($user = db_fetch_object($result)) {
-    if (versioncontrol_is_account_approved($user->uid, $repo_id)) {
+    if (versioncontrol_is_account_authorized($user->uid, $repo_id)) {
       $matches[$user->name] = check_plain($user->name);
     }
   }

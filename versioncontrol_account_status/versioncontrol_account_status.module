@@ -9,6 +9,9 @@
  * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: hook into versioncontrol_is_account_authorized()
+// TODO: hook into versioncontrol_account() for cleaning up data
+// TODO: hook into the account table in order to display the account status
 
 // Status values for VCS access applications.
 define('VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED', 0); // not in the database
