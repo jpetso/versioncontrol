@@ -238,7 +238,7 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
   $categories = array();
 
   $uid = arg(1);
-  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
+  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), TRUE);
   if (empty($accounts)) {
     $items = array();
     $categories = array();
@@ -1626,17 +1626,16 @@ function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_un
 }
 
 /**
- * Returns TRUE if the account is approved (= the user may commit to the given
- * repository), or FALSE otherwise. Only call this function on existing
- * accounts, the return value for all other uid/repo_id combinations
+ * Returns TRUE if the account is authorized to commit to the given
+ * repository, or FALSE otherwise. Only call this function on existing
+ * accounts or uid 0, the return value for all other uid/repo_id combinations
  * is undefined.
  *
  * @param $uid
  *   The user id of the checked account.
  * @param $repo_id
  *   The repository id of the repository where the status should be checked.
- *   (Note that a user can be disabled in one repository while staying approved
- *   in another one.)
+ *   (Note that the user's authorization status may differ for each repository.)
  */
 function versioncontrol_is_account_authorized($uid, $repo_id) {
   if (!$uid) {

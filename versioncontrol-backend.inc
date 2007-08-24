@@ -24,7 +24,7 @@
  *   or FALSE otherwise.
  */
 function _versioncontrol_has_account_access($object) {
-  if (variable_get('versioncontrol_allow_unauthorized_access', 0)) {
+  if (!variable_get('versioncontrol_allow_unauthorized_access', 0)) {
     if (!versioncontrol_is_account_authorized($object['uid'], $object['repository']['repo_id'])) {
       _versioncontrol_access_errors(array(t(
         '** ERROR: !user does not have commit access to this repository.',

@@ -9,9 +9,7 @@
  * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: hook into versioncontrol_is_account_authorized()
-// TODO: hook into versioncontrol_account() for cleaning up data
-// TODO: hook into the account table in order to display the account status
+// TODO: alter the account table in order to add filtering by status
 
 // Status values for VCS access applications.
 define('VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED', 0); // not in the database
@@ -21,14 +19,17 @@ define('VERSIONCONTROL_ACCOUNT_STATUS_APPROVED',  3); // evaluated and approved
 define('VERSIONCONTROL_ACCOUNT_STATUS_DECLINED',  4); // evaluated, but not approved
 define('VERSIONCONTROL_ACCOUNT_STATUS_DISABLED',  5); // was approved, but has been revoked
 
-function _versioncontrol_account_status_get_status_options() {
-  return array(
-    VERSIONCONTROL_ACCOUNT_STATUS_QUEUED => t('Queued'),
-    VERSIONCONTROL_ACCOUNT_STATUS_PENDING => t('Pending'),
-    VERSIONCONTROL_ACCOUNT_STATUS_APPROVED => t('Approved'),
-    VERSIONCONTROL_ACCOUNT_STATUS_DECLINED => t('Declined'),
-    VERSIONCONTROL_ACCOUNT_STATUS_DISABLED => t('Disabled'),
-  );
+function _versioncontrol_account_status_get_status_options($include_undefined = FALSE) {
+  $options = array();
+  if ($include_undefined) {
+    $options[VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED] = t('Undefined');
+  }
+  $options[VERSIONCONTROL_ACCOUNT_STATUS_QUEUED] = t('Queued');
+  $options[VERSIONCONTROL_ACCOUNT_STATUS_PENDING] = t('Pending');
+  $options[VERSIONCONTROL_ACCOUNT_STATUS_APPROVED] = t('Approved');
+  $options[VERSIONCONTROL_ACCOUNT_STATUS_DECLINED] = t('Declined');
+  $options[VERSIONCONTROL_ACCOUNT_STATUS_DISABLED] = t('Disabled');
+  return $options;
 }
 
 // Special repo_id value which means "all repositories" in this module.
@@ -156,6 +157,120 @@ function versioncontrol_account_status_set($status_data) {
             VALUES ('%d', '%d', '%s', '%d')",
             $status_data['uid'], $status_data['repo_id'],
             $status_data['motivation'], $status_data['status']);
+}
+
+/**
+ * Implementation of hook_versioncontrol_account():
+ * Delete the account status for accounts that are being deleted.
+ */
+function versioncontrol_account_status_versioncontrol_account($op, $uid, $username, $repository, $additional_data = array()) {
+  if ($op == 'delete') {
+    db_query("DELETE FROM {versioncontrol_account_status_users}
+              WHERE uid = '%d'", $uid);
+  }
+}
+
+/**
+ * Implementation of hook_versioncontrol_is_account_authorized():
+ * Let the Version Control API know whether the given user is approved or not.
+ */
+function versioncontrol_account_status_versioncontrol_is_account_authorized($uid, $repo_id) {
+  $result = db_query("SELECT status FROM {versioncontrol_account_status_users}
+                      WHERE uid = '%d' AND repo_id = '%d'", $uid, $repo_id);
+
+  while ($account = db_fetch_object($result)) {
+    return ($account->status == VERSIONCONTROL_ACCOUNT_STATUS_APPROVED);
+  }
+  return FALSE;
+}
+
+
+/**
+ * Implementation of hook_versioncontrol_alter_account_list():
+ * Add additional columns into the list of VCS accounts.
+ * By changing the @p $header and @p $rows_by_uid arguments,
+ * the account list can be customized accordingly.
+ *
+ * @param $accounts
+ *   The list of accounts that is being displayed in the account table. This is
+ *   a structured array like the one returned by versioncontrol_get_accounts().
+ * @param $repositories
+ *   An array of repositories where the given users have a VCS account.
+ *   Array keys are the repository ids, and array values are the
+ *   repository arrays like returned from versioncontrol_get_repository().
+ * @param $header
+ *   A list of columns that will be passed to theme('table').
+ * @param $rows_by_uid
+ *   An array of existing table rows, with Drupal user ids as array keys.
+ *   Each row already includes the generic column values, and for each row
+ *   there is an account with the same uid given in the @p $accounts parameter.
+ */
+function versioncontrol_account_status_versioncontrol_alter_account_list($accounts, $repositories, &$header, &$rows_by_uid) {
+  $selected_auth_method = versioncontrol_get_current_authorization_method();
+  $methods = array(
+    'versioncontrol_account_status_global',
+    'versioncontrol_account_status_repository'
+  );
+  if (!in_array($selected_auth_method, $methods)) {
+    return;
+  }
+
+  $accounts_column_index = 1;
+  $status_column_index = NULL;
+  $new_header = array();
+
+  // insert a new 'Status' column after the 'Accounts' one
+  foreach ($header as $index => $column) {
+    if ($index == $accounts_column_index) {
+      $new_header[] = $column;
+      $new_header[] = t('Status');
+    }
+    else {
+      $new_header[] = $column;
+    }
+  }
+  $header = $new_header;
+
+  // Same for the actual status field in each row.
+  foreach ($rows_by_uid as $uid => $row) {
+    $new_row = array();
+
+    foreach ($row as $index => $column) {
+      if ($index == $accounts_column_index) {
+        $new_row[] = $column;
+        $new_row[] = _versioncontrol_account_status_get_cell(
+          $uid, $accounts[$uid], $repositories, $selected_auth_method
+        );
+      }
+      else {
+        $new_row[] = $column;
+      }
+    }
+    $rows_by_uid[$uid] = $new_row;
+  }
+}
+
+/**
+ * The actual 'Status' cell for each row in the accounts list.
+ */
+function _versioncontrol_account_status_get_cell($uid, $usernames_by_repository, $repositories, $method) {
+  $status_options = _versioncontrol_account_status_get_status_options(TRUE);
+
+  if ($method == 'versioncontrol_account_status_global') {
+    $status_data = versioncontrol_account_status_get($uid, VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL);
+    return $status_options[$status_data['status']];
+  }
+  else if ($method == 'versioncontrol_account_status_repository') {
+    $statuses = array();
+    foreach ($usernames_by_repository as $repo_id => $username) {
+      $status_data = versioncontrol_account_status_get($uid, $repo_id);
+      $statuses[] = t('@repository: !status', array(
+        '!status' => $status_options[$status_data['status']],
+        '@repository' => $repositories[$repo_id]['name'],
+      ));
+    }
+    return theme('item_list', $statuses);
+  }
 }
 
 
@@ -559,9 +674,11 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
 
   $is_reapplication = FALSE;
 
-  if (!$admin_access && in_array($status_data['status'], array(
-      VERSIONCONTROL_ACCOUNT_STATUS_DECLINED, VERSIONCONTROL_ACCOUNT_STATUS_DISABLED
-    ))) {
+  $reapplication_statuses = array(
+    VERSIONCONTROL_ACCOUNT_STATUS_DECLINED,
+    VERSIONCONTROL_ACCOUNT_STATUS_DISABLED,
+  );
+  if (!$admin_access && in_array($status_data['status'], $reapplication_statuses)) {
     $is_reapplication = TRUE;
     // let the user try again.
     $status_data['status'] = VERSIONCONTROL_ACCOUNT_STATUS_QUEUED;
@@ -818,7 +935,14 @@ function versioncontrol_account_status_application_submit($form_id, $form_values
     _versioncontrol_account_status_send_application_mails($data);
   }
 
-  return 'user/'. $applicant_uid;
+  // Only the last submit hook will define the redirect,
+  // so replicate the one from the Version Control API here as well.
+  if (user_access('administer version control systems')) {
+    return 'admin/project/versioncontrol-accounts';
+  }
+  else {
+    return 'user/'. $applicant_uid .'/edit/versioncontrol/'. $repo_id;
+  }
 }
 
 /**

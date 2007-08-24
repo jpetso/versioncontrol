@@ -105,7 +105,7 @@ function versioncontrol_admin_settings_submit($form_id, $form_values) {
 function versioncontrol_admin_account_list() {
   $form = array();
   $users = array();
-  $accounts = versioncontrol_get_accounts();
+  $accounts = versioncontrol_get_accounts(array(), TRUE);
 
   // Retrieve all repositories that users are listed in.
   $repo_ids = array();
@@ -160,7 +160,7 @@ function versioncontrol_admin_account_list() {
 
   // Construct the user account table.
   $header = array(t('User'), t('Accounts'), t('Commits'), t('First commit'), t('Last commit'));
-  $rows = array();
+  $rows_by_uid = array();
   foreach ($accounts as $uid => $usernames_by_repository) {
     $user = $users[$uid];
 
@@ -190,13 +190,21 @@ function versioncontrol_admin_account_list() {
                      ? t('VCS backend is currently disabled')
                      : theme('item_list', $repo_usernames);
 
-    $rows[] = array(
+    $rows_by_uid[$uid] = array(
       theme('username', $user), $vcs_usernames,
       isset($number_commits[$uid]) ? $number_commits[$uid] : 0,
       isset($first_commits[$uid]) ? $first_commits[$uid] : t('n/a'),
       isset($last_commits[$uid]) ? $last_commits[$uid] : t('n/a'),
     );
   }
+
+  // Provide a possibility for backends and other modules to modify the list.
+  foreach (module_implements('versioncontrol_alter_account_list') as $module) {
+    $function = $module .'_versioncontrol_alter_account_list';
+    $function($accounts, $repositories, $header, $rows_by_uid);
+  }
+  // We don't want the uids in the final $rows array.
+  $rows = array_values($rows_by_uid);
 
   // The finished user account list.
   $form['list'] = array(
@@ -235,7 +243,7 @@ function versioncontrol_account_register_page() {
     return '';
   }
 
-  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
+  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), TRUE);
   $repositories = versioncontrol_get_repositories();
 
   // Construct the '#options' array.
