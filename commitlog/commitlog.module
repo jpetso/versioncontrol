@@ -8,6 +8,7 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: mailing out commit messages to the version control admin.
 
 /**
  * Implementation of hook_menu().
@@ -433,6 +434,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
       $project_item = versioncontrol_get_parent_item(
         $commit['repository'], $commit_directory_item, $project['directory']
       );
+      $project_string = theme('commitlog_project', $commit['repository'], $project, $html);
     }
   }
   $directory_item = isset($project_item) ? $project_item : $commit_directory_item;
@@ -441,7 +443,6 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
 
   foreach ($commit_actions as $path => $action) {
     $item = versioncontrol_get_affected_item($action);
-    $item_path = substr($item['path'], strlen($directory_item['path']) + 1);
 
     if (module_exists('versioncontrol_project')) {
       if (isset($project)) {
@@ -449,11 +450,12 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
       }
       else {
         $item_project = versioncontrol_project_get_project_for_item(
-          $commit['repository'], $commit['directory']
+          $commit['repository'], $item['path']
         );
       }
     }
 
+    $item_path = substr($item['path'], strlen($directory_item['path']) + 1);
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
       $item_path = t('!path [directory]', array('!path' => $item_path));
     }
@@ -514,7 +516,9 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
     }
 
     if ($html && isset($item_project)) {
-      $project_string = theme('commitlog_project', $commit['repository'], $project, $html);
+      $project_string = isset($project_string)
+                        ? $project_string
+                        : theme('commitlog_project', $commit['repository'], $item_project, $html);
       $action_string = t('!project: !action', array('!action' => $action_string));
     }
 
