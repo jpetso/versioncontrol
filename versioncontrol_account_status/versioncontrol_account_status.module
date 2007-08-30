@@ -9,6 +9,7 @@
  * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: set newly inserted accounts to "approved" if they were submitted programmatically (without status)
 // TODO: alter the account table in order to add filtering by status
 
 // Status values for VCS access applications.
