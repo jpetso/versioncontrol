@@ -7,7 +7,8 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: admin interface checkbox for variable_get('versioncontrol_allow_unauthorized_access', 0)
+// TODO: provide import and export capabilities for backend modules
+// TODO: use import and export capabilities to redirect to the import/export pages
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -168,6 +169,35 @@ function versioncontrol_menu($may_cache) {
       'type' => MENU_DEFAULT_LOCAL_TASK,
       'weight' => 0,
     );
+    foreach ($backends as $vcs => $backend) {
+      if (versioncontrol_backend_implements($vcs, 'import_accounts')) {
+        $items[] = array(
+          'path' => 'admin/project/versioncontrol-accounts/import',
+          'title' => t('Import'),
+          'description' => t('Import an existing set of VCS user accounts.'),
+          'callback' => 'drupal_get_form',
+          'callback arguments' => array('versioncontrol_admin_account_import_form'),
+          'access' => $admin_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 2,
+        );
+        break;
+      }
+    }
+    foreach ($backends as $vcs => $backend) {
+      if (versioncontrol_backend_implements($vcs, 'export_accounts')) {
+        $items[] = array(
+          'path' => 'admin/project/versioncontrol-accounts/export',
+          'title' => t('Export'),
+          'description' => t('Export VCS user accounts of a specific repository.'),
+          'callback' => 'versioncontrol_admin_account_export_page',
+          'access' => $admin_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 3,
+        );
+        break;
+      }
+    }
 
     $items[] = array(
       'path' => 'versioncontrol/register', // [."/$uid" [."/$repo_id"]]
@@ -2291,6 +2321,44 @@ function versioncontrol_get_file_contents($repository, $file_item) {
     $repository['vcs'], 'get_file_contents', array($repository, $file_item)
   );
 }
+
+
+/**
+ * Implementation of hook_block():
+ * Present a list of the most active developers.
+ */
+function versioncontrol_block($op = 'list', $delta = 0) {
+  if ($op == 'list') {
+    $blocks[0]['info'] = t('Most active developers');
+    return $blocks;
+  }
+  else if ($op == 'view') {
+    if ($delta == 0) {
+      $interval = 7 * 24 * 60 * 60;
+      $length = 15;
+
+      $result = db_query_range("SELECT COUNT(c.commit_id) AS count, c.uid, u.name
+                                FROM {versioncontrol_commits} c
+                                 INNER JOIN {users} u ON c.uid = u.uid
+                                  AND c.uid != 0 AND c.date > %d
+                                GROUP BY c.uid ORDER BY count DESC",
+                                time() - $interval, 0, $length);
+
+      $usernames = array();
+      while ($user = db_fetch_object($result)) {
+        $usernames[] = theme('username', $user);
+      }
+      if (!empty($usernames)) {
+        $block = array(
+          'subject' => t('Most active developers'),
+          'content' => theme('item_list', $usernames),
+        );
+        return $block;
+      }
+    }
+  }
+}
+
 
 /**
  * Retrieve an array where each element represents a single line of the

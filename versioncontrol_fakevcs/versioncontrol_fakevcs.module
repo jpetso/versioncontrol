@@ -1400,3 +1400,74 @@ function versioncontrol_fakevcs_repository($op, $repository) {
               WHERE repo_id = '%d'", $repository['repo_id']);
   }
 }
+
+
+/**
+ * Implementation of [vcs_backend]_import_accounts():
+ * Import accounts into a repository, given text data from the accounts file.
+ * No accounts are deleted, new accounts are inserted, and existing accounts
+ * are updated with imported ones.
+ *
+ * @param $repository
+ *   The repository where the accounts will be imported.
+ * @param $data
+ *   The contents of the "account data" text area where the user has to
+ *   enter/copy the contents of the version control system's accounts file.
+ */
+function versioncontrol_fakevcs_import_accounts($repository, $data) {
+  $accounts = versioncontrol_fakevcs_parse_account_data();
+  foreach ($accounts as $account) {
+    $uid = versioncontrol_get_uid_for_username($repository, $account['username']);
+    $additional_data = array('password' => $account['password']);
+    if (!isset($uid)) {
+      versioncontrol_insert_account($uid, $username, $repository, $additional_data);
+    }
+    else {
+      versioncontrol_update_account($uid, $username, $repository, $additional_data);
+    }
+  }
+}
+
+/**
+ * Implementation of [vcs_backend]_export_accounts():
+ * Export accounts of a repository to text data that is suitable for
+ * copying to the version control system's accounts file.
+ *
+ * @param $repository
+ *   The repository whose accounts will be exported.
+ * @param $accounts
+ *   The list (array) of accounts that should be exported, given in the same
+ *   format as the return value of versioncontrol_get_accounts().
+ *   All accounts in this list are from the above repository.
+ *
+ * @return
+ *   The exported textual representation of the account list.
+ */
+function versioncontrol_fakevcs_export_accounts($repository, $accounts) {
+  $accounts_flat = array();
+  $uid_constraints = array();
+  $params = array($repository['repo_id']);
+
+  foreach ($accounts as $uid => $usernames_per_repository) {
+    foreach ($usernames_per_repository as $repo_id => $username) {
+      $accounts_flat[$uid] = array('uid' => $uid, 'username' => $username);
+      $uid_constraints[] = "uid = '%d'";
+      $params[] = $uid;
+    }
+  }
+
+  $result = db_query("SELECT uid, password FROM {versioncontrol_fakevcs_accounts}
+                      WHERE repo_id = '%d'
+                       AND (". implode(' OR ', $uid_constraints) .")",
+                      $params);
+  while ($account = db_fetch_object($result)) {
+    $accounts_flat[$account->uid]['password'] = $account->password;
+  }
+
+  $data = '';
+  foreach ($accounts_flat as $uid => $account) {
+    $data .= '# '. url('user/'. $uid, NULL, NULL, TRUE) ."\n";
+    $data .= $account['username'] .':'. $account['password'] ."\n";
+  }
+  return $data;
+}

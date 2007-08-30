@@ -12,7 +12,6 @@
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
-
 /**
  * Form callback for "admin/project/versioncontrol-settings/general":
  * Provide a form for settings of Version Control API itself.
@@ -41,6 +40,14 @@ function versioncontrol_admin_settings() {
     '#description' => t('Determines the way that users gain access to VCS repositories.'),
     '#options' => $options,
     '#default_value' => versioncontrol_get_current_authorization_method(),
+    '#weight' => -2,
+  );
+
+  $form['versioncontrol_allow_unauthorized_access'] = array(
+    '#type' => 'checkbox',
+    '#title' => 'Allow repository access to unknown or unauthorized committers',
+    '#description' => 'If this is enabled, VCS users that are not registered or approved can nevertheless commit to repositories, assuming that no other commit restrictions apply. If it is disabled, only authorized users may commit. In any case, this setting only works if the appropriate pre-commit/pre-branch/pre-tag hook script is in place for the respective repository.',
+    '#default_value' => variable_get('versioncontrol_allow_unauthorized_access', 0),
     '#weight' => -1,
   );
 
@@ -89,6 +96,7 @@ function versioncontrol_admin_settings_submit($form_id, $form_values) {
   $value_names = array(
     'versioncontrol_email_address',
     'versioncontrol_authorization_method',
+    'versioncontrol_allow_unauthorized_access',
     'versioncontrol_registration_message_unauthorized',
     'versioncontrol_registration_message_authorized',
   );
@@ -209,6 +217,212 @@ function versioncontrol_admin_account_list() {
   // The finished user account list.
   $form['list'] = array(
     '#value' => theme('table', $header, $rows)
+  );
+  return $form;
+}
+
+
+/**
+ * Form callback for "admin/project/versioncontrol-accounts/import":
+ * A repository select box and a text area for VCS specific account data
+ * that will be imported into the selected repository.
+ */
+function versioncontrol_admin_account_import_form() {
+  $backends = versioncontrol_get_backends();
+  $selected_backends = array();
+  foreach ($backends as $vcs => $backend) {
+    if (versioncontrol_backend_implements($vcs, 'import_accounts')) {
+      $selected_backends[] = $vcs;
+    }
+  }
+
+  $repositories = versioncontrol_get_repositories(array('vcs' => $selected_backends));
+  $form = array();
+
+  if (empty($repositories)) {
+    $form['no_repositories'] = array(
+      '#type' => 'markup',
+      '#value' => t('There are no repositories for which the accounts can be imported.'),
+      '#prefix' => '<p>',
+      '#suffix' => '</p>',
+    );
+    return $form;
+  }
+
+  $repository_names = array();
+  foreach ($repositories as $repo_id => $repository) {
+    if (!isset($first_repo_id)) {
+      $first_repo_id = $repo_id;
+    }
+    $repository_names[$repo_id] = check_plain($repository['name']);
+  }
+
+  $form['repo_id'] = array(
+    '#type' => 'select',
+    '#title' => t('Import accounts into'),
+    '#options' => $repository_names,
+    '#default_value' => $first_repo_id,
+  );
+  $form['data'] = array(
+    '#type' => 'textarea',
+    '#title' => t('Account data'),
+    '#description' => t('The contents of the config file that contains the accounts that shall be imported. Existing accounts will be updated, new accounts will be created, and all others will be left untouched.'),
+    '#cols' => 70,
+    '#rows' => 24,
+    '#required' => TRUE,
+  );
+  $form['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Import accounts'),
+    '#weight' => 100,
+  );
+  return $form;
+}
+
+/**
+ * Submit handler for the "select repository to import" form from above:
+ * Call the [vcs_backend]_admin_import_accounts() with the given data.
+ */
+function versioncontrol_admin_account_import_form_submit($form_id, $form_values) {
+  $repository = versioncontrol_get_repository($form_values['repo_id']);
+  if (!isset($repository)) {
+    drupal_set_message(t('The selected repository could not be found.'), 'error');
+    return;
+  }
+  _versioncontrol_call_backend($repository['vcs'], 'import_accounts',
+                               array($repository, $form_values['data']));
+}
+
+
+/**
+ * Callback for "admin/project/versioncontrol-accounts/export":
+ * A list of accounts with filtering possibilities.
+ */
+function versioncontrol_admin_account_export_page() {
+  $repo_id = arg(4);
+
+  if (is_numeric($repo_id)) {
+    $repository = versioncontrol_get_repository($repo_id);
+  }
+  if (!isset($repository)) {
+    // When the repository is not given, show the redirection page.
+    return drupal_get_form('versioncontrol_admin_account_export_form');
+  }
+  if (!versioncontrol_backend_implements($repository['vcs'], 'export_accounts')) {
+    drupal_not_found();
+    return '';
+  }
+
+  // The repository has already been selected, prepare and export the accounts.
+  $accounts = versioncontrol_get_accounts(array(
+    'repo_ids' => array($repository['repo_id']),
+  ));
+  $data = _versioncontrol_call_backend($repository['vcs'], 'export_accounts',
+                                       array($repository, $accounts));
+  if (arg(5) == 'plaintext') {
+    drupal_set_header('Content-Type: text/plain; charset=utf-8');
+    print $data;
+  }
+  else {
+    return drupal_get_form('versioncontrol_admin_account_export_display_form',
+                           $repository, $data);
+  }
+}
+
+/**
+ * Form callback for "admin/project/versioncontrol-accounts/export":
+ * Select the repository from which to extract data, and show the exported
+ * data on submitting the form.
+ */
+function versioncontrol_admin_account_export_form() {
+  $backends = versioncontrol_get_backends();
+  $selected_backends = array();
+  foreach ($backends as $vcs => $backend) {
+    if (versioncontrol_backend_implements($vcs, 'export_accounts')) {
+      $selected_backends[] = $vcs;
+    }
+  }
+
+  $repositories = versioncontrol_get_repositories(array('vcs' => $selected_backends));
+  $form = array();
+
+  if (empty($repositories)) {
+    $form['no_repositories'] = array(
+      '#type' => 'markup',
+      '#value' => t('There are no repositories for which the accounts can be exported.'),
+      '#prefix' => '<p>',
+      '#suffix' => '</p>',
+    );
+    return $form;
+  }
+
+  $repository_names = array();
+  foreach ($repositories as $repo_id => $repository) {
+    if (!isset($first_repo_id)) {
+      $first_repo_id = $repo_id;
+    }
+    $repository_names[$repo_id] = check_plain($repository['name']);
+  }
+
+  $form['repository'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Select repository'),
+    '#weight' => 10,
+  );
+  $form['repository']['repo_id'] = array(
+    '#type' => 'select',
+    '#title' => t('Export accounts from'),
+    '#options' => $repository_names,
+    '#default_value' => $first_repo_id,
+  );
+  $form['repository']['buttons'] = array();
+  $form['repository']['buttons']['export_to_form'] = array(
+    '#type' => 'submit',
+    '#value' => t('Export to page'),
+  );
+  $form['repository']['buttons']['export_to_plaintext'] = array(
+    '#type' => 'submit',
+    '#value' => t('Export to plaintext'),
+  );
+  return $form;
+}
+
+/**
+ * Submit handler for the "select repository to export" form from above:
+ * Redirect to the export form for the specific repository.
+ */
+function versioncontrol_admin_account_export_form_submit($form_id, $form_values) {
+  $target_path = 'admin/project/versioncontrol-accounts/export/'. $form_values['repo_id'];
+  if ($form_values['op'] == t('Export to plaintext')) {
+    $target_path .= '/plaintext';
+  }
+  return $target_path;
+}
+
+/**
+ * Form callback for "admin/project/versioncontrol-accounts/export/$repo_id":
+ * Show the exported account data in a form as text area.
+ *
+ * @param $repository
+ *   The repository for which accounts have been exported.
+ * @param $data
+ *   The exported account data - the text that is supposed to be copied
+ *   to the version control system's accounts file.
+ */
+function versioncontrol_admin_account_export_display_form($repository, $data) {
+  $backends = versioncontrol_get_backends();
+  $vcs_name = $backends[$repository['vcs']]['name'];
+
+  $form['#vcs'] = $vcs_name;
+  $form['#repository'] = $repository;
+
+  $form['data'] = array(
+    '#type' => 'textarea',
+    '#title' => t('@vcs account data', array('@vcs' => $vcs_name)),
+    '#description' => t('The exported account data. You can copy this to the config file that contains the @vcs accounts.', array('@vcs' => $vcs_name)),
+    '#default_value' => $data,
+    '#cols' => 70,
+    '#rows' => 30,
   );
   return $form;
 }
@@ -699,24 +913,25 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   $form['#vcs'] = $vcs;
   $form['#repository'] = $repository;
 
+  $form['repo_id'] = array(
+    '#type' => 'value',
+    '#value' => isset($repository) ? $repository['repo_id'] : 0,
+  );
+  $form['original_name'] = array(
+    '#type' => 'value',
+    '#value' => isset($repository) ? check_plain($repository['name']) : 0,
+  );
+  $form['vcs'] = array(
+    '#type' => 'value',
+    '#value' => $vcs,
+  );
+
   $form['repository_information'] = array(
     '#type' => 'fieldset',
     '#title' => t('Repository information'),
     '#collapsible' => TRUE,
     '#collapsed' => FALSE,
     '#weight' => 0,
-  );
-  $form['repository_information']['repo_id'] = array(
-    '#type' => 'value',
-    '#value' => isset($repository) ? $repository['repo_id'] : 0,
-  );
-  $form['repository_information']['original_name'] = array(
-    '#type' => 'value',
-    '#value' => isset($repository) ? check_plain($repository['name']) : 0,
-  );
-  $form['repository_information']['vcs'] = array(
-    '#type' => 'value',
-    '#value' => $vcs,
   );
   $form['repository_information']['repo_name'] = array(
     '#type' => 'textfield',
