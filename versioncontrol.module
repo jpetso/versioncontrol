@@ -1592,10 +1592,10 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
  * repository. If you need more detailed querying functionality than this
  * function provides, use versioncontrol_get_accounts() instead.
  *
- * @param $username
- *   The VCS specific username (a string) corresponding to the Drupal user.
  * @param $repo_id
  *   The repository id of the repository where the user has its VCS account.
+ * @param $username
+ *   The VCS specific username (a string) corresponding to the Drupal user.
  * @param $include_unauthorized
  *   If FALSE (which is the default), this function does not return accounts
  *   that are pending, queued, disabled, blocked, or otherwise non-approved.
@@ -1625,10 +1625,10 @@ function versioncontrol_get_account_uid_for_username($repo_id, $username, $inclu
  * repository. If you need more detailed querying functionality than this
  * function provides, use versioncontrol_get_accounts() instead.
  *
- * @param $uid
- *   The Drupal user id corresponding to the VCS account.
  * @param $repo_id
  *   The repository id of the repository where the user has its VCS account.
+ * @param $uid
+ *   The Drupal user id corresponding to the VCS account.
  * @param $include_unauthorized
  *   If FALSE (which is the default), this function does not return accounts
  *   that are pending, queued, disabled, blocked, or otherwise non-approved.
