@@ -749,7 +749,7 @@ function versioncontrol_account_edit_form_validate($form_id, $form_values) {
       );
     }
     // Check for duplicates.
-    $existing_uid = versioncontrol_get_account_uid_for_username($username, $repository, TRUE);
+    $existing_uid = versioncontrol_get_account_uid_for_username($repository['repo_id'], $username, TRUE);
     if ($existing_uid && $uid != $existing_uid) {
       if ($existing_user = user_load(array('uid' => $existing_uid))) {
         $existing_username = theme('username', $existing_user);
@@ -781,14 +781,14 @@ function versioncontrol_account_edit_form_submit($form_id, $form_values) {
   );
 
   if (empty($form_values['original_username'])) {
-    versioncontrol_insert_account($uid, $username, $repository, $additional_data);
+    versioncontrol_insert_account($repository, $uid, $username, $additional_data);
     $message = drupal_set_message(t(
       'The @vcs account %username has been registered.',
       array('@vcs' => $vcs_name, '%username' => $username)
     ));
   }
   else {
-    versioncontrol_update_account($uid, $username, $repository, $additional_data);
+    versioncontrol_update_account($repository, $uid, $username, $additional_data);
     $message = drupal_set_message(t(
       'The @vcs account %username has been updated successfully.',
       array('@vcs' => $vcs_name, '%username' => $username)

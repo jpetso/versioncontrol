@@ -74,7 +74,7 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
       foreach ($accounts_flat as $account) {
         if (isset($repositories[$account['repo_id']])) {
           versioncontrol_delete_account(
-            $account['uid'], $account['username'], $repositories[$account['repo_id']]
+            $repositories[$account['repo_id']], $account['uid'], $account['username']
           );
         }
       }
@@ -1605,7 +1605,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
  *   The Drupal user id that corresponds to the given username and repository,
  *   or NULL if no Drupal user could be associated to those.
  */
-function versioncontrol_get_account_uid_for_username($username, $repo_id, $include_unauthorized = FALSE) {
+function versioncontrol_get_account_uid_for_username($repo_id, $username, $include_unauthorized = FALSE) {
   $result = db_query("SELECT uid, repo_id
                       FROM {versioncontrol_accounts}
                       WHERE username = '%s' AND repo_id = '%d'",
@@ -1638,7 +1638,7 @@ function versioncontrol_get_account_uid_for_username($username, $repo_id, $inclu
  *   The VCS username (a string) that corresponds to the given Drupal user
  *   and repository, or NULL if no VCS account could be associated to those.
  */
-function versioncontrol_get_account_username_for_uid($uid, $repo_id, $include_unauthorized = FALSE) {
+function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_unauthorized = FALSE) {
   $result = db_query("SELECT uid, username, repo_id
                       FROM {versioncontrol_accounts}
                       WHERE uid = '%d' AND repo_id = '%d'",

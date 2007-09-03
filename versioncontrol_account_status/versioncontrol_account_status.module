@@ -146,7 +146,8 @@ function versioncontrol_account_status_get($uid, $repo_id) {
  * Store VCS account status information in the database.
  *
  * @param $data
- *   A structured array in the same format as the result value
+ *   A structured array containing the 'uid', 'repo_id', 'motivation'
+ *   and 'status' elements, in the same format as the result value
  *   of versioncontrol_account_status_get().
  */
 function versioncontrol_account_status_set($status_data) {
@@ -158,17 +159,6 @@ function versioncontrol_account_status_set($status_data) {
             VALUES ('%d', '%d', '%s', '%d')",
             $status_data['uid'], $status_data['repo_id'],
             $status_data['motivation'], $status_data['status']);
-}
-
-/**
- * Implementation of hook_versioncontrol_account():
- * Delete the account status for accounts that are being deleted.
- */
-function versioncontrol_account_status_versioncontrol_account($op, $uid, $username, $repository, $additional_data = array()) {
-  if ($op == 'delete') {
-    db_query("DELETE FROM {versioncontrol_account_status_users}
-              WHERE uid = '%d'", $uid);
-  }
 }
 
 /**
@@ -645,6 +635,8 @@ function versioncontrol_account_status_form_alter_pending(&$form, $status_data) 
     );
   }
 
+  // We can't unset account because other modules might still want
+  // to add elements to the 'account' array, such as a password field.
   $form['account']['#prefix'] = '<!--';
   $form['account']['#suffix'] = '-->';
   unset($form['submit']);
@@ -709,7 +701,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
   // The motivation message is editable for new application submissions,
   // otherwise it will just be displayed as unmodifiable markup.
   if ($is_application) {
-    $form['is_application'] = array(
+    $form['send_application_mails'] = array(
       '#type' => 'value',
       '#value' => TRUE,
     );
@@ -744,12 +736,10 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
     );
   }
   else {
-    foreach ($conditions as $element_name => $texts) {
-      $form[$element_name] = array(
-        '#type' => 'value',
-        '#value' => 1,
-      );
-    }
+    $form['skip_conditions_check'] = array(
+      '#type' => 'value',
+      '#value' => TRUE,
+    );
     $form['motivation'] = array(
       '#type' => 'value',
       '#value' => $status_data['motivation'],
@@ -779,7 +769,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
 
     if ($selected_auth_method == 'versioncontrol_account_status_global') {
       unset($form['account']);
-      unset($form['submit']);
+      unset($form['submit']); // TODO: ...really? I don't remember why I should ever have done so.
       // Replace the validation and submit handlers
       $form['#validate'] = array('versioncontrol_account_status_application_validate' => array());
       $form['#submit'] = array('versioncontrol_account_status_application_submit' => array());
@@ -790,9 +780,8 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
           'Request @vcs account', array('@vcs' => $form['vcs_name']['#value'])
         );
       }
-      // Add our validation and submit handlers, but leave the original ones
+      // Add our validation handler, and leave the original validation and submit ones
       $form['#validate']['versioncontrol_account_status_application_validate'] = array();
-      $form['#submit']['versioncontrol_account_status_application_submit'] = array();
     }
   }
   else if ($is_indirection_form && !$admin_access) {
@@ -810,9 +799,8 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
     if (isset($form['repository'])) { // on the indirection form
       $form['repository']['submit']['#value'] = t('Save account status and create account');
     }
-    // Add our validation and submit handlers, but leave the original ones
+    // Add our validation handler, and leave the original validation and submit ones
     $form['#validate']['versioncontrol_account_status_application_validate'] = array();
-    $form['#submit']['versioncontrol_account_status_application_submit'] = array();
   }
 }
 
@@ -859,6 +847,10 @@ function _versioncontrol_account_status_form_alter_status_admin(&$form, $status_
   if (isset($form['motivation_fieldset']['motivation_display'])) {
     $form['status_admin']['motivation_display'] = $form['motivation_fieldset']['motivation_display'];
   }
+  $form['skip_conditions_check'] = array(
+    '#type' => 'value',
+    '#value' => TRUE,
+  );
   unset($form['motivation_fieldset']);
 
   // Provide the admin with tools to edit the account status.
@@ -893,56 +885,127 @@ function versioncontrol_account_status_application_validate($form_id, $form_valu
   $conditions = _versioncontrol_account_status_get_conditions(
     $strings['default_condition_description'], $strings['default_condition_error']
   );
-  foreach ($conditions as $element_name => $texts) {
-    if ($form_values[$element_name] != 1) {
-      form_set_error($element_name, $texts['error']);
+  if (!isset($form_values['skip_conditions_check'])) {
+    foreach ($conditions as $element_name => $texts) {
+      if ($form_values[$element_name] != 1) {
+        form_set_error($element_name, $texts['error']);
+      }
     }
   }
 }
 
+
 /**
- * The submit handler for the application form (wherever it occurs):
- * Send an email to the admin if necessary.
+ * The submit handler for some configurations of the application form:
+ * Call the actual submit function, as this one is only called when
+ * Version Control API's submit handler has been replaced.
  */
 function versioncontrol_account_status_application_submit($form_id, $form_values) {
-  global $user;
+  $additional_data = versioncontrol_account_status_versioncontrol_extract_account_data($form_values);
+  $submit_data = $additional_data['versioncontrol_account_status'];
+  versioncontrol_account_status_submit($submit_data);
+
+  if (user_access('administer version control systems')) {
+    return 'admin/project/versioncontrol-accounts';
+  }
+  else {
+    $data = $submit_data['status_data'];
+    return 'user/'. $data['uid'] .'/edit/versioncontrol/'. $data['repo_id'];
+  }
+}
+
+/**
+ * Implementation of hook_versioncontrol_extract_account_data():
+ * Extract account status data from the edit/register user account form's
+ * submitted values.
+ */
+function versioncontrol_account_status_versioncontrol_extract_account_data($form_values) {
+  // If the form wasn't altered at all, let it be.
+  if (!isset($form_values['versioncontrol_account_status_uid'])) {
+    return array();
+  }
 
   $applicant_uid = $form_values['versioncontrol_account_status_uid'];
   $repo_id = $form_values['versioncontrol_account_status_repo_id'];
-  $data = versioncontrol_account_status_get($applicant_uid, $repo_id);
-
-  $admin_access = user_access('administer version control systems');
+  $status_data = versioncontrol_account_status_get($applicant_uid, $repo_id);
 
   if (isset($form_values['send_admin_message'])) { // if status administration was on the form
-    if ($data['status'] == $form_values['status']
-        && $data['status'] == VERSIONCONTROL_ACCOUNT_STATUS_QUEUED) {
+    if ($status_data['status'] == $form_values['status']
+        && $status_data['status'] == VERSIONCONTROL_ACCOUNT_STATUS_QUEUED) {
       // The QUEUED status should only indicate the initial status of an
       // application. Once it has been replied to, it should be set to PENDING.
       // In case the administrator forgets to do this, do it automatically.
       $form_values['status'] = VERSIONCONTROL_ACCOUNT_STATUS_PENDING;
     }
   }
+  $status_data['motivation'] = $form_values['motivation'];
+  $status_data['status'] = $form_values['status'];
 
-  // Update the database entry.
-  $data['motivation'] = $form_values['motivation'];
-  $data['status'] = $form_values['status'];
-  versioncontrol_account_status_set($data);
+  return array('versioncontrol_account_status' => array(
+    'status_data' => $status_data,
+    'admin_message' => array(
+      'is_send' => $form_values['send_admin_message'],
+      'contents' => $form_values['admin_message'],
+    ),
+    'send_application_mails' => $form_values['send_application_mails'],
+  ));
+}
 
-  if ($form_values['send_admin_message']) {
-    $admin_message = $form_values['admin_message'];
-    _versioncontrol_account_status_send_status_update_mails($data, $admin_message);
-  }
-  if ($form_values['is_application']) {
-    _versioncontrol_account_status_send_application_mails($data);
-  }
+/**
+ * Implementation of hook_versioncontrol_account():
+ * Insert the account status for accounts that are being inserted or updated,
+ * and delete the account status for those that are being deleted.
+ */
+function versioncontrol_account_status_versioncontrol_account($op, $uid, $username, $repository, $additional_data = array()) {
+  switch ($op) {
+    case 'insert':
+    case 'update':
+      $additional_data = $additional_data['versioncontrol_account_status'];
 
-  // Only the last submit hook will define the redirect,
-  // so replicate the one from the Version Control API here as well.
-  if (user_access('administer version control systems')) {
-    return 'admin/project/versioncontrol-accounts';
+      if (!isset($additional_data)) {
+        // Auto-approve the account if it was inserted programmatically and
+        // the caller doesn't know anything about this module.
+        if ($op == 'insert') {
+          $additional_data = array(
+            'status_data' => array(
+              'uid' => $uid,
+              'repo_id' => $repository['repo_id'],
+              'motivation' => 'Inserted programmatically.',
+              'status' => VERSIONCONTROL_ACCOUNT_STATUS_APPROVED,
+            ),
+            'admin_message' => array('is_send' => FALSE, 'contents' => ''),
+            'send_application_mails' => FALSE,
+          );
+        }
+        // Don't change the status for programmatical updates, though.
+        if ($op == 'update') {
+          break;
+        }
+      }
+      versioncontrol_account_status_submit($additional_data);
+      break;
+
+    case 'delete':
+      db_query("DELETE FROM {versioncontrol_account_status_users}
+                WHERE uid = '%d'", $uid);
+      break;
   }
-  else {
-    return 'user/'. $applicant_uid .'/edit/versioncontrol/'. $repo_id;
+}
+
+/**
+ * The actual submit handler for the application form (wherever it occurs):
+ * Send an email to the user and/or admin, if necessary.
+ */
+function versioncontrol_account_status_submit($submit_data) {
+  $status_data = $submit_data['status_data'];
+  versioncontrol_account_status_set($status_data);
+
+  if ($submit_data['admin_message']['is_send']) {
+    $contents = $submit_data['admin_message'];
+    _versioncontrol_account_status_send_status_update_mails($status_data, $contents);
+  }
+  if ($submit_data['send_application_mails']) {
+    _versioncontrol_account_status_send_application_mails($status_data);
   }
 }
 
@@ -951,8 +1014,7 @@ function versioncontrol_account_status_application_submit($form_id, $form_values
  */
 function _versioncontrol_account_status_send_application_mails($status_data) {
   // Only send notification mails if the admin didn't submit the application.
-  $admin_access = user_access('administer version control systems');
-  if ($admin_access) {
+  if (user_access('administer version control systems')) {
     return;
   }
 

@@ -712,7 +712,7 @@ function _versioncontrol_fill_uid_and_repository($object, $include_unauthorized 
   // If not already there, retrieve the Drupal user id of the committer.
   if (!isset($object['uid'])) {
     $uid = versioncontrol_get_account_uid_for_username(
-      $object['username'], $object['repository']['repo_id'], $include_unauthorized
+      $object['repository']['repo_id'], $object['username'], $include_unauthorized
     );
     // If no uid could be retrieved, blame the commit on user 0 (anonymous).
     $object['uid'] = isset($uid) ? $uid : 0;
@@ -761,17 +761,17 @@ function _versioncontrol_get_common_directory($paths) {
  * Insert a VCS user account into the database,
  * and call the necessary module hooks.
  *
+ * @param $repository
+ *   The repository where the user has its VCS account.
  * @param $uid
  *   The Drupal user id corresponding to the VCS username.
  * @param $username
  *   The VCS specific username (a string).
- * @param $repository
- *   The repository where the user has its VCS account.
  * @param $additional_data
  *   An array of additional author information. Modules can fill this array
  *   by implementing hook_versioncontrol_extract_account_data().
  */
-function versioncontrol_insert_account($uid, $username, $repository, $additional_data = array()) {
+function versioncontrol_insert_account($repository, $uid, $username, $additional_data = array()) {
   db_query(
     "INSERT INTO {versioncontrol_accounts} (uid, repo_id, username)
      VALUES ('%d', '%d', '%s')", $uid, $repository['repo_id'], $username
@@ -804,9 +804,9 @@ function versioncontrol_insert_account($uid, $username, $repository, $additional
 
 /**
  * Update a VCS user account in the database, and call the necessary
- * module hooks. The @p $uid and @p $repository parameters must stay the same
+ * module hooks. The @p $repository and @p $uid parameters must stay the same
  * values as the one given on account creation, whereas @p $username and
- * @p $vcs_specific may change.
+ * @p $additional_data may change.
  *
  * @param $uid
  *   The Drupal user id corresponding to the VCS username.
@@ -818,8 +818,8 @@ function versioncontrol_insert_account($uid, $username, $repository, $additional
  *   An array of additional author information. Modules can fill this array
  *   by implementing hook_versioncontrol_extract_account_data().
  */
-function versioncontrol_update_account($uid, $username, $repository, $additional_data = array()) {
-  $old_username = versioncontrol_get_account_username_for_uid($uid, $repository, TRUE);
+function versioncontrol_update_account($repository, $uid, $username, $additional_data = array()) {
+  $old_username = versioncontrol_get_account_username_for_uid($repository['repo_id'], $uid, TRUE);
   $username_changed = ($username != $old_username);
 
   if ($username_changed) {
@@ -865,14 +865,14 @@ function versioncontrol_update_account($uid, $username, $repository, $additional
  * Delete a VCS user account from the database, set all commits with this
  * account as author to user 0 (anonymous), and call the necessary hooks.
  *
+ * @param $repository
+ *   The repository where the user has its VCS account.
  * @param $uid
  *   The Drupal user id corresponding to the VCS username.
  * @param $username
  *   The VCS specific username (a string).
- * @param $repository
- *   The repository where the user has its VCS account.
  */
-function versioncontrol_delete_account($uid, $username, $repository) {
+function versioncontrol_delete_account($repository, $uid, $username) {
   // Update the commits table.
   db_query("UPDATE {versioncontrol_commits}
             SET uid = '0'
@@ -1094,7 +1094,7 @@ function versioncontrol_delete_repository($repository) {
   );
   foreach ($accounts as $uid => $usernames_by_repository) {
     foreach ($usernames_by_repository as $repo_id => $username) {
-      versioncontrol_delete_account($uid, $username, $repository);
+      versioncontrol_delete_account($repository, $uid, $username);
     }
   }
 
