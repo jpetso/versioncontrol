@@ -7,6 +7,7 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: Filter the accounts table by repository (and username?) and let other modules hook into the filter.
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -156,8 +157,7 @@ function versioncontrol_menu($may_cache) {
       'path' => 'admin/project/versioncontrol-accounts',
       'title' => t('VCS accounts'),
       'description' => t('Manage associations of Drupal users to VCS user accounts.'),
-      'callback' => 'drupal_get_form',
-      'callback arguments' => array('versioncontrol_admin_account_list'),
+      'callback' => 'versioncontrol_admin_account_list_page',
       'access' => $admin_access,
       'type' => MENU_NORMAL_ITEM,
     );

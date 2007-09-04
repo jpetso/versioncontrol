@@ -110,39 +110,57 @@ function versioncontrol_admin_settings_submit($form_id, $form_values) {
  * Form callback for "admin/project/versioncontrol-accounts":
  * A list of accounts with filtering possibilities.
  */
-function versioncontrol_admin_account_list() {
-  $form = array();
+function versioncontrol_admin_account_list_page() {
   $users = array();
   $accounts = versioncontrol_get_accounts(array(), TRUE);
 
   // Retrieve all repositories that users are listed in.
   $repo_ids = array();
   foreach ($accounts as $uid => $usernames_by_repository) {
-    $user = user_load(array('uid' => $uid));
-    if (!$user) {
-      continue;
-    }
-    $users[$uid] = $user;
     foreach ($usernames_by_repository as $repo_id => $username) {
       $repo_ids[] = $repo_id;
     }
   }
+  $repo_ids = array_unique($repo_ids);
+  $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
+  $filter_form = drupal_get_form('versioncontrol_admin_account_list_filter_form', $repositories);
 
+  // Filter the list of accounts.
+  foreach (module_implements('versioncontrol_filter_accounts') as $module) {
+    $function = $module .'_versioncontrol_filter_accounts';
+    $function($accounts);
+  }
+  $accounts = versioncontrol_admin_get_paged_accounts($accounts);
+
+  // Retrieve more info for the accounts that survived filtering.
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    $user = user_load(array('uid' => $uid));
+    if (!$user) {
+      unset($accounts[$uid]);
+      continue;
+    }
+    $users[$uid] = $user;
+  }
   if (empty($users)) {
-    $form['empty'] = array(
-      '#value' => '<p>'. t('No Drupal users are currently associated to VCS user accounts. Please do a mass import of VCS users or add/approve them one by one.') .'</p>'
-    );
-    return $form;
+    return $filter_form .'<p>'.
+      t('No accounts could be found with the current filter settings.')
+      .'</p>';
   }
 
-  $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
+  $uid_constraints = array();
+  $params = array();
+  foreach ($users as $uid => $user) {
+    $uid_constraints[] = "uid = '%d'";
+    $params[] = $uid;
+  }
 
   // Retrieve total, first and last commits of each user.
   $result = db_query("SELECT uid, COUNT(commit_id) AS number_commits,
                        MIN(date) AS first_commit_date, MAX(date) AS last_commit_date,
                        MIN(commit_id) AS first_commit_id, MAX(commit_id) AS last_commit_id
                       FROM {versioncontrol_commits}
-                      GROUP BY uid");
+                      WHERE ". implode(' OR ', $uid_constraints) ."
+                      GROUP BY uid", $params);
 
   $number_commits = array();
   $first_commits = array();
@@ -214,11 +232,124 @@ function versioncontrol_admin_account_list() {
   // We don't want the uids in the final $rows array.
   $rows = array_values($rows_by_uid);
 
-  // The finished user account list.
-  $form['list'] = array(
-    '#value' => theme('table', $header, $rows)
+  // The finished user account list with account filter.
+  $output .= $filter_form . theme('table', $header, $rows);
+
+  if ($pager = theme('pager', NULL, variable_get('versioncontrol_admin_account_pager', 20), 0)) {
+    $output .= $pager;
+  }
+
+  return $output;
+}
+
+/**
+ * Return a subset of the given accounts (10 Drupal users by default, and all
+ * of their VCS usernames). Paging is also used by emulating pager_query().
+ */
+function versioncontrol_admin_get_paged_accounts($accounts, $element = 0) {
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : '';
+  $pager_page_array = explode(',', $page);
+  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
+
+  $limit = variable_get('versioncontrol_admin_account_pager', 20);
+  $i = 0;
+  $paged_accounts = array();
+
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    if ($i >= ($page * $limit) && $i < (($page+1) * $limit)) {
+      $paged_accounts[$uid] = $usernames_by_repository;
+    }
+    ++$i;
+  }
+
+  // Emulate pager_query() in order to get a proper theme('pager').
+  $pager_total_items[$element] = count($accounts);
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
+
+  return $paged_accounts;
+}
+
+/**
+ * A form for filtering accounts which is embedded in the account list page.
+ */
+function versioncontrol_admin_account_list_filter_form($repositories) {
+  $form = array();
+  $repository_names = array(0 => t('All'));
+
+  foreach ($repositories as $repo_id => $repository) {
+    $repository_names[$repo_id] = check_plain($repository['name']);
+  }
+  if (!isset($_SESSION['versioncontrol_filter_repo_id'])) {
+    $_SESSION['versioncontrol_filter_repo_id'] = 0;
+  }
+
+  $form['#id'] = 'vcs-account-filter-form';
+
+  $form['fieldset'] = array(
+    '#type' => 'fieldset',
+    '#title' => t('Filter'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+  );
+  $form['fieldset']['filters'] = array(
+    '#value' => '',
+    '#prefix' => '<div class="container-inline">',
+    '#suffix' => '</div>',
+  );
+  $form['fieldset']['filters']['repo_id'] = array(
+    '#type' => 'select',
+    '#title' => t('Repository'),
+    '#options' => $repository_names,
+    '#default_value' => $_SESSION['versioncontrol_filter_repo_id'],
+    '#weight' => 10,
+  );
+  $form['fieldset']['filters']['submit'] = array(
+    '#type' => 'submit',
+    '#value' => t('Filter'),
+    '#weight' => 100,
   );
   return $form;
+}
+
+/**
+ * Submit handler for the account filter form.
+ */
+function versioncontrol_admin_account_list_filter_form_submit($form_id, $form_values) {
+  $_SESSION['versioncontrol_filter_repo_id'] = $form_values['repo_id'];
+}
+
+/**
+ * Implementation of hook_versioncontrol_filter_accounts():
+ * Unset filtered accounts before they are even attempted to be displayed
+ * on the account list.
+ *
+ * @param $accounts
+ *   The accounts that would normally be displayed, in the same format as the
+ *   return value of versioncontrol_get_accounts(). Entries in this list
+ *   may be unset by this filter function.
+ */
+function versioncontrol_versioncontrol_filter_accounts(&$accounts) {
+  if (!isset($_SESSION['versioncontrol_filter_repo_id'])) {
+    $_SESSION['versioncontrol_filter_repo_id'] = 0;
+  }
+  $filter_repo_id = $_SESSION['versioncontrol_filter_repo_id'];
+
+  if ($filter_repo_id == 0) {
+    return; // Don't change the list if "All" repositories are selected.
+  }
+
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    foreach ($usernames_by_repository as $repo_id => $username) {
+      if ($repo_id != $filter_repo_id) {
+        unset($accounts[$uid][$repo_id]);
+        if (empty($accounts[$uid])) {
+          unset($accounts[$uid]);
+        }
+      }
+    }
+  }
 }
 
 

@@ -14,6 +14,7 @@
 
 // Status values for VCS access applications.
 define('VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED', 0); // not in the database
+define('VERSIONCONTROL_ACCOUNT_STATUS_ALL',       0); // any of the following
 define('VERSIONCONTROL_ACCOUNT_STATUS_QUEUED',    1); // not yet looked at
 define('VERSIONCONTROL_ACCOUNT_STATUS_PENDING',   2); // needs more info from the applicant
 define('VERSIONCONTROL_ACCOUNT_STATUS_APPROVED',  3); // evaluated and approved
@@ -271,6 +272,10 @@ function _versioncontrol_account_status_get_cell($uid, $usernames_by_repository,
  */
 function versioncontrol_account_status_form_alter($form_id, &$form) {
   switch ($form['#id']) {
+    case 'vcs-account-filter-form':
+      versioncontrol_account_status_account_filter_form_alter($form_id, $form);
+      break;
+
     case 'versioncontrol-settings-form':
       versioncontrol_account_status_global_settings_form_alter($form_id, $form);
       break;
@@ -305,10 +310,82 @@ function versioncontrol_account_status_form_alter($form_id, &$form) {
 
 /**
  * Implementation of hook_form_alter() for Version Control API's
+ * account filtering form on the admin account list.
+ */
+function versioncontrol_account_status_account_filter_form_alter($form_id, &$form) {
+  $options = array_merge(
+    array(VERSIONCONTROL_ACCOUNT_STATUS_ALL => t('All')),
+    _versioncontrol_account_status_get_status_options()
+  );
+
+  if (!isset($_SESSION['versioncontrol_account_status_filter'])) {
+    $_SESSION['versioncontrol_account_status_filter'] = VERSIONCONTROL_ACCOUNT_STATUS_QUEUED;
+  }
+
+  $form['#submit']['versioncontrol_account_status_account_filter_form_submit'] = array();
+
+  $form['fieldset']['filters']['versioncontrol_account_status'] = array(
+    '#type' => 'select',
+    '#title' => t('Status'),
+    '#options' => $options,
+    '#default_value' => $_SESSION['versioncontrol_account_status_filter'],
+    '#weight' => 0,
+  );
+}
+
+/**
+ * Additional submit handler for the account filter form.
+ */
+function versioncontrol_account_status_account_filter_form_submit($form_id, $form_values) {
+  $_SESSION['versioncontrol_account_status_filter'] = $form_values['versioncontrol_account_status'];
+}
+
+/**
+ * Implementation of hook_versioncontrol_filter_accounts():
+ * Unset filtered accounts before they are even attempted to be displayed
+ * on the account list.
+ *
+ * @param $accounts
+ *   The accounts that would normally be displayed, in the same format as the
+ *   return value of versioncontrol_get_accounts(). Entries in this list
+ *   may be unset by this filter function.
+ */
+function versioncontrol_account_status_versioncontrol_filter_accounts(&$accounts) {
+  if (!isset($_SESSION['versioncontrol_account_status_filter'])) {
+    $_SESSION['versioncontrol_account_status_filter'] = 0;
+  }
+  $filter_status = $_SESSION['versioncontrol_account_status_filter'];
+
+  if ($filter_status == VERSIONCONTROL_ACCOUNT_STATUS_ALL) {
+    return; // Don't change the list if "All" statuses are selected.
+  }
+
+  $uid_constraints = array();
+  $params = array($filter_status);
+  foreach ($accounts as $uid => $usernames_by_repository) {
+    $uid_constraints[] = "uid = '%d'";
+    $params[] = $uid;
+  }
+
+  // Retrieve all users with the given status.
+  $result = db_query("SELECT DISTINCT uid FROM {versioncontrol_account_status_users}
+                      WHERE status = '%d'
+                       AND (". implode(' OR ', $uid_constraints) .")", $params);
+
+  $filtered_accounts = array();
+  while ($account = db_fetch_object($result)) {
+    $filtered_accounts[$account->uid] = $accounts[$account->uid];
+  }
+  $accounts = $filtered_accounts;
+}
+
+
+/**
+ * Implementation of hook_form_alter() for Version Control API's
  * account authorization settings form.
  */
 function versioncontrol_account_status_global_settings_form_alter($form_id, &$form) {
-  $form['#validate']['versioncontrol_account_status_global_settings_form_validate'] = array();
+  $form['#submit']['versioncontrol_account_status_global_settings_form_submit'] = array();
 
   $form['versioncontrol_account_status_application_form'] = array(
     '#type' => 'fieldset',
