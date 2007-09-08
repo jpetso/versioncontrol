@@ -9,8 +9,7 @@
  * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: set newly inserted accounts to "approved" if they were submitted programmatically (without status)
-// TODO: alter the account table in order to add filtering by status
+// TODO: make the conditions hook a replacement function call to a .local.inc file
 
 // Status values for VCS access applications.
 define('VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED', 0); // not in the database
@@ -35,7 +34,7 @@ function _versioncontrol_account_status_get_status_options($include_undefined = 
 }
 
 // Special repo_id value which means "all repositories" in this module.
-define('VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL',    0);
+define('VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL', 0);
 
 /**
  * Implementation of hook_versioncontrol_authorization_methods().
@@ -54,7 +53,7 @@ function versioncontrol_account_status_versioncontrol_authorization_methods() {
 }
 
 /**
- * Retrieve a list of necessary requirements that each applicant must agree to
+ * Retrieve a list of necessary requirements that each applicant must agree
  * in order to get the application approved. This list can be altered by
  * hooking into hook_versioncontrol_account_status_conditions_alter(&$conditions)
  * (sorry for the long function name) so that it's a breeze to replace
