@@ -167,7 +167,7 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  *   by calling versioncontrol_get_access_errors().
  */
 function versioncontrol_has_branch_access($branch, $branched_items) {
-  $branch = _versioncontrol_fill_uid_and_repository($branch);
+  $branch = _versioncontrol_fill_branch_or_tag($branch, $branched_items);
   if (!isset($branch['repository'])) {
     _versioncontrol_set_repository_error(t('branch'));
     return FALSE;
@@ -221,7 +221,7 @@ function versioncontrol_has_branch_access($branch, $branched_items) {
  *   by calling versioncontrol_get_access_errors().
  */
 function versioncontrol_has_tag_access($tag, $tagged_items) {
-  $tag = _versioncontrol_fill_uid_and_repository($tag);
+  $tag = _versioncontrol_fill_branch_or_tag($tag, $tagged_items);
   if (!isset($tag['repository'])) {
     _versioncontrol_set_repository_error(t('tag'));
     return FALSE;
@@ -240,7 +240,6 @@ function versioncontrol_has_tag_access($tag, $tagged_items) {
  * internally, so let's share the code in a common function.
  */
 function _versioncontrol_has_branch_or_tag_access($hook, $branch_or_tag, $items) {
-  $branch_or_tag['directory'] = _versioncontrol_get_common_directory($items);
   $error_messages = array();
 
   foreach (module_implements($hook) as $module) {
@@ -1204,6 +1203,25 @@ function versioncontrol_ensure_branch($branch_name, $repo_id) {
               VALUES ('%d', '%d', '%s')", $branch_id, $repo_id, $branch_name);
   }
   return $branch_id;
+}
+
+/**
+ * Export a repository's authenticated accounts to the version control system's
+ * password file format.
+ *
+ * @param $repository
+ *   The repository array of the repository whose accounts should be exported.
+ *
+ * @return
+ *   The plaintext result data which could be written into the password file
+ *   as is.
+ */
+function versioncontrol_export_accounts($repository) {
+  $accounts = versioncontrol_get_accounts(array(
+    'repo_ids' => array($repository['repo_id']),
+  ));
+  return _versioncontrol_call_backend($repository['vcs'], 'export_accounts',
+                                      array($repository, $accounts));
 }
 
 

@@ -101,6 +101,89 @@ function versioncontrol_install() {
       break;
 
     case 'pgsql':
+      db_query("CREATE TABLE {versioncontrol_commits} (
+        commit_id int NOT NULL default '0',
+        repo_id int NOT NULL default '0',
+        date bigint NOT NULL default '0',
+        uid int NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        directory varchar(255) NOT NULL default '',
+        message text,
+        revision varchar(255) NOT NULL default '',
+        PRIMARY KEY (commit_id)
+      )");
+      db_query("CREATE INDEX {versioncontrol_commits}_repo_id_idx ON {versioncontrol_commits} (repo_id)");
+      db_query("CREATE INDEX {versioncontrol_commits}_uid_idx ON {versioncontrol_commits} (uid)");
+      db_query("CREATE INDEX {versioncontrol_commits}_date_idx ON {versioncontrol_commits} (date)");
+
+      db_query("CREATE TABLE {versioncontrol_branches} (
+        branch_id int NOT NULL default '0',
+        repo_id int NOT NULL default '0',
+        branch_name varchar(255) NOT NULL default '',
+        PRIMARY KEY (branch_id),
+        UNIQUE (repo_id, branch_name)
+      )");
+
+      db_query("CREATE TABLE {versioncontrol_branch_operations} (
+        branch_op_id int NOT NULL default '0',
+        branch_id int NOT NULL default '0',
+        action smallint NOT NULL default '0',
+        date bigint NOT NULL default '0',
+        uid int NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        directory varchar(255) NOT NULL default '',
+        PRIMARY KEY (branch_op_id)
+      )");
+      db_query("CREATE INDEX {versioncontrol_branch_operations}_branch_id_idx
+                ON {versioncontrol_branch_operations} (branch_id)");
+
+      db_query("CREATE TABLE {versioncontrol_tag_operations} (
+        tag_op_id int NOT NULL default '0',
+        repo_id int NOT NULL default '0',
+        tag_name varchar(255) NOT NULL default '',
+        action smallint NOT NULL default '0',
+        date bigint NOT NULL default '0',
+        uid int NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        directory varchar(255) NOT NULL default '',
+        PRIMARY KEY (branch_op_id)
+      )");
+      db_query("CREATE INDEX {versioncontrol_tag_operations}_tag_id_idx
+                ON {versioncontrol_tag_operations} (tag_id)");
+
+      db_query("CREATE TABLE {versioncontrol_repositories} (
+        repo_id int NOT NULL default '0',
+        name varchar(255) NOT NULL default '',
+        vcs varchar(8) NOT NULL default '',
+        root varchar(255) NOT NULL default '',
+        url_backend varchar(64) NOT NULL default '',
+        PRIMARY KEY (repo_id),
+        UNIQUE (name)
+      )");
+
+      db_query("CREATE TABLE {versioncontrol_repository_urls} (
+        repo_id int NOT NULL default '0',
+        commit_view varchar(255) NOT NULL default '',
+        file_view varchar(255) NOT NULL default '',
+        directory_view varchar(255) NOT NULL default '',
+        diff varchar(255) NOT NULL default '',
+        tracker varchar(255) NOT NULL default '',
+        PRIMARY KEY (repo_id)
+      )");
+
+      db_query("CREATE TABLE {versioncontrol_repository_internal_data} (
+        repo_id int NOT NULL default '0',
+        registration_message text,
+        PRIMARY KEY (repo_id)
+      )");
+
+      db_query("CREATE TABLE {versioncontrol_accounts} (
+        uid int NOT NULL default '0',
+        repo_id int NOT NULL default '0',
+        username varchar(64) NOT NULL default '',
+        PRIMARY KEY (uid, repo_id),
+        UNIQUE (repo_id, username)
+      )");
       break;
   }
 }

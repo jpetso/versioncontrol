@@ -427,7 +427,8 @@ function versioncontrol_admin_account_import_form_submit($form_id, $form_values)
 
 /**
  * Callback for "admin/project/versioncontrol-accounts/export":
- * A list of accounts with filtering possibilities.
+ * Export a repository's authenticated accounts to the version control system's
+ * password file format.
  */
 function versioncontrol_admin_account_export_page() {
   $repo_id = arg(4);
@@ -441,15 +442,12 @@ function versioncontrol_admin_account_export_page() {
   }
   if (!versioncontrol_backend_implements($repository['vcs'], 'export_accounts')) {
     drupal_not_found();
-    return '';
+    return;
   }
 
-  // The repository has already been selected, prepare and export the accounts.
-  $accounts = versioncontrol_get_accounts(array(
-    'repo_ids' => array($repository['repo_id']),
-  ));
-  $data = _versioncontrol_call_backend($repository['vcs'], 'export_accounts',
-                                       array($repository, $accounts));
+  // The repository has already been selected, export the accounts.
+  $data = versioncontrol_export_accounts($repository);
+
   if (arg(5) == 'plaintext') {
     drupal_set_header('Content-Type: text/plain; charset=utf-8');
     print $data;
@@ -585,7 +583,7 @@ function versioncontrol_account_register_page() {
   }
   if (!$admin_access && $uid != $user->uid) {
     drupal_access_denied();
-    return '';
+    return;
   }
 
   $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), TRUE);

@@ -17,17 +17,25 @@ function commit_restrictions_install() {
     case 'mysql':
       db_query("CREATE TABLE {commit_restrictions} (
         repo_id int unsigned NOT NULL default '0',
-        allowed_paths longtext NOT NULL,
-        forbidden_paths longtext NOT NULL,
+        allowed_paths text,
+        forbidden_paths text,
         deny_undefined_paths tinyint NOT NULL default '0',
         valid_branches varchar(255) NOT NULL default '',
         valid_tags varchar(255) NOT NULL default '',
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-
       break;
 
     case 'pgsql':
+      db_query("CREATE TABLE {commit_restrictions} (
+        repo_id int NOT NULL default '0',
+        allowed_paths text,
+        forbidden_paths text,
+        deny_undefined_paths smallint NOT NULL default '0',
+        valid_branches varchar(255) NOT NULL default '',
+        valid_tags varchar(255) NOT NULL default '',
+        PRIMARY KEY (repo_id)
+      )");
       break;
   }
 }

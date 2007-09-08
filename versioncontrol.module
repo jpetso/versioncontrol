@@ -7,7 +7,6 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: Filter the accounts table by repository (and username?) and let other modules hook into the filter.
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
