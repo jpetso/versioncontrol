@@ -825,7 +825,11 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     );
   }
   else {
-    $form['account']['account_name'] = array(
+    $form['account_name'] = array(
+      '#type' => 'value',
+      '#value' => $username,
+    );
+    $form['account']['account_name_display'] = array(
       '#type' => 'item',
       '#title' => t('@vcs username', array('@vcs' => $vcs_name)),
       '#description' => t('Your @vcs username. This field can only be edited by administrators and is used to link your @vcs messages to your user account.', array('@vcs' => $vcs_name)),
@@ -918,10 +922,15 @@ function versioncontrol_account_edit_form_submit($form_id, $form_values) {
   }
   else {
     versioncontrol_update_account($repository, $uid, $username, $additional_data);
-    $message = drupal_set_message(t(
-      'The @vcs account %username has been updated successfully.',
-      array('@vcs' => $vcs_name, '%username' => $username)
-    ));
+
+    // Regular users cannot change the username, and will probably get
+    // a message for each of the other actions that hook into the form.
+    if (user_access('administer version control systems')) {
+      $message = drupal_set_message(t(
+        'The @vcs account %username has been updated successfully.',
+        array('@vcs' => $vcs_name, '%username' => $username)
+      ));
+    }
   }
   if (user_access('administer version control systems')) {
     return 'admin/project/versioncontrol-accounts';

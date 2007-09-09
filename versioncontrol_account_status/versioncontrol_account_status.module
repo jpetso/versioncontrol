@@ -9,7 +9,6 @@
  * Copyright 2006, 2007 by Derek Wright ("dww", http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: make the conditions hook a replacement function call to a .local.inc file
 
 // Status values for VCS access applications.
 define('VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED', 0); // not in the database
@@ -19,6 +18,16 @@ define('VERSIONCONTROL_ACCOUNT_STATUS_PENDING',   2); // needs more info from th
 define('VERSIONCONTROL_ACCOUNT_STATUS_APPROVED',  3); // evaluated and approved
 define('VERSIONCONTROL_ACCOUNT_STATUS_DECLINED',  4); // evaluated, but not approved
 define('VERSIONCONTROL_ACCOUNT_STATUS_DISABLED',  5); // was approved, but has been revoked
+
+// Special repo_id value which means "all repositories" in this module.
+define('VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL', 0);
+
+// Include site specific overrides if they exist.
+$path = drupal_get_path('module', 'versioncontrol_account_status');
+if (file_exists($path .'/versioncontrol_account_status_local.inc')) {
+  include_once($path .'/versioncontrol_account_status_local.inc');
+}
+
 
 function _versioncontrol_account_status_get_status_options($include_undefined = FALSE) {
   $options = array();
@@ -32,9 +41,6 @@ function _versioncontrol_account_status_get_status_options($include_undefined = 
   $options[VERSIONCONTROL_ACCOUNT_STATUS_DISABLED] = t('Disabled');
   return $options;
 }
-
-// Special repo_id value which means "all repositories" in this module.
-define('VERSIONCONTROL_ACCOUNT_STATUS_GLOBAL', 0);
 
 /**
  * Implementation of hook_versioncontrol_authorization_methods().
@@ -53,11 +59,10 @@ function versioncontrol_account_status_versioncontrol_authorization_methods() {
 }
 
 /**
- * Retrieve a list of necessary requirements that each applicant must agree
- * in order to get the application approved. This list can be altered by
- * hooking into hook_versioncontrol_account_status_conditions_alter(&$conditions)
- * (sorry for the long function name) so that it's a breeze to replace
- * the standard precondition with site specific ones.
+ * Retrieve a list of necessary requirements that each applicant must agree to
+ * in order to get the application approved. This list can be replaced by
+ * implementing versioncontrol_account_status_local_conditions() in the
+ * versioncontrol_account_status_local.inc file.
  *
  * @return
  *   An array of conditions that are afterwards transformed into form elements.
@@ -71,17 +76,17 @@ function versioncontrol_account_status_versioncontrol_authorization_methods() {
  *   - 'error': The error message that is shown if the user stays with "No".
  */
 function _versioncontrol_account_status_get_conditions($default_condition_description, $default_condition_error) {
-  $conditions = array(
-    'policy' => array(
-      'description' => $default_condition_description,
-      'error' => $default_condition_error,
-    ),
-  );
-  foreach (module_implements('versioncontrol_account_status_conditions_alter') as $module) {
-    $function = $module .'_versioncontrol_account_status_conditions_alter';
-    $function($conditions);
+  if (function_exists('versioncontrol_account_status_local_conditions')) {
+    return versioncontrol_account_status_local_conditions();
   }
-  return $conditions;
+  else {
+    return array(
+      'policy' => array(
+        'description' => $default_condition_description,
+        'error' => $default_condition_error,
+      ),
+    );
+  }
 }
 
 /**
@@ -434,7 +439,7 @@ function versioncontrol_account_status_repository_settings_form_alter($form_id, 
 
   $form['versioncontrol_account_status_application_form'] = array(
     '#type' => 'fieldset',
-    '#title' => t('Account application form strings'),
+    '#title' => t('Account application form messages'),
     '#description' => t('If site-wide account approval is enabled, the following messages are shown on the application form (which replaces the account registration forms until the account is approved).'),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
@@ -485,20 +490,34 @@ function versioncontrol_account_status_settings_form_alter($form_id, &$form, $st
     '#description' => t('Message to show to authenticated users who are applying for a CVS account.'),
     '#default_value' => $strings['application_message'],
   );
-  $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_default_condition_description'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Required pledge'),
-    '#description' => t('A statement that the user needs to answer with "Yes" in order to proceed with the application. (If more of these statements are required, you can add those with a custom module.)'),
-    '#default_value' => $strings['default_condition_description'],
-    '#size' => 100,
-  );
-  $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_default_condition_error'] = array(
-    '#type' => 'textfield',
-    '#title' => t('Error message for the required pledge'),
-    '#description' => t('The error text that is shown when the user doesn\'t select "Yes" for the above statement.'),
-    '#default_value' => $strings['default_condition_error'],
-    '#size' => 100,
-  );
+
+  if (!function_exists('versioncontrol_account_status_local_conditions')) {
+    $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_default_condition_description'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Required pledge'),
+      '#description' => t('A statement that the user needs to answer with "Yes" in order to proceed with the application. (If more of these statements are required, you can add those with custom code.)'),
+      '#default_value' => $strings['default_condition_description'],
+      '#size' => 100,
+    );
+    $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_default_condition_error'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Error message for the required pledge'),
+      '#description' => t('The error text that is shown when the user doesn\'t select "Yes" for the above statement.'),
+      '#default_value' => $strings['default_condition_error'],
+      '#size' => 100,
+    );
+  }
+  else {
+    $form['versioncontrol_account_status_default_condition_description'] = array(
+      '#type' => 'value',
+      '#value' => $strings['default_condition_description'],
+    );
+    $form['versioncontrol_account_status_default_condition_error'] = array(
+      '#type' => 'value',
+      '#value' => $strings['default_condition_error'],
+    );
+  }
+
   $form['versioncontrol_account_status_application_form']['versioncontrol_account_status_motivation_description'] = array(
     '#type' => 'textarea',
     '#title' => t('Motivation message description'),
@@ -897,11 +916,6 @@ function _versioncontrol_account_status_form_alter_reapplication(&$form) {
     '#suffix' => '</em></p>',
     '#weight' => -100,
   );
-  // Since disabled accounts (possibly with a commit history) are also
-  // eligible for reapplication, the username field is set to disabled.
-  if (isset($form['account'])) {
-    $form['account']['account_name']['#disabled'] = TRUE;
-  }
 }
 
 /**
