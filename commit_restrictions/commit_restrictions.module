@@ -8,8 +8,6 @@
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 // TODO: directories where branches and tags may be created
-// TODO: better error message for invalid branch, but valid tag
-//       (and the other way round)
 
 /**
  * Implementation of hook_form_alter(): Add commit restriction settings
@@ -360,13 +358,29 @@ function commit_restrictions_versioncontrol_branch_access($branch, $branched_ite
         return array();
       }
     }
+
     // no branch regexps match this branch, so deny it
     $error_message = t(
-      "** ERROR: the !name branch is not allowed in this repository.",
+      '** ERROR: the !name branch is not allowed in this repository.',
       array('!name' => $branch['branch_name'])
     );
+    // The user might have mistaken tags for branches -
+    // in that case, we should explain how it actually works.
+    if (!empty($restrictions['valid_tags'])) {
+      foreach ($restrictions['valid_tags'] as $valid_tag_regexp) {
+        if (preg_match($valid_tag_regexp, $branch['branch_name'])) {
+          $error_message = t(
+'** ERROR: "!name" is a valid name for a tag, but not for a branch.
+** You must either create a tag with this name, or choose a valid branch name.',
+            array('!name' => $branch['branch_name'])
+          );
+        }
+      }
+    }
     return array($error_message);
   }
+
+  // No branch restrictions, the user may proceed.
   return array();
 }
 
@@ -418,12 +432,28 @@ function commit_restrictions_versioncontrol_tag_access($tag, $tagged_items) {
         return array();
       }
     }
-    // no branch regexps match this branch, so deny it
+
+    // no tag regexps match this branch, so deny it
     $error_message = t(
-      "** ERROR: the !name tag is not allowed in this repository.",
+      '** ERROR: the !name tag is not allowed in this repository.',
       array('!name' => $tag['tag_name'])
     );
+    // The user might have mistaken branches for tags -
+    // in that case, we should explain how it actually works.
+    if (!empty($restrictions['valid_branches'])) {
+      foreach ($restrictions['valid_branches'] as $valid_branch_regexp) {
+        if (preg_match($valid_branch_regexp, $tag['tag_name'])) {
+          $error_message = t(
+'** ERROR: "!name" is a valid name for a branch, but not for a tag.
+** You must either create a branch with this name, or choose a valid tag name.',
+            array('!name' => $tag['tag_name'])
+          );
+        }
+      }
+    }
     return array($error_message);
   }
+
+  // No tag restrictions, the user may proceed.
   return array();
 }
