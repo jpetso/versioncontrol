@@ -7,7 +7,6 @@
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: directories where branches and tags may be created
 
 /**
  * Implementation of hook_form_alter(): Add commit restriction settings
@@ -57,6 +56,13 @@ function commit_restrictions_form_alter($form_id, &$form) {
         '#collapsed' => TRUE,
         '#weight' => 7,
       );
+      $form['branch_tag_restrictions']['valid_branch_tag_paths'] = array(
+        '#type' => 'textfield',
+        '#title' => t('Allowed paths for branches and tags'),
+        '#description' => t('A space-separated list of PHP regular expressions for directories or files where it will be possible to create branches and tags. Example: "@^(/[^/]+)?/(modules|themes|theme-engines|docs|translations)/@"'),
+        '#default_value' => implode(' ', $restrictions['valid_branch_tag_paths']),
+        '#size' => 60,
+      );
       $form['branch_tag_restrictions']['valid_branches'] = array(
         '#type' => 'textfield',
         '#title' => t('Valid branches'),
@@ -82,27 +88,31 @@ function commit_restrictions_form_alter($form_id, &$form) {
  */
 function commit_restrictions_versioncontrol_extract_repository_data($form_values) {
   $allowed_paths = empty($form_values['allowed_paths'])
-                   ? array() : array_filter(explode(' ', $form_values['allowed_paths']));
+    ? array() : array_filter(explode(' ', $form_values['allowed_paths']));
 
   $forbidden_paths = empty($form_values['forbidden_paths'])
-                     ? array() : array_filter(explode(' ', $form_values['forbidden_paths']));
+    ? array() : array_filter(explode(' ', $form_values['forbidden_paths']));
 
   $deny_undefined_paths = isset($form_values['deny_undefined_paths'])
                           ? FALSE : $form_values['deny_undefined_paths'];
 
+  $valid_branch_tag_paths = empty($form_values['valid_branch_tag_paths'])
+    ? array() : array_filter(explode(' ', $form_values['valid_branch_tag_paths']));
+
   $valid_branches = empty($form_values['valid_branches'])
-                    ? array() : array_filter(explode(' ', $form_values['valid_branches']));
+    ? array() : array_filter(explode(' ', $form_values['valid_branches']));
 
   $valid_tags = empty($form_values['valid_tags'])
-                ? array() : array_filter(explode(' ', $form_values['valid_tags']));
+    ? array() : array_filter(explode(' ', $form_values['valid_tags']));
 
   return array(
     'commit_restrictions' => array(
-      'allowed_paths'        => $form_values['allowed_paths'],
-      'forbidden_paths'      => $form_values['forbidden_paths'],
-      'deny_undefined_paths' => $form_values['deny_undefined_paths'],
-      'valid_branches'       => $form_values['valid_branches'],
-      'valid_tags'           => $form_values['valid_tags'],
+      'allowed_paths'          => $form_values['allowed_paths'],
+      'forbidden_paths'        => $form_values['forbidden_paths'],
+      'deny_undefined_paths'   => $form_values['deny_undefined_paths'],
+      'valid_branch_tag_paths' => $form_values['valid_branch_tag_paths'],
+      'valid_branches'         => $form_values['valid_branches'],
+      'valid_tags'             => $form_values['valid_tags'],
     ),
   );
 }
@@ -150,10 +160,12 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
       if (isset($restrictions)) {
         db_query("INSERT INTO {commit_restrictions}
                   (repo_id, allowed_paths, forbidden_paths,
-                   deny_undefined_paths, valid_branches, valid_tags)
-                  VALUES ('%d', '%s', '%s', '%d', '%s', '%s')",
+                   deny_undefined_paths, valid_branch_tag_paths,
+                   valid_branches, valid_tags)
+                  VALUES ('%d', '%s', '%s', '%d', '%s', '%s', '%s')",
                   $repository['repo_id'], $restrictions['allowed_paths'],
                   $restrictions['forbidden_paths'], $restrictions['deny_undefined_paths'],
+                  $restrictions['valid_branch_tag_paths'],
                   $restrictions['valid_branches'], $restrictions['valid_tags']);
       }
       break;
@@ -181,22 +193,25 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
 function _commit_restrictions_load($repo_id) {
   if ($repo_id) {
     $result = db_query("SELECT allowed_paths, forbidden_paths,
-                              deny_undefined_paths, valid_branches, valid_tags
+                               deny_undefined_paths, valid_branch_tag_paths,
+                               valid_branches, valid_tags
                         FROM {commit_restrictions}
                         WHERE repo_id = '%d'", $repo_id);
 
     while ($restrictions = db_fetch_object($result)) {
       return array(
-        'allowed_paths'   => empty($restrictions->allowed_paths)
-                             ? array() : explode(' ', $restrictions->allowed_paths),
-        'forbidden_paths' => empty($restrictions->forbidden_paths)
-                             ? array() : explode(' ', $restrictions->forbidden_paths),
-        'valid_branches'  => empty($restrictions->valid_branches)
-                             ? array() : explode(' ', $restrictions->valid_branches),
-        'valid_tags'      => empty($restrictions->valid_tags)
-                             ? array() : explode(' ', $restrictions->valid_tags),
-        'deny_undefined_paths' => ($restrictions->deny_undefined_paths > 0)
-                                  ? TRUE : FALSE,
+        'allowed_paths'          => empty($restrictions->allowed_paths)
+                                    ? array() : explode(' ', $restrictions->allowed_paths),
+        'forbidden_paths'        => empty($restrictions->forbidden_paths)
+                                    ? array() : explode(' ', $restrictions->forbidden_paths),
+        'valid_branch_tag_paths' => empty($restrictions->valid_branch_tag_paths)
+                                    ? array() : explode(' ', $restrictions->valid_branch_tag_paths),
+        'valid_branches'         => empty($restrictions->valid_branches)
+                                    ? array() : explode(' ', $restrictions->valid_branches),
+        'valid_tags'             => empty($restrictions->valid_tags)
+                                    ? array() : explode(' ', $restrictions->valid_tags),
+        'deny_undefined_paths'   => ($restrictions->deny_undefined_paths > 0)
+                                    ? TRUE : FALSE,
       );
     }
   }
@@ -206,6 +221,7 @@ function _commit_restrictions_load($repo_id) {
     'allowed_paths' => array(),
     'forbidden_paths' => array(),
     'deny_undefined_paths' => FALSE,
+    'valid_branch_tag_paths' => array(),
     'valid_branches' => array(),
     'valid_tags' => array(),
   );
@@ -304,8 +320,8 @@ function _commit_restrictions_item_error_message($item) {
   $itemtype = ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY)
               ? t('directory') : t('file');
   return t(
-    "** Access denied: committing to this !itemtype is not allowed:\n".
-    "** !path",
+'** Access denied: committing to this !itemtype is not allowed:
+** !path',
     array('!itemtype' => $itemtype, '!path' => $item['path'])
   );
 }
@@ -352,6 +368,13 @@ function commit_restrictions_versioncontrol_branch_access($branch, $branched_ite
 
   $restrictions = _commit_restrictions_load($branch['repository']['repo_id']);
 
+  // Make sure that branches may be created at all in this directory.
+  $error_messages = _commit_restrictions_check_branch_tag_paths($branched_items, $restrictions);
+  if (!empty($error_messages)) {
+    return $error_messages;
+  }
+
+  // Make sure that the assigned branch name is allowed.
   if (!empty($restrictions['valid_branches'])) {
     foreach ($restrictions['valid_branches'] as $valid_branch_regexp) {
       if (preg_match($valid_branch_regexp, $branch['branch_name'])) {
@@ -426,6 +449,13 @@ function commit_restrictions_versioncontrol_tag_access($tag, $tagged_items) {
 
   $restrictions = _commit_restrictions_load($tag['repository']['repo_id']);
 
+  // Make sure that tags may be created at all in this directory.
+  $error_messages = _commit_restrictions_check_branch_tag_paths($tagged_items, $restrictions);
+  if (!empty($error_messages)) {
+    return $error_messages;
+  }
+
+  // Make sure that the assigned tag name is allowed.
   if (!empty($restrictions['valid_tags'])) {
     foreach ($restrictions['valid_tags'] as $valid_tag_regexp) {
       if (preg_match($valid_tag_regexp, $tag['tag_name'])) {
@@ -456,4 +486,50 @@ function commit_restrictions_versioncontrol_tag_access($tag, $tagged_items) {
 
   // No tag restrictions, the user may proceed.
   return array();
+}
+
+/**
+ * Determine if the items that are being branched or tagged are matching
+ * at least one of the valid branch/tag paths regexps, and return
+ * an appropriate error message array.
+ *
+ * @param $items
+ *   The branched or tagged items.
+ * @param $restrictions
+ *   The preloaded array of the repository's commit restrictions.
+ *
+ * @return
+ *   An empty array if the items match at least one of the valid path regexps,
+ *   or an array filled with an error message if it doesn't.
+ */
+function _commit_restrictions_check_branch_tag_paths($items, $restrictions) {
+  // Paths where it is not allowed to commit.
+  if (!empty($restrictions['valid_branch_tag_paths'])) {
+    foreach ($items as $item) {
+      $valid = FALSE;
+
+      foreach ($restrictions['valid_branch_tag_paths'] as $valid_path_regexp) {
+        $path = $item['path'];
+
+        if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY && $item['path'] != '/') {
+          $path = $item['path'] .'/';
+        }
+        if (preg_match($valid_path_regexp, $path)) {
+          $valid = TRUE;
+          break;
+        }
+      }
+
+      if (!$valid) {
+        $itemtype = ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY)
+                    ? t('directory') : t('file');
+        $error_messages[] = t(
+'** Access denied: creating branches or tags for this !itemtype is not allowed:
+** !path',
+          array('!itemtype' => $itemtype, '!path' => $item['path'])
+        );
+      }
+    }
+  }
+  return $error_messages;
 }

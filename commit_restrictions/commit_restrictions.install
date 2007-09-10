@@ -20,8 +20,9 @@ function commit_restrictions_install() {
         allowed_paths text,
         forbidden_paths text,
         deny_undefined_paths tinyint NOT NULL default '0',
-        valid_branches varchar(255) NOT NULL default '',
-        valid_tags varchar(255) NOT NULL default '',
+        valid_branch_tag_paths text,
+        valid_branches text,
+        valid_tags text,
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
       break;
@@ -32,8 +33,9 @@ function commit_restrictions_install() {
         allowed_paths text,
         forbidden_paths text,
         deny_undefined_paths smallint NOT NULL default '0',
-        valid_branches varchar(255) NOT NULL default '',
-        valid_tags varchar(255) NOT NULL default '',
+        valid_branch_tag_paths text,
+        valid_branches text,
+        valid_tags text,
         PRIMARY KEY (repo_id)
       )");
       break;
