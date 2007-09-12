@@ -5,9 +5,10 @@
 }
 
 #commitlog .items {
-  margin-left: 1.5em;
+  line-height: 1.4em;
 }
 
 #commitlog .description {
-  margin-left: 1.5em;
+  margin-top: -0.5em;
+  margin-bottom: 1.5em;
 }

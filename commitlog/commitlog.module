@@ -99,7 +99,7 @@ function commitlog_rss() {
     exit();
   }
 
-  list($constraints, $attributes) = _commitlog_get_commit_constraints();
+  list($constraints, $attributes) = _commitlog_get_commits();
   $commits = commitlog_get_paged_commits($constraints);
 
   drupal_set_header('Content-Type: text/xml; charset=utf-8');
@@ -279,11 +279,12 @@ function theme_commitlog_page($commits, $attributes) {
   }
   $output .= '</div>';
 
-  $query = array();
+  $query_items = array();
   foreach ($attributes as $key => $value) {
-    $query[] = $key .'='. $value;
+    $query_items[] = $key .'='. $value;
   }
-  $output .= theme('feed_icon', url('commitlog/feed', implode('&', $query)));
+  $query = empty($query_items) ? NULL : implode('&', $query_items);
+  $output .= theme('feed_icon', url('commitlog/feed', $query));
 
   return $output;
 }
@@ -295,11 +296,17 @@ function theme_commitlog_rss($commits) {
 
   foreach ($commits as $commit) {
     $location = theme('commitlog_commit_location', $commit);
+    $username = theme('commitlog_account_username',
+      $commit['uid'], $commit['username'], $commit['repository']
+    );
 
-    $title = t('!location by @username', array('!location' => $location, '@username' => $commit['username']));
+    $title = t('!location by @username', array('!location' => $location, '@username' => $username));
     $link = url('commitlog', 'commits='. $commit['commit_id'], NULL, TRUE);
-    $extra = array('pubDate' => gmdate('r', $commit['date']));
-    $text = theme('commitlog_commit', $commit);
+    $extra = array(
+      'pubDate' => gmdate('r', $commit['date']),
+      'guid' => 'Commit '. $commit['commit_id'] .' at '. $base_url,
+    );
+    $text = theme('commitlog_commit', $commit, $username);
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
@@ -314,21 +321,23 @@ function theme_commitlog_rss($commits) {
   return $output;
 }
 
-function theme_commitlog_commit($commit) {
+function theme_commitlog_commit($commit, $username = NULL) {
+  if (!isset($username)) {
+    $username = theme('commitlog_account_username',
+      $commit['uid'], $commit['username'], $commit['repository']
+    );
+  }
   $commit_actions = versioncontrol_get_commit_actions($commit);
   $actions = theme('commitlog_commit_actions', $commit, $commit_actions);
   $message = theme('commitlog_commit_message', $commit);
   $branches = theme('commitlog_commit_branches', $commit);
-
-  $name = theme('commitlog_account_username',
-                $commit['uid'], $commit['username'], $commit['repository']);
 
   $output .= '<div class="commit">';
   $output .= '<div class="title">';
   $output .= t('Commit !id by !name at !time in !repo:', array(
     '!id'   => theme('commitlog_commit_identifier', $commit),
     '!repo' => theme('commitlog_repository', $commit['repository']),
-    '!name' => $name,
+    '!name' => $username,
     '!time' => format_date($commit['date'], 'custom', 'H:i'),
   ));
   $output .= "</div>\n"; // class "title"
@@ -365,7 +374,7 @@ function theme_commitlog_commit_location($commit, $directory_item = NULL, $html 
   $location = theme('commitlog_item', $commit['repository'], $item, $directory_item['path'], $html);
   $branches = theme('commitlog_commit_branches', $commit, $html);
   if (!empty($branches)) {
-    $location = t('!directory @ !branches', array(
+    $location = t('!branches: !directory', array(
       '!directory' => $location,
       '!branches' => $branches,
     ));
@@ -532,8 +541,11 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
     ));
   }
 
-  $output = '<div class="location">'. theme('commitlog_commit_location', $commit, $directory_item) .'</div>'."\n";
-  $output .= '<div class="items">'. implode(($html ? "<br />\n" : "\n"), $lines) .'</div>'."\n";
+  $location = t('on !location', array(
+    '!location' => theme('commitlog_commit_location', $commit, $directory_item),
+  ));
+  $output = '<div class="location">'. $location .'</div>'."\n";
+  $output .= ($html ? '<div class="items">'. theme('item_list', $lines) .'</div>' : implode("\n", $lines)) ."\n";
   return $output;
 }
 
