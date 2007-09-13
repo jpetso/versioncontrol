@@ -303,8 +303,11 @@ function theme_commitlog_rss($commits) {
     $title = t('!location by @username', array('!location' => $location, '@username' => $username));
     $link = url('commitlog', 'commits='. $commit['commit_id'], NULL, TRUE);
     $extra = array(
-      'pubDate' => gmdate('r', $commit['date']),
-      'guid' => 'Commit '. $commit['commit_id'] .' at '. $base_url,
+      array('key' => 'pubDate', 'value' => gmdate('r', $commit['date'])),
+      array('key' => 'guid',
+        'value' => 'Commit '. $commit['commit_id'] .' at '. $base_url,
+        'attributes' => array('isPermaLink' => 'false'),
+      ),
     );
     $text = theme('commitlog_commit', $commit, $username);
     $items .= format_rss_item($title, $link, $text, $extra);
