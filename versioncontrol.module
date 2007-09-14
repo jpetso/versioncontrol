@@ -10,7 +10,6 @@
  */
 // TODO: move the "account authorization" selection to repository edit forms only
 // TODO: add an internal weight column to repositories
-// TODO: add a log message to the tag operation
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -781,7 +780,9 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
     }
     $commit_ids_by_backend[$row->vcs][] = $row->commit_id;
 
-    $repo_ids[] = $row->repo_id;
+    if (!in_array($row->repo_id, $repo_ids)) {
+      $repo_ids[] = $row->repo_id;
+    }
 
     $commits[] = array(
       'commit_id'  => $row->commit_id,
@@ -1165,6 +1166,8 @@ function versioncontrol_get_branch_operation($branch_op_id) {
  *   - 'directory': The deepest-level directory in the repository that is
  *        common to all the tagged items, e.g. '/src' if the files
  *        '/src/subdir/code.php' and '/src/README.txt' were tagged.
+ *   - 'message': The tag message that the user has given. If the version
+ *        control system doesn't support tag messages, this is an empty string.
  *   - '[xxx]_specific': An array of VCS specific additional tag operation info.
  *        How this array looks like is defined by the corresponding
  *        backend module (versioncontrol_[xxx]).
@@ -1297,7 +1300,9 @@ function versioncontrol_get_branch_operations($constraints = array()) {
     }
     $branch_op_ids_by_backend[$row->vcs][] = $row->branch_op_id;
 
-    $repo_ids[] = $row->repo_id;
+    if (!in_array($row->repo_id, $repo_ids)) {
+      $repo_ids[] = $row->repo_id;
+    }
 
     $branches[] = array(
       'branch_op_id' => $row->branch_op_id,
@@ -1389,6 +1394,8 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  *   - 'directory': The deepest-level directory in the repository that is
  *        common to all the tagged items, e.g. '/src' if the files
  *        '/src/subdir/code.php' and '/src/README.txt' were tagged.
+ *   - 'message': The tag message that the user has given. If the version
+ *        control system doesn't support tag messages, this is an empty string.
  *   - '[xxx]_specific': An array of VCS specific additional tag operation info.
  *        How this array looks like is defined by the corresponding
  *        backend module (versioncontrol_[xxx]).
@@ -1419,7 +1426,8 @@ function versioncontrol_get_tag_operations($constraints = array()) {
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
   $result = db_query('SELECT t.tag_op_id, t.tag_name, t.action, t.date,
-                             t.uid, t.username, t.directory, r.repo_id, r.vcs
+                             t.uid, t.username, t.directory, t.message,
+                             r.repo_id, r.vcs
                       FROM {versioncontrol_tag_operations} t
                        INNER JOIN {versioncontrol_repositories} r
                         ON t.repo_id = r.repo_id
@@ -1441,7 +1449,9 @@ function versioncontrol_get_tag_operations($constraints = array()) {
     }
     $tag_op_ids_by_backend[$row->vcs][] = $row->tag_op_id;
 
-    $repo_ids[] = $row->repo_id;
+    if (!in_array($row->repo_id, $repo_ids)) {
+      $repo_ids[] = $row->repo_id;
+    }
 
     $tags[] = array(
       'tag_op_id'  => $row->tag_op_id,
@@ -1453,6 +1463,7 @@ function versioncontrol_get_tag_operations($constraints = array()) {
       'uid'        => $row->uid,
       'username'   => $row->username,
       'directory'  => $row->directory,
+      'message'    => $row->message,
       $row->vcs .'_specific' => array(),
     );
   }
@@ -2419,14 +2430,15 @@ function versioncontrol_user_autocomplete($repo_id, $string) {
  * of multiple columns and has to be a numeric value.
  */
 function _versioncontrol_db_get_additions($table_name, $primary_key_name, $keys) {
-  $or_constraints = array();
+  $placeholders = array();
 
   foreach ($keys as $key) {
-    $or_constraints[] = $primary_key_name ." = '%d'";
+    $placeholders[] = "'%d'";
   }
 
   $result = db_query('SELECT * FROM {'. $table_name .'}
-                      WHERE '. implode(' OR ', $or_constraints), $keys);
+                      WHERE '. $primary_key_name .' IN ('.
+                      implode(',', $placeholders) .')', $keys);
 
   $additions = array();
   while ($addition = db_fetch_array($result)) {

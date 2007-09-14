@@ -61,21 +61,21 @@ function _versioncontrol_set_repository_error($type) {
  *   will instead be determined by this function. This array describes
  *   the commit that is about to happen. Here's the allowed elements:
  *
- *   'repository': The repository where this commit occurs, given as a
- *                 structured array, like a single element of what is returned
- *                 by versioncontrol_get_repositories().
- *                 You can either pass this or 'repo_id'.
- *   'repo_id': The repository where this commit occurs, given as a simple
- *              integer id. You can either pass this or 'repository'.
- *   'uid': The Drupal user id of the committer. Passing this is optional -
- *          if it isn't set, this function will determine the uid.
- *   'username': The system specific VCS username of the committer.
- *   'message': The commit message. Passing this is optional, just leave the
- *              'message' element unset if the VCS can't retrieve the commit
- *              message at the time of the pre-commit hook.
+ *   - 'repository': The repository where this commit occurs, given as a
+ *        structured array, like a single element of what is returned
+ *        by versioncontrol_get_repositories().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where this commit occurs, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'message': The commit message. Passing this is optional, just leave the
+ *       'message' element unset if the VCS can't retrieve the commit message
+ *       at the time of the pre-commit hook.
  *   '[xxx]_specific': An array of VCS specific additional commit information.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *       How this array looks like is defined by the corresponding
+ *       backend module (versioncontrol_[xxx]).
  *
  * @param $commit_actions
  *   A structured array containing the exact details of what is about to happen
@@ -134,23 +134,24 @@ function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NU
  * @param $branch
  *   A structured array that consists of the following elements:
  *
- *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
- *   'action': Specifies what is going to happen with the branch. This is
- *             VERSIONCONTROL_ACTION_ADDED if the branch is being created,
- *             VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   'uid': The Drupal user id of the committer. Passing this is optional -
- *          if it isn't set, this function will determine the uid.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the branching occurs, given as a
- *                 structured array, like a single element of what is returned
- *                 by versioncontrol_get_repositories().
- *                 You can either pass this or 'repo_id'.
- *   'repo_id': The repository where the branching occurs, given as a simple
- *              integer id. You can either pass this or 'repository'.
- *   '[xxx]_specific': An array of VCS specific additional branch operation
- *                     info. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'branch_name': The name of the target branch
+ *        (a string like 'DRUPAL-6--1').
+ *   - 'action': Specifies what is going to happen with the branch. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the branch is being created,
+ *        VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the branching occurs, given as a
+ *        structured array, like a single element of what is returned
+ *        by versioncontrol_get_repositories().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where the branching occurs, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - '[xxx]_specific': An array of VCS specific additional branch operation
+ *        info. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
  *
  * @param $branched_items
  *   An array of all items that are affected by the branching operation.
@@ -188,23 +189,25 @@ function versioncontrol_has_branch_access($branch, $branched_items) {
  * @param $tag
  *   A structured array that consists of the following elements:
  *
- *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   'action': Specifies what is going to happen with the tag. This is
- *             VERSIONCONTROL_ACTION_ADDED if the tag is being created,
- *             VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   'uid': The Drupal user id of the committer. Passing this is optional -
- *          if it isn't set, this function will determine the uid.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the tagging occurs, given as a
- *                 structured array, like a single element of what is returned
- *                 by versioncontrol_get_repositories().
- *                 You can either pass this or 'repo_id'.
- *   'repo_id': The repository where the tagging occurs, given as a simple
- *              integer id. You can either pass this or 'repository'.
- *   '[xxx]_specific': An array of VCS specific additional tag operation
- *                     info. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   - 'action': Specifies what is going to happen with the tag. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the tag is being created,
+ *        VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the tagging occurs, given as a
+ *        structured array, like a single element of what is returned
+ *        by versioncontrol_get_repositories().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where the tagging occurs, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - 'message': The tag message that the user has given. If the version
+ *        control system doesn't support tag messages, leave 'message' unset.
+ *   - '[xxx]_specific': An array of VCS specific additional tag operation
+ *        info. How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]).
  *
  * @param $tagged_items
  *   An array of all items that are affected by the tagging operation.
@@ -228,6 +231,21 @@ function versioncontrol_has_tag_access($tag, $tagged_items) {
   }
   if (!_versioncontrol_has_account_access($tag, t('tag'))) {
     return FALSE;
+  }
+
+  if (!isset($tag['message'])) {
+    $tag['message'] = '';
+  }
+  else if (empty($tag['message'])) {
+    // If we let empty messages through, we can't tell if the backend doesn't
+    // support tag messages, or if the user provided one. So, disallow empty
+    // tag messages by the user, as that's bad practice anyways.
+    _versioncontrol_access_errors(array(
+      t('** ERROR: You have to provide a tag message.'),
+    ));
+    return FALSE;
+    // So, that's that. Now if empty($tag['message']), it can always be assumed
+    // that the VCS doesn't support tag messages.
   }
 
   return _versioncontrol_has_branch_or_tag_access(
@@ -295,30 +313,28 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   versioncontrol_get_commits(), but leaving out on a few details that
  *   will instead be determined by this function. Here's the allowed elements:
  *
- *   'repository': The repository where this commit occurred, given as a
- *                 structured array, like a single element of what is returned
- *                 by versioncontrol_get_repositories().
- *                 You can either pass this or 'repo_id'.
- *   'repo_id': The repository where this commit occurred, given as a simple
- *              integer id. You can either pass this or 'repository'.
- *   'date': The time when the revision was committed, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer. Passing this is optional -
- *          if it isn't set, this function will determine the uid.
- *   'username': The system specific VCS username of the committer.
- *   'message': The commit message.
- *   'revision': The VCS specific repository-wide revision identifier,
- *               like '' in CVS, '27491' in Subversion or some SHA-1 key
- *               in various distributed version control systems.
- *               If there is no such revision (which may be the case for
- *               version control systems that don't support atomic commits)
- *               then the 'revision' element is an empty string.
- *   '[xxx]_specific': An array of VCS specific additional commit information.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     If the backend has registered itself with the
- *                     VERSIONCONTROL_FLAG_AUTOADD_COMMITS option, all items
- *                     of this array will automatically be inserted into the
- *                     {versioncontrol_[xxx]_commits} table.
+ *   - 'repository': The repository where this commit occurred, given as a
+ *        structured array, like a single element of what is returned
+ *        by versioncontrol_get_repositories().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where this commit occurred, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - 'date': The time when the revision was committed, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'message': The commit message.
+ *   - 'revision': The VCS specific repository-wide revision identifier,
+ *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
+ *        distributed version control systems. If there is no such revision
+ *        (which may be the case for version control systems that don't support
+ *        atomic commits) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': An array of VCS specific additional commit information.
+ *        How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]). If the backend has registered
+ *        itself with the VERSIONCONTROL_FLAG_AUTOADD_COMMITS option, all items
+ *        of this array will automatically be inserted into the
+ *        {versioncontrol_[xxx]_commits} table.
  *
  * @param $commit_actions
  *   A structured array containing the exact details of what happened to
@@ -379,28 +395,28 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
  * @param $branch
  *   A structured array that consists of the following elements:
  *
- *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
- *   'action': Specifies what happened to the branch. This is
- *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
- *             VERSIONCONTROL_ACTION_MODIFIED if was renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   'date': The time when the branching was done, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer. Passing this is optional -
- *          if it isn't set, this function will determine the uid.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the branching occurred,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *                 You can either pass this or 'repo_id'.
- *   'repo_id': The repository where the branching occurs, given as a simple
- *              integer id. You can either pass this or 'repository'.
- *   '[xxx]_specific': An array of VCS specific additional branch operation
- *                     info. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     If the backend has registered itself with the
- *                     VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS option,
- *                     all items of this array will automatically be inserted
- *                     into the {versioncontrol_[xxx]_branch_operations} table.
+ *   - 'branch_name': The name of the target branch
+ *        (a string like 'DRUPAL-6--1').
+ *   - 'action': Specifies what happened to the branch. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the branch was created,
+ *        VERSIONCONTROL_ACTION_MODIFIED if was renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   - 'date': The time when the branching was done, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the branching occurred,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where the branching occurs, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - '[xxx]_specific': An array of VCS specific additional branch operation
+ *        info. How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]). If the backend has registered
+ *        itself with the VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS option,
+ *        all items of this array will automatically be inserted into the
+ *        {versioncontrol_[xxx]_branch_operations} table.
  *
  * @param $branched_items
  *   An array of all items that are affected by the branching operation.
@@ -454,28 +470,29 @@ function versioncontrol_insert_branch_operation($branch, $branched_items) {
  * @param $tag
  *   A structured array that consists of the following elements:
  *
- *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   'action': Specifies what happened to the tag. This is
- *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
- *             VERSIONCONTROL_ACTION_MOVED if was renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   'date': The time when the tagging was done, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer. Passing this is optional -
- *          if it isn't set, this function will determine the uid.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the tagging occurred,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *                 You can either pass this or 'repo_id'.
- *   'repo_id': The repository where the tagging occurs, given as a simple
- *              integer id. You can either pass this or 'repository'.
- *   '[xxx]_specific': An array of VCS specific additional tag operation
- *                     info. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     If the backend has registered itself with the
- *                     VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS option,
- *                     all items of this array will automatically be inserted
- *                     into the {versioncontrol_[xxx]_tag_operations} table.
+ *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   - 'action': Specifies what happened to the tag. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
+ *        VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   - 'date': The time when the tagging was done, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the tagging occurred,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where the tagging occurs, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - 'message': The tag message that the user has given. If the version
+ *        control system doesn't support tag messages, leave 'message' unset.
+ *   - '[xxx]_specific': An array of VCS specific additional tag operation
+ *        info. How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]). If the backend has registered
+ *        itself with the VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS option,
+ *        all items of this array will automatically be inserted into the
+ *        {versioncontrol_[xxx]_tag_operations} table.
  *
  * @param $tagged_items
  *   An array of all items that are affected by the tagging operation.
@@ -498,16 +515,20 @@ function versioncontrol_insert_tag_operation($tag, $tagged_items) {
   if (!isset($tag['repository'])) {
     return NULL;
   }
+  if (!isset($tag['message'])) {
+    $tag['message'] = '';
+  }
 
   // Ok, everything's there, insert the tag into the database.
   $tag['tag_op_id'] = db_next_id('{versioncontrol_tag_operations}_tag_op_id');
 
   db_query("INSERT INTO {versioncontrol_tag_operations}
-            (tag_op_id, repo_id, tag_name, action, date, uid, username, directory)
-            VALUES ('%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s')",
+            (tag_op_id, repo_id, tag_name, action, date, uid, username,
+             directory, message)
+            VALUES ('%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%s')",
             $tag['tag_op_id'], $tag['repository']['repo_id'], $tag['tag_name'],
             $tag['action'], $tag['date'], $tag['uid'], $tag['username'],
-            $tag['directory']);
+            $tag['directory'], $tag['message']);
 
   $backends = versioncontrol_get_backends();
   $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS,
@@ -909,22 +930,22 @@ function versioncontrol_delete_account($repository, $uid, $username) {
  *   It's a single repository array like the one returned by
  *   versioncontrol_get_repository(), so it consists of the following elements:
  *
- *   'name': The user-visible name of the repository.
- *   'vcs': The unique string identifier of the version control system
- *          that powers this repository.
- *   'root': The root directory of the repository. In most cases,
- *           this will be a local directory (e.g. '/var/repos/drupal'),
- *           but it may also be some specialized string for remote repository
- *           access. How this string may look like depends on the backend.
- *   'url_backend': The prefix (excluding the trailing underscore)
- *                  for URL backend retrieval functions.
- *   '[xxx]_specific': An array of VCS specific additional repository
- *                     information. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     If the backend has registered itself with the
- *                     VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option,
- *                     all items of this array will automatically be inserted
- *                     into the {versioncontrol_[xxx]_commits} table.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *        that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *        this will be a local directory (e.g. '/var/repos/drupal'),
+ *        but it may also be some specialized string for remote repository
+ *        access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *        for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *        information. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
+ *        If the backend has registered itself with the
+ *        VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option, all items of
+ *        this array will automatically be inserted into the
+ *        {versioncontrol_[xxx]_commits} table.
  *
  * @param $repository_urls
  *   An array of repository viewer URLs. How this array looks like is
@@ -991,23 +1012,23 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
  *   It's a single repository array like the one returned by
  *   versioncontrol_get_repository(), so it consists of the following elements:
  *
- *   'repo_id': The unique repository id.
- *   'name': The user-visible name of the repository.
- *   'vcs': The unique string identifier of the version control system
- *          that powers this repository.
- *   'root': The root directory of the repository. In most cases,
- *           this will be a local directory (e.g. '/var/repos/drupal'),
- *           but it may also be some specialized string for remote repository
- *           access. How this string may look like depends on the backend.
- *   'url_backend': The prefix (excluding the trailing underscore)
- *                  for URL backend retrieval functions.
- *   '[xxx]_specific': An array of VCS specific additional repository
- *                     information. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     If the backend has registered itself with the
- *                     VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option,
- *                     all items of this array will automatically be inserted
- *                     into the {versioncontrol_[xxx]_commits} table.
+ *   - 'repo_id': The unique repository id.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *        that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *        this will be a local directory (e.g. '/var/repos/drupal'),
+ *        but it may also be some specialized string for remote repository
+ *        access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *        for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *        information. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
+ *        If the backend has registered itself with the
+ *        VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option, all items of
+ *        this array will automatically be inserted into the
+ *        {versioncontrol_[xxx]_commits} table.
  *
  * @param $repository_urls
  *   An array of repository viewer URLs. How this array looks like is

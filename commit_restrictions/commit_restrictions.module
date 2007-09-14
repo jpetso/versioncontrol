@@ -333,18 +333,19 @@ function _commit_restrictions_item_error_message($item) {
  * @param $branch
  *   A structured array that consists of the following elements:
  *
- *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
- *   'action': Specifies what is going to happen with the branch. This is
- *             VERSIONCONTROL_ACTION_ADDED if the branch is being created,
- *             VERSIONCONTROL_ACTION_MOVED if it's being renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the branching occurs,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *   'directory': The deepest-level directory in the repository that is common
- *                to all of the branched items.
+ *   - 'branch_name': The name of the target branch
+ *        (a string like 'DRUPAL-6--1').
+ *   - 'action': Specifies what is going to happen with the branch. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the branch is being created,
+ *        VERSIONCONTROL_ACTION_MOVED if it's being renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the branching occurs,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all of the branched items.
  *
  * @param $branched_items
  *   An array of all items that are affected by the branching operation.
@@ -414,18 +415,20 @@ function commit_restrictions_versioncontrol_branch_access($branch, $branched_ite
  * @param $tag
  *   A structured array that consists of the following elements:
  *
- *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   'action': Specifies what is going to happen with the tag. This is
- *             VERSIONCONTROL_ACTION_ADDED if the tag is being created,
- *             VERSIONCONTROL_ACTION_MOVED if it's being renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the tagging occurs,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *   'directory': The deepest-level directory in the repository that is common
- *                to all of the tagged items.
+ *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   - 'action': Specifies what is going to happen with the tag. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the tag is being created,
+ *        VERSIONCONTROL_ACTION_MOVED if it's being renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the tagging occurs,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all of the tagged items.
+ *   - 'message': The tag message that the user has given. If the version
+ *        control system doesn't support tag messages, this is an empty string.
  *
  * @param $tagged_items
  *   An array of all items that are affected by the tagging operation.
