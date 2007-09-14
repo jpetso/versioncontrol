@@ -5,8 +5,12 @@
  * Version Control API - An interface to version control systems
  * whose functionality is provided by pluggable back-end modules.
  *
+ * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: move the "account authorization" selection to repository edit forms only
+// TODO: add an internal weight column to repositories
+// TODO: add a log message to the tag operation
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
@@ -332,15 +336,19 @@ function versioncontrol_perm() {
  *   The corresponding array values are again structured arrays and consist
  *   of elements with the following keys:
  *
- *   'name': The user-visible name of the VCS.
- *   'description': A short description of the backend, if possible not longer
- *                  than one or two sentences.
- *   'capabilities': An array listing optional capabilities, in addition to the
- *                   required functionality like retrieval of detailed
- *                   commit information. Array values can be an arbitrary
- *                   combination of VERSIONCONTROL_CAPABILITY_* values. If no
- *                   additional capabilities are supported by the backend,
- *                   this array will be empty.
+ *   - 'name': The user-visible name of the VCS.
+ *   - 'description': A short description of the backend, if possible
+ *        not longer than one or two sentences.
+ *   - 'capabilities': An array listing optional capabilities, in addition
+ *        to the required functionality like retrieval of detailed
+ *        commit information. Array values can be an arbitrary combination
+ *        of VERSIONCONTROL_CAPABILITY_* values. If no additional capabilities
+ *        are supported by the backend, this array will be empty.
+ *   - 'flags': An array listing which tables should be managed by
+ *        Version Control API instead of doing it manually in the backend.
+ *        Array values can be an arbitrary combination of VERSIONCONTROL_FLAG_*
+ *        values. If no array additions should be automatically managed,
+ *        this array will be empty.
  *
  *   If no single backends can be found, an empty array is returned.
  *
@@ -462,19 +470,19 @@ function versioncontrol_get_current_authorization_method() {
  * @return
  *   A single repository array that consists of the following elements:
  *
- *   'repo_id': The unique repository id.
- *   'name': The user-visible name of the repository.
- *   'vcs': The unique string identifier of the version control system
- *          that powers this repository.
- *   'root': The root directory of the repository. In most cases,
- *           this will be a local directory (e.g. '/var/repos/drupal'),
- *           but it may also be some specialized string for remote repository
- *           access. How this string may look like depends on the backend.
- *   'url_backend': The prefix (excluding the trailing underscore)
- *                  for URL backend retrieval functions.
- *   '[xxx]_specific': An array of VCS specific additional repository
- *                     information. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'repo_id': The unique repository id.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *        that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *        this will be a local directory (e.g. '/var/repos/drupal'),
+ *        but it may also be some specialized string for remote repository
+ *        access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *        for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *        information. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
  *
  *   If no repository corresponds to the given repository id, NULL is returned.
  */
@@ -493,38 +501,37 @@ function versioncontrol_get_repository($repo_id) {
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
  *
- *   'vcs': An array of strings, like array('cvs', 'svn', 'git').
- *          If given, only commits for these backends will be returned.
- *   'repo_ids': An array of repository ids.
- *               If given, only the corresponding repositories will be returned.
- *   'names': An array of repository names, like
- *            array('Drupal CVS', 'Experimental SVN'). If given, only
- *            repositories with these repository names will be returned.
- *   '[xxx]_specific': An array of VCS specific constraints. How this array
- *                     looks like is defined by the corresponding backend
- *                     module (versioncontrol_[xxx]). Other backend modules
- *                     won't get to see this constraint, so in theory you can
- *                     provide one of those for each backend in one
- *                     single query.
+ *   - 'vcs': An array of strings, like array('cvs', 'svn', 'git').
+ *       If given, only repositories for these backends will be returned.
+ *   - 'repo_ids': An array of repository ids.
+ *       If given, only the corresponding repositories will be returned.
+ *   - 'names': An array of repository names, like
+ *       array('Drupal CVS', 'Experimental SVN'). If given,
+ *       only repositories with these repository names will be returned.
+ *   - '[xxx]_specific': An array of VCS specific constraints. How this array
+ *       looks like is defined by the corresponding backend module
+ *       (versioncontrol_[xxx]). Other backend modules won't get to see this
+ *       constraint, so in theory you can provide one of those for each backend
+ *       in one single query.
  *
  * @return
  *   An array of repositories where the key of each element is the
  *   repository id. The corresponding value contains a structured array
  *   with the following keys:
  *
- *   'repo_id': The unique repository id.
- *   'name': The user-visible name of the repository.
- *   'vcs': The unique string identifier of the version control system
- *          that powers this repository.
- *   'root': The root directory of the repository. In most cases,
- *           this will be a local directory (e.g. '/var/repos/drupal'),
- *           but it may also be some specialized string for remote repository
- *           access. How this string may look like depends on the backend.
- *   'url_backend': The prefix (excluding the trailing underscore)
- *                  for URL backend retrieval functions.
- *   '[xxx]_specific': An array of VCS specific additional repository
- *                     information. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'repo_id': The unique repository id.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *        that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *        this will be a local directory (e.g. '/var/repos/drupal'),
+ *        but it may also be some specialized string for remote repository
+ *        access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *        for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *        information. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
  *
  *   If not a single repository matches these constraints,
  *   an empty array is returned.
@@ -662,47 +669,45 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
  *
- *   'vcs': An array of strings, like array('cvs', 'svn', 'git').
- *          If given, only commits for these backends will be returned.
- *   'repo_ids': An array of repository ids. If given, only commits
- *               for the corresponding repositories will be returned.
- *   'branches': An array of strings, specified separately for each repository,
- *               like array($repo_id => array('HEAD', 'DRUPAL-5')).
- *               If given, only commits on the given branches will be returned.
- *   'paths': An array of strings (item locations), specified separately
- *            for each repository, like
- *              array($repo_id => array(
- *                '/trunk/contributions/modules/versioncontrol',
- *                '/trunk/contributions/themes/b2',
- *              )).
- *            If given, only commits that affected this item (or its children,
- *            in case the item is a directory) will be returned.
- *   'commit_ids': An array of commit ids. If given, only commits matching
- *                 those ids will be returned.
- *   'commit_id_lower': A commit id. If given, the result set will not contain
- *                      commits earlier than this lower bound. Mind that
- *                      commit ids only correspond to chronological order
- *                      within the bounds of each repository.
- *   'commit_id_upper': A commit id. If given, the result set will not contain
- *                      commits later than this upper bound. Mind that
- *                      commit ids only correspond to chronological order
- *                      within the bounds of each repository.
- *   'date_lower': A Unix timestamp. If given, the result set will not contain
- *                 commits earlier than this lower bound.
- *   'date_upper': A Unix timestamp. If given, the result set will not contain
- *                 commits later than this upper bound.
- *   'uids': An array of Drupal user ids. If given, the result set will only
- *           contain commits that correspond to any of the specified users.
- *   'usernames': An array of system-specific usernames (the ones that the
- *                version control systems themselves get to see), like
- *                array('dww', 'jpetso'). If given, the result set will only
- *                contain commits that correspond to any of the specified users.
- *   '[xxx]_specific': An array of VCS specific constraints. How this array
- *                     looks like is defined by the corresponding backend
- *                     module (versioncontrol_[xxx]). Other backend modules
- *                     won't get to see this constraint, so in theory you can
- *                     provide one of those for each backend in one
- *                     single query.
+ *   - 'vcs': An array of strings, like array('cvs', 'svn', 'git').
+ *        If given, only commits for these backends will be returned.
+ *   - 'repo_ids': An array of repository ids. If given, only commits
+ *        for the corresponding repositories will be returned.
+ *   - 'branches': An array of strings, specified separately for each
+ *        repository, like array($repo_id => array('HEAD', 'DRUPAL-5')).
+ *        If given, only commits on the given branches will be returned.
+ *   - 'paths': An array of strings (item locations), like
+ *          array(
+ *            '/trunk/contributions/modules/versioncontrol',
+ *            '/trunk/contributions/themes/b2',
+ *          ).
+ *        If given, only commits that affected this item (or its children,
+ *        in case the item is a directory) will be returned.
+ *   - 'commit_ids': An array of commit ids. If given, only commits matching
+ *        those ids will be returned.
+ *   - 'commit_id_lower': A commit id. If given, the result set will not
+ *        contain commits earlier than this lower bound. Mind that commit ids
+ *        only correspond to chronological order within the bounds
+ *        of each repository.
+ *   - 'commit_id_upper': A commit id. If given, the result set will not
+ *        contain commits later than this upper bound. Mind that commit ids
+ *        only correspond to chronological order within the bounds
+ *        of each repository.
+ *   - 'date_lower': A Unix timestamp. If given, the result set will not
+ *        contain commits that were committed earlier than this lower bound.
+ *   - 'date_upper': A Unix timestamp. If given, the result set will not
+ *        contain commits that were committe later later than this upper bound.
+ *   - 'uids': An array of Drupal user ids. If given, the result set will only
+ *        contain commits that correspond to any of the specified users.
+ *   - 'usernames': An array of system-specific usernames (the ones that the
+ *        version control systems themselves get to see), like
+ *        array('dww', 'jpetso'). If given, the result set will only
+ *        contain commits that correspond to any of the specified users.
+ *   - '[xxx]_specific': An array of VCS specific constraints. How this array
+ *        looks like is defined by the corresponding backend module
+ *        (versioncontrol_[xxx]). Other backend modules won't get to see
+ *        this constraint, so in theory you can provide one of those for
+ *        each backend in one single query.
  *
  * @param $result_count
  *   This variable will be set to the overall number of commits that matched
@@ -719,27 +724,27 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *   An array of commits, reversely sorted by the time of the commit.
  *   Each element contains a structured array with the following keys:
  *
- *   'commit_id': The Drupal-specific commit identifier (a simple integer)
- *                which is unique among all commits in all repositories.
- *   'repository': The repository where this commit occurred.
- *                 This is a structured array, like a single element of
- *                 what is returned by versioncontrol_get_repositories().
- *   'date': The time when the revision was committed, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'directory': The deepest-level directory in the repository that is common
- *                to all the changed items, e.g. '/src' if the commit changed
- *                the files '/src/subdir/code.php' and '/src/README.txt'.
- *   'message': The commit message.
- *   'revision': The VCS specific repository-wide revision identifier,
- *               like '' in CVS, '27491' in Subversion or some SHA-1 key
- *               in various distributed version control systems.
- *               If there is no such revision (which may be the case for
- *               version control systems that don't support atomic commits)
- *               then the 'revision' element is an empty string.
- *   '[xxx]_specific': An array of VCS specific additional commit information.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'commit_id': The Drupal-specific commit identifier (a simple integer)
+ *        which is unique among all commits in all repositories.
+ *   - 'repository': The repository where this commit occurred.
+ *        This is a structured array, like a single element of
+ *        what is returned by versioncontrol_get_repositories().
+ *   - 'date': The time when the revision was committed,
+ *        given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all the changed items, e.g. '/src' if the commit changed
+ *        the files '/src/subdir/code.php' and '/src/README.txt'.
+ *   - 'message': The commit message.
+ *   - 'revision': The VCS specific repository-wide revision identifier,
+ *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
+ *        distributed version control systems. If there is no such revision
+ *        (which may be the case for version control systems that don't support
+ *        atomic commits) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': An array of VCS specific additional commit information.
+ *        How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]).
  *
  *   If not a single commit matches these constraints,
  *   an empty array is returned.
@@ -1102,27 +1107,27 @@ function _versioncontrol_page_commits($commits, $page, $limit) {
  * @return
  *   A single branch operation array that consists of the following elements:
  *
- *   'branch_op_id': The unique identifier (a simple integer)
- *                   of this branch operation.
- *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
- *   'action': Specifies what happened to the branch. This is
- *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
- *             VERSIONCONTROL_ACTION_MOVED if was renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   'date': The time when the branching was done, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the branching occurred,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *   'directory': The deepest-level directory in the repository that is common
- *                to all the branched items, e.g. '/src' if the files
- *                '/src/subdir/code.php' and '/src/README.txt' were branched.
- *   '[xxx]_specific': An array of VCS specific additional branch operation info.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     The 'branch_id' element will already be included in
- *                     this array for the convenience of VCS backends.
+ *   - 'branch_op_id': The unique identifier (a simple integer)
+ *        of this branch operation.
+ *   - 'branch_name': The name of the target branch
+ *        (a string like 'DRUPAL-6--1').
+ *   - 'action': Specifies what happened to the branch. This is
+ *      VERSIONCONTROL_ACTION_ADDED if the branch was created,
+ *      VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *      or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   - 'date': The time when the branching was done, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the branching occurred,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all the branched items, e.g. '/src' if the files
+ *        '/src/subdir/code.php' and '/src/README.txt' were branched.
+ *   - '[xxx]_specific': An array of VCS specific additional branch operation
+ *        info. How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]). The 'branch_id' element will
+ *        already be included in this array for the convenience of VCS backends.
  *
  *   If no branch operation corresponds to the given branch op id,
  *   NULL is returned.
@@ -1144,25 +1149,25 @@ function versioncontrol_get_branch_operation($branch_op_id) {
  * @return
  *   A single tag operation array that consists of the following elements:
  *
- *   'tag_op_id': The unique identifier (a simple integer)
- *                of this tag operation.
- *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   'action': Specifies what happened to the tag. This is
- *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
- *             VERSIONCONTROL_ACTION_MOVED if was renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   'date': The time when the tagging was done, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the tagging occurred,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *   'directory': The deepest-level directory in the repository that is common
- *                to all the tagged items, e.g. '/src' if the files
- *                '/src/subdir/code.php' and '/src/README.txt' were tagged.
- *   '[xxx]_specific': An array of VCS specific additional tag operation info.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'tag_op_id': The unique identifier (a simple integer)
+ *        of this tag operation.
+ *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   - 'action': Specifies what happened to the tag. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
+ *        VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   - 'date': The time when the tagging was done, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the tagging occurred,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all the tagged items, e.g. '/src' if the files
+ *        '/src/subdir/code.php' and '/src/README.txt' were tagged.
+ *   - '[xxx]_specific': An array of VCS specific additional tag operation info.
+ *        How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]).
  *
  *   If no tag operation corresponds to the given tag op id, NULL is returned.
  */
@@ -1186,64 +1191,60 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
  *
- *   'repo_ids': An array of repository ids. If given, only branch operations
- *               for the corresponding repositories will be returned.
- *   'branch_op_ids': An array of branch operation ids. If given, only
- *                    branch operations matching those ids will be returned.
- *   'branch_op_id_lower': A branch operation id. If given, the result set will
- *                         not contain branch operations earlier than this
- *                         lower bound. Mind that branch operation ids only
- *                         correspond to chronological order within the bounds
- *                         of each repository.
- *   'branch_op_id_upper': A branch operation id. If given, the result set will
- *                         not contain branch operations later than this
- *                         upper bound. Mind that branch operation ids only
- *                         correspond to chronological order within the bounds
- *                         of each repository.
- *   'date_lower': A Unix timestamp. If given, the result set will not contain
- *                 branch operations earlier than this lower bound.
- *   'date_upper': A Unix timestamp. If given, the result set will not contain
- *                 branch operations later than this upper bound.
- *   'uids': An array of Drupal user ids. If given, the result set will only
- *           contain branch operations that correspond to any of the
- *           specified users.
- *   'usernames': An array of system-specific usernames (the ones that the
- *                version control systems themselves get to see), like
- *                array('dww', 'jpetso'). If given, the result set will only
- *                contain branch operations that correspond to any of the
- *                specified users.
- *   '[xxx]_specific': An array of VCS specific constraints. How this array
- *                     looks like is defined by the corresponding backend
- *                     module (versioncontrol_[xxx]). Other backend modules
- *                     won't get to see this constraint, so in theory you can
- *                     provide one of those for each backend in one
- *                     single query.
+ *   - 'repo_ids': An array of repository ids. If given, only branch operations
+ *        for the corresponding repositories will be returned.
+ *   - 'branch_op_ids': An array of branch operation ids. If given, only
+ *        branch operations matching those ids will be returned.
+ *   - 'branch_op_id_lower': A branch operation id. If given, the result set
+ *        will not contain branch operations earlier than this lower bound.
+ *        Mind that branch operation ids only correspond to chronological order
+ *        within the bounds of each repository.
+ *   - 'branch_op_id_upper': A branch operation id. If given, the result set
+ *        will not contain branch operations later than this upper bound.
+ *        Mind that branch operation ids only correspond to chronological order
+ *        within the bounds of each repository.
+ *   - 'date_lower': A Unix timestamp. If given, the result set will not
+ *        contain branch operations earlier than this lower bound.
+ *   - 'date_upper': A Unix timestamp. If given, the result set will not
+ *        contain branch operations later than this upper bound.
+ *   - 'uids': An array of Drupal user ids. If given, the result set will only
+ *        contain branch operations that correspond to any of the
+ *        specified users.
+ *   - 'usernames': An array of system-specific usernames (the ones that the
+ *        version control systems themselves get to see), like
+ *        array('dww', 'jpetso'). If given, the result set will only contain
+ *        branch operations that correspond to any of the specified users.
+ *   - '[xxx]_specific': An array of VCS specific constraints. How this array
+ *        looks like is defined by the corresponding backend module
+ *        (versioncontrol_[xxx]). Other backend modules won't get to see
+ *        thisconstraint, so in theory you can provide one of those
+ *        for each backend in one single query.
  *
  * @return
  *   An array of branch operations, reversely sorted by the time of the branching.
  *   Each element contains a structured array with the following keys:
  *
- *   'branch_op_id': The unique identifier (a simple integer)
- *                   of this branch operation.
- *   'branch_name': The name of the target branch (a string like 'DRUPAL-6--1').
- *   'action': Specifies what happened to the branch. This is
- *             VERSIONCONTROL_ACTION_ADDED if the branch was created,
- *             VERSIONCONTROL_ACTION_MOVED if was renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   'date': The time when the branching was done, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the branching occurred,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *   'directory': The deepest-level directory in the repository that is common
- *                to all the branched items, e.g. '/src' if the files
- *                '/src/subdir/code.php' and '/src/README.txt' were branched.
- *   '[xxx]_specific': An array of VCS specific additional branch operation info.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
- *                     The 'branch_id' element will already be included in
- *                     this array for the convenience of VCS backends.
+ *   - 'branch_op_id': The unique identifier (a simple integer)
+ *        of this branch operation.
+ *   - 'branch_name': The name of the target branch
+ *        (a string like 'DRUPAL-6--1').
+ *   - 'action': Specifies what happened to the branch. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the branch was created,
+ *        VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   - 'date': The time when the branching was done, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the branching occurred,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all the branched items, e.g. '/src' if the files
+ *        '/src/subdir/code.php' and '/src/README.txt' were branched.
+ *   - '[xxx]_specific': An array of VCS specific additional branch operation
+ *        info. How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]). The 'branch_id' element will
+ *        already be included in this array for the convenience of VCS backends.
  *
  *   If not a single branch operation matches these constraints,
  *   an empty array is returned.
@@ -1340,62 +1341,57 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
  *
- *   'repo_ids': An array of repository ids. If given, only tag operations
- *               for the corresponding repositories will be returned.
- *   'tag_op_ids': An array of tag operation ids. If given, only tag operations
- *                 matching those ids will be returned.
- *   'tag_op_id_lower': A tag operation id. If given, the result set will not
- *                      contain tag operations earlier than this lower bound.
- *                      Mind that tag operation ids only correspond to
- *                      chronological order within the bounds
- *                      of each repository.
- *   'tag_op_id_upper': A tag operation id. If given, the result set will not
- *                      contain tag operations later than this upper bound.
- *                      Mind that tag operation ids only correspond to
- *                      chronological order within the bounds
- *                      of each repository.
- *   'date_lower': A Unix timestamp. If given, the result set will not contain
- *                 tag operations earlier than this lower bound.
- *   'date_upper': A Unix timestamp. If given, the result set will not contain
- *                 tag operations later than this upper bound.
- *   'uids': An array of Drupal user ids. If given, the result set will only
- *           contain tag operations that correspond to any of the
- *           specified users.
- *   'usernames': An array of system-specific usernames (the ones that the
- *                version control systems themselves get to see), like
- *                array('dww', 'jpetso'). If given, the result set will only
- *                contain tag operations that correspond to any of the
- *                specified users.
- *   '[xxx]_specific': An array of VCS specific constraints. How this array
- *                     looks like is defined by the corresponding backend
- *                     module (versioncontrol_[xxx]). Other backend modules
- *                     won't get to see this constraint, so in theory you can
- *                     provide one of those for each backend in one
- *                     single query.
+ *   - 'repo_ids': An array of repository ids. If given, only tag operations
+ *        for the corresponding repositories will be returned.
+ *   - 'tag_op_ids': An array of tag operation ids. If given,
+ *        only tag operations matching those ids will be returned.
+ *   - 'tag_op_id_lower': A tag operation id. If given, the result set will not
+ *        contain tag operations earlier than this lower bound.
+ *        Mind that tag operation ids only correspond to chronological order
+ *        within the bounds of each repository.
+ *   - 'tag_op_id_upper': A tag operation id. If given, the result set will not
+ *        contain tag operations later than this upper bound.
+ *        Mind that tag operation ids only correspond to chronological order
+ *        within the bounds of each repository.
+ *   - 'date_lower': A Unix timestamp. If given, the result set will not
+ *        contain tag operations earlier than this lower bound.
+ *   - 'date_upper': A Unix timestamp. If given, the result set will not
+ *        contain tag operations later than this upper bound.
+ *   - 'uids': An array of Drupal user ids. If given, the result set will only
+ *        contain tag operations that correspond to any of the specified users.
+ *   - 'usernames': An array of system-specific usernames (the ones that the
+ *        version control systems themselves get to see), like
+ *        array('dww', 'jpetso'). If given, the result set will only contain
+ *        tag operations that correspond to any of the specified users.
+ *   - '[xxx]_specific': An array of VCS specific constraints. How this array
+ *        looks like is defined by the corresponding backend module
+ *        (versioncontrol_[xxx]). Other backend modules won't get to see
+ *        this constraint, so in theory you can provide one of those
+ *        for each backend in one single query.
  *
  * @return
  *   An array of tag operations, reversely sorted by the time of the tagging.
  *   Each element contains a structured array with the following keys:
  *
- *   'tag_op_id': The unique identifier (a simple integer)
- *                of this tag operation.
- *   'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   'action': Specifies what happened to the tag. This is
- *             VERSIONCONTROL_ACTION_ADDED if the tag was created,
- *             VERSIONCONTROL_ACTION_MOVED if was renamed,
- *             or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   'date': The time when the tagging was done, given as Unix timestamp.
- *   'uid': The Drupal user id of the committer.
- *   'username': The system specific VCS username of the committer.
- *   'repository': The repository where the tagging occurred,
- *                 given as a structured array, like the return value
- *                 of versioncontrol_get_repository().
- *   'directory': The deepest-level directory in the repository that is common
- *                to all the tagged items, e.g. '/src' if the files
- *                '/src/subdir/code.php' and '/src/README.txt' were tagged.
- *   '[xxx]_specific': An array of VCS specific additional tag operation info.
- *                     How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'tag_op_id': The unique identifier (a simple integer)
+ *        of this tag operation.
+ *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
+ *   - 'action': Specifies what happened to the tag. This is
+ *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
+ *        VERSIONCONTROL_ACTION_MOVED if was renamed,
+ *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
+ *   - 'date': The time when the tagging was done, given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'repository': The repository where the tagging occurred,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all the tagged items, e.g. '/src' if the files
+ *        '/src/subdir/code.php' and '/src/README.txt' were tagged.
+ *   - '[xxx]_specific': An array of VCS specific additional tag operation info.
+ *        How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]).
  *
  *   If not a single tag operation matches these constraints,
  *   an empty array is returned.
@@ -1487,17 +1483,17 @@ function versioncontrol_get_tag_operations($constraints = array()) {
  * @param $constraints
  *   An optional array of constraints. Possible array elements are:
  *
- *   'uids': An array of Drupal user ids. If given, only accounts that
- *           correspond to these Drupal users will be returned.
- *   'repo_ids': An array of repository ids. If given, only accounts
- *               in the corresponding repositories will be returned.
- *   'usernames': An array of system specific VCS usernames,
- *                like array('dww', 'jpetso'). If given, only accounts
- *                with these VCS usernames will be returned.
- *   'usernames_by_repository': A structured array that looks like
- *           array($repo_id => array('dww', 'jpetso'), ...).
- *           You might want this if you combine multiple username and
- *           repository constraints, otherwise you can well do without.
+ *   - 'uids': An array of Drupal user ids. If given, only accounts that
+ *        correspond to these Drupal users will be returned.
+ *   - 'repo_ids': An array of repository ids. If given, only accounts
+ *        in the corresponding repositories will be returned.
+ *   - 'usernames': An array of system specific VCS usernames,
+ *        like array('dww', 'jpetso'). If given, only accounts
+ *        with these VCS usernames will be returned.
+ *   - 'usernames_by_repository': A structured array that looks like
+ *        array($repo_id => array('dww', 'jpetso'), ...).
+ *        You might want this if you combine multiple username and repository
+ *        constraints, otherwise you can well do without.
  *
  * @param $include_unauthorized
  *   If FALSE (which is the default), this function does not return accounts
@@ -1796,12 +1792,12 @@ function versioncontrol_get_url_tracker($repository, $issue_id) {
  *   A structured array with the repository viewer URLs as values (each of them
  *   can be an empty string), corresponding to the following keys:
  *
- *   'commit_view': The overall summary view of a commit/revision.
- *   'file_view': The 'view' URL of a file in the repository.
- *   'directory_view': The 'view' URL of a directory in the repository.
- *   'diff': The difference between two versions of a file
- *           (or of two different files, if the repository viewer supports it).
- *   'tracker': The issue/bug/case URL of the associated issue/case/bug tracker.
+ *   - 'commit_view': The overall summary view of a commit/revision.
+ *   - 'file_view': The 'view' URL of a file in the repository.
+ *   - 'directory_view': The 'view' URL of a directory in the repository.
+ *   - 'diff': The difference between two versions of a file
+ *        (or of two different files, if the repository viewer supports it).
+ *   - 'tracker': The issue/bug/case URL of the associated issue tracker.
  */
 function _versioncontrol_get_repository_urls($repository) {
   static $urls_by_repository = array();
@@ -1838,34 +1834,32 @@ function _versioncontrol_get_repository_urls($repository) {
  *   exist anymore. The corresponding array values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'action': Specifies how the item was modified.
- *             One of the predefined VERSIONCONTROL_ACTION_* values.
- *   'modified': Boolean value, specifies if a file was modified in addition
- *               to the other action in the 'action' element of the array.
- *               Only exists for the VERSIONCONTROL_ACTION_MOVED
- *               and VERSIONCONTROL_ACTION_COPIED actions.
- *   'current item': The updated state of the modified item. Exists for all
- *                   actions except VERSIONCONTROL_ACTION_DELETED.
- *   'source items': An array with the previous state(s) of the modified item.
- *                   Path and branch will always be the same as in the current
- *                   item except for the VERSIONCONTROL_ACTION_MOVED,
- *                   VERSIONCONTROL_ACTION_COPIED and
- *                   VERSIONCONTROL_ACTION_MERGED actions.
- *                   Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
+ *   - 'action': Specifies how the item was modified.
+ *        One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   - 'modified': Boolean value, specifies if a file was modified in addition
+ *        to the other action in the 'action' element of the array.
+ *        Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *        and VERSIONCONTROL_ACTION_COPIED actions.
+ *   - 'current item': The updated state of the modified item.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
+ *   - 'source items': An array with the previous state(s) of the modified item.
+ *        Path and branch will always be the same as in the current item
+ *        except for the VERSIONCONTROL_ACTION_MOVED,
+ *        VERSIONCONTROL_ACTION_COPIED and VERSIONCONTROL_ACTION_MERGED actions.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
  *
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
@@ -1900,16 +1894,15 @@ function versioncontrol_get_affected_item($commit_action) {
  *   The requested directory item. Item values are structured arrays and
  *   consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which in this case can only be
- *           VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the directory at the time of the commit.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which in this case can only be
+ *        VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the directory at the time of the commit.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier
+ *        of the respective version control system.)
  */
 function versioncontrol_get_commit_directory_item($commit) {
   return _versioncontrol_call_backend(
@@ -1944,19 +1937,18 @@ function versioncontrol_get_commit_branches($commit) {
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   'source branch': Optional, may be set by the backend if the source branch
- *                    (the one that this one branched off) can be retrieved.
- *                    If given, this is a string with the original branch name.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - 'source branch': Optional, may be set by the backend if the
+ *        source branch (the one that this one branched off) can be retrieved.
+ *        If given, this is a string with the original branch name.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
@@ -1980,19 +1972,18 @@ function versioncontrol_get_branched_items($branch) {
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   'source tag': Optional, may be set by the backend if the source tag
- *                    (the one that this one tagged off) can be retrieved.
- *                    If given, this is a string with the original tag name.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - 'source tag': Optional, may be set by the backend if the source tag
+ *        (the one that this one tagged off) can be retrieved.
+ *        If given, this is a string with the original tag name.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
@@ -2098,16 +2089,15 @@ function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL)
  *   The corresponding item values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   An empty array is returned if there are no branches for this item.
  *   NULL is returned if the given item is not inside the repository at the
@@ -2146,16 +2136,15 @@ function versioncontrol_get_all_item_branches($repository, $item) {
  *   The corresponding item values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   An empty array is returned if there are no tags for this item.
  *   NULL is returned if the given item is not inside the repository at the
@@ -2190,34 +2179,32 @@ function versioncontrol_get_all_item_tags($repository, $item) {
  *   of the array is a structured array consisting of elements with the
  *   following keys:
  *
- *   'action': Specifies how the item was modified.
- *             One of the predefined VERSIONCONTROL_ACTION_* values.
- *   'modified': Boolean value, specifies if a file was modified in addition
- *               to the other action in the 'action' element of the array.
- *               Only exists for the VERSIONCONTROL_ACTION_MOVED
- *               and VERSIONCONTROL_ACTION_COPIED actions.
- *   'current item': The updated state of the modified item. Exists for all
- *                   actions except VERSIONCONTROL_ACTION_DELETED.
- *   'source items': An array with the previous state(s) of the modified item.
- *                   Path and branch will always be the same as in the current
- *                   item except for the VERSIONCONTROL_ACTION_MOVED,
- *                   VERSIONCONTROL_ACTION_COPIED and
- *                   VERSIONCONTROL_ACTION_MERGED actions.
- *                   Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
+ *   - 'action': Specifies how the item was modified.
+ *        One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   - 'modified': Boolean value, specifies if a file was modified in addition
+ *        to the other action in the 'action' element of the array.
+ *        Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *        and VERSIONCONTROL_ACTION_COPIED actions.
+ *   - 'current item': The updated state of the modified item.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
+ *   - 'source items': An array with the previous state(s) of the modified item.
+ *        Path and branch will always be the same as in the current item except
+ *        for the VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED and
+ *        VERSIONCONTROL_ACTION_MERGED actions.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
  *
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -2255,16 +2242,15 @@ function versioncontrol_get_item_history($repository, $item) {
  *   The corresponding item values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
@@ -2298,9 +2284,9 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
  * @return
  *   A structured array that consists of elements with the following keys:
  *
- *   'file type': Specifies the file type, which is either
- *                VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
- *   'contents': The raw contents of the file.
+ *   - 'file type': Specifies the file type, which is either
+ *       VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
+ *   - 'contents': The raw contents of the file.
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision,
@@ -2316,6 +2302,46 @@ function versioncontrol_get_file_contents($repository, $file_item) {
   }
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_file_contents', array($repository, $file_item)
+  );
+}
+
+/**
+ * Retrieve an array where each element represents a single line of the
+ * given file in the specified commit, annotated with the committer who last
+ * modified that line. Note that annotations are generally a quite slow
+ * operation, so expect this function to take a bit more time as well.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_file_annotation')
+ * if the particular backend actually implements it.
+ *
+ * @param $repository
+ *   The repository that the file item is located in.
+ * @param $file_item
+ *   The file item whose annotation should be retrieved.
+ *
+ * @return
+ *   A structured array that consists of one element per line, with
+ *   line numbers as keys (starting from 1) and a structured array as values,
+ *   where each of them consists of elements with the following keys:
+ *
+ *   - 'username': The system specific VCS username of the last committer.
+ *   - 'line': The contents of the line, without linebreak characters.
+ *
+ *   NULL is returned if the given item is not under version control,
+ *   or was not under version control at the time of the given revision,
+ *   or if it is not a file item at all, or if it is marked as binary file.
+ *
+ *   A real-life example of such a result array can be found
+ *   in the FakeVCS example module.
+ */
+function versioncontrol_get_file_annotation($repository, $file_item) {
+  if (!($file_item['type'] == VERSIONCONTROL_ITEM_FILE
+        || $file_item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED)) {
+    return NULL;
+  }
+  return _versioncontrol_call_backend(
+    $repository['vcs'], 'get_file_annotation', array($repository, $file_item)
   );
 }
 
@@ -2354,48 +2380,6 @@ function versioncontrol_block($op = 'list', $delta = 0) {
       }
     }
   }
-}
-
-
-/**
- * Retrieve an array where each element represents a single line of the
- * given file in the specified commit, annotated with the committer who last
- * modified that line. Note that annotations are generally a quite slow
- * operation, so expect this function to take a bit more time as well.
- *
- * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_file_annotation')
- * if the particular backend actually implements it.
- *
- * @param $repository
- *   The repository that the file item is located in.
- * @param $file_item
- *   The file item whose annotation should be retrieved.
- *
- * @return
- *   A structured array that consists of one element per line, with
- *   line numbers as keys (starting from 1) and a structured array as values,
- *   where each of them consists of elements with the following keys:
- *
- *   'username': The system specific VCS username of the last committer.
- *   'line': The contents of the line, without linebreak characters.
- *
- *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision,
- *   or if it is not a file item at all, or if it is marked as binary file, or
- *   if the specific backend module does not implement retrieving annotations.
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
- */
-function versioncontrol_get_file_annotation($repository, $file_item) {
-  if (!($file_item['type'] == VERSIONCONTROL_ITEM_FILE
-        || $file_item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED)) {
-    return NULL;
-  }
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_file_annotation', array($repository, $file_item)
-  );
 }
 
 

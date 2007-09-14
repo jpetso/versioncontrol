@@ -24,19 +24,19 @@ include_once(drupal_get_path('module', 'versioncontrol_fakevcs') .'/versioncontr
  *   the backend. The corresponding array values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'name': The user-visible name of the VCS.
- *   'description': A short description of the backend, if possible not longer
- *                  than one or two sentences.
- *   'capabilities': An array listing optional capabilities, in addition to the
- *                   required functionality like retrieval of detailed
- *                   commit information. Array values can be an arbitrary
- *                   combination of VERSIONCONTROL_CAPABILITY_* values. If no
- *                   additional capabilities are supported by the backend,
- *                   this array will be empty.
- *   'flags': An array listing which tables should be managed by
- *            Version Control API instead of doing it manually in the backend.
- *            If no array additions should be automatically managed,
- *            this array will be empty.
+ *   - 'name': The user-visible name of the VCS.
+ *   - 'description': A short description of the backend, if possible not
+ *        longer than one or two sentences.
+ *   - 'capabilities': An array listing optional capabilities, in addition to
+ *        the required functionality like retrieval of detailed commit
+ *        information. Array values can be an arbitrary combination
+ *        of VERSIONCONTROL_CAPABILITY_* values. If no additional capabilities
+ *        are supported by the backend, this array will be empty.
+ *   - 'flags': An array listing which tables should be managed by
+ *        Version Control API instead of doing it manually in the backend.
+ *        Array values can be an arbitrary combination of VERSIONCONTROL_FLAG_*
+ *        values. If no array additions should be automatically managed,
+ *        this array will be empty.
  */
 versioncontrol_fakevcs_versioncontrol_backends() {
   // Our example VCS is called FakeVCS, and supports all possible capabilities.
@@ -204,34 +204,32 @@ versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_constraints = 
  *   exist anymore. The corresponding array values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'action': Specifies how the item was modified.
- *             One of the predefined VERSIONCONTROL_ACTION_* values.
- *   'modified': Boolean value, specifies if a file was modified in addition
- *               to the other action in the 'action' element of the array.
- *               Only exists for the VERSIONCONTROL_ACTION_MOVED
- *               and VERSIONCONTROL_ACTION_COPIED actions.
- *   'current item': The updated state of the modified item. Exists for all
- *                   actions except VERSIONCONTROL_ACTION_DELETED.
- *   'source items': An array with the previous state(s) of the modified item.
- *                   Path and branch will always be the same as in the current
- *                   item except for the VERSIONCONTROL_ACTION_MOVED,
- *                   VERSIONCONTROL_ACTION_COPIED and
- *                   VERSIONCONTROL_ACTION_MERGED actions.
- *                   Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
+ *   - 'action': Specifies how the item was modified.
+ *        One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   - 'modified': Boolean value, specifies if a file was modified in addition
+ *        to the other action in the 'action' element of the array.
+ *        Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *        and VERSIONCONTROL_ACTION_COPIED actions.
+ *   - 'current item': The updated state of the modified item.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
+ *   - 'source items': An array with the previous state(s) of the modified item.
+ *        Path and branch will always be the same as in the current item
+ *        except for the VERSIONCONTROL_ACTION_MOVED,
+ *        VERSIONCONTROL_ACTION_COPIED and VERSIONCONTROL_ACTION_MERGED actions.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
  *
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  */
 function versioncontrol_fakevcs_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
@@ -403,16 +401,15 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
  *   The requested directory item. Item values are structured arrays and
  *   consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which in this case can only be
- *           VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the directory at the time of the commit.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which in this case can only be
+ *        VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the directory at the time of the commit.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier
+ *        of the respective version control system.)
  */
 function versioncontrol_fakevcs_get_commit_directory_item($commit) {
   // Assuming $commit is a single commit array that looks like this:
@@ -437,6 +434,22 @@ function versioncontrol_fakevcs_get_commit_directory_item($commit) {
 }
 
 /**
+ * Implementation of [versioncontrol_backend]_get_commit_branches():
+ * Retrieve the branches that have been affected by the given commit.
+ *
+ * @return
+ *   An array of strings that identify a branch in the respective repository,
+ *   or an empty array if no branches were affected at all.
+ */
+function versioncontrol_fakevcs_get_commit_branches($commit) {
+  // How CVS would probably do it
+  return array('DRUPAL-5--1');
+  // How SVN could also do it
+  return array('trunk', '5.x-1.x');
+}
+
+/**
+ * Implementation of [versioncontrol_backend]_get_branched_items():
  * Retrieve the set of items that were affected by a branch operation.
  *
  * @param $branch
@@ -449,22 +462,18 @@ function versioncontrol_fakevcs_get_commit_directory_item($commit) {
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   'source branch': Optional, may be set by the backend if the source branch
- *                    (the one that this one branched off) can be retrieved.
- *                    If given, this is a string with the original branch name.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - 'source branch': Optional, may be set by the backend if the
+ *        source branch (the one that this one branched off) can be retrieved.
+ *        If given, this is a string with the original branch name.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  */
 function versioncontrol_fakevcs_get_branched_items($branch) {
   // How CVS could do it, assuming $branch looks like this:
@@ -542,6 +551,7 @@ function versioncontrol_fakevcs_get_branched_items($branch) {
 }
 
 /**
+ * Implementation of [versioncontrol_backend]_get_tagged_items():
  * Retrieve the set of items that were affected by a tag operation.
  *
  * @param $tag
@@ -554,22 +564,18 @@ function versioncontrol_fakevcs_get_branched_items($branch) {
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   'source tag': Optional, may be set by the backend if the source tag
- *                    (the one that this one tagged off) can be retrieved.
- *                    If given, this is a string with the original tag name.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - 'source tag': Optional, may be set by the backend if the source tag
+ *        (the one that this one tagged off) can be retrieved.
+ *        If given, this is a string with the original tag name.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  */
 function versioncontrol_fakevcs_get_tagged_items($tag) {
   // How CVS could do it, assuming $tag looks like this:
@@ -642,21 +648,6 @@ function versioncontrol_fakevcs_get_tagged_items($tag) {
 
   // Or, how git, Mercurial and Bazaar could do it:
   return array();
-}
-
-/**
- * Implementation of [versioncontrol_backend]_get_commit_branches():
- * Retrieve the branches that have been affected by the given commit.
- *
- * @return
- *   An array of strings that identify a branch in the respective repository,
- *   or an empty array if no branches were affected at all.
- */
-function versioncontrol_fakevcs_get_commit_branches($commit) {
-  // How CVS would probably do it
-  return array('DRUPAL-5--1');
-  // How SVN could also do it
-  return array('trunk', '5.x-1.x');
 }
 
 
@@ -760,7 +751,7 @@ function versioncontrol_fakevcs_get_parent_item($repository, $item, $parent_path
 
 /**
  * Implementation of [versioncontrol_backend]_get_all_item_branches():
- * Retrieve all branches that exist for the given item $path, and how this item
+ * Retrieve all branches that exist for the given item, and how this item
  * is named there. The main branch ('HEAD', 'trunk', 'master' or however it is
  * called in the respective VCS) is also included in the result.
  *
@@ -784,16 +775,15 @@ function versioncontrol_fakevcs_get_parent_item($repository, $item, $parent_path
  *   The corresponding item values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   An empty array is returned if there are no branches for this item.
  *   NULL is returned if the given item is not inside the repository at the
@@ -844,7 +834,7 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
  * @param $repository
  *   The repository that the item is located in.
  * @param $item
- *   The item whose set of tags should be retrieved.
+ *   The item whose history should be retrieved.
  *
  * @return
  *   A structured array that looks like
@@ -857,16 +847,15 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
  *   The corresponding item values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   An empty array is returned if there are no tags for this item.
  *   NULL is returned if the given item is not inside the repository at the
@@ -928,34 +917,32 @@ function versioncontrol_fakevcs_get_item_tags($repository, $item) {
  *   of the array is a structured array consisting of elements with the
  *   following keys:
  *
- *   'action': Specifies how the item was modified.
- *             One of the predefined VERSIONCONTROL_ACTION_* values.
- *   'modified': Boolean value, specifies if a file was modified in addition
- *               to the other action in the 'action' element of the array.
- *               Only exists for the VERSIONCONTROL_ACTION_MOVED
- *               and VERSIONCONTROL_ACTION_COPIED actions.
- *   'current item': The updated state of the modified item. Exists for all
- *                   actions except VERSIONCONTROL_ACTION_DELETED.
- *   'source items': An array with the previous state(s) of the modified item.
- *                   Path and branch will always be the same as in the current
- *                   item except for the VERSIONCONTROL_ACTION_MOVED,
- *                   VERSIONCONTROL_ACTION_COPIED and
- *                   VERSIONCONTROL_ACTION_MERGED actions.
- *                   Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
+ *   - 'action': Specifies how the item was modified.
+ *        One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   - 'modified': Boolean value, specifies if a file was modified in addition
+ *        to the other action in the 'action' element of the array.
+ *        Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *        and VERSIONCONTROL_ACTION_COPIED actions.
+ *   - 'current item': The updated state of the modified item.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
+ *   - 'source items': An array with the previous state(s) of the modified item.
+ *        Path and branch will always be the same as in the current item except
+ *        for the VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_COPIED and
+ *        VERSIONCONTROL_ACTION_MERGED actions.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
  *
  *   Item values are structured arrays and consist of elements
  *   with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -1021,16 +1008,15 @@ function versioncontrol_get_item_history($repository, $item) {
  *   The corresponding item values are again structured arrays
  *   and consist of elements with the following keys:
  *
- *   'type': Specifies the item type, which is either
- *           VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   'path': The path of the item at the specific revision.
- *   'revision': The (file-level) revision when the item was last changed.
- *               If there is no such revision (which may be the case for
- *               directory items) then the 'revision' element is
- *               an empty string.
- *   '[xxx]_specific': May be set by the backend to remember additional
- *                     item info. ("[xxx]" is the unique string identifier
- *                     of the respective version control system.)
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was last changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
@@ -1176,14 +1162,13 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
  * @return
  *   A structured array that consists of elements with the following keys:
  *
- *   'file type': Specifies the file type, which is either
- *                VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
- *   'contents': The raw contents of the file.
+ *   - 'file type': Specifies the file type, which is either
+ *       VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
+ *   - 'contents': The raw contents of the file.
  *
  *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of $commit, or if it is
- *   not a file item at all, or if the specific backend module does not
- *   implement retrieving file contents.
+ *   or was not under version control at the time of the given revision,
+ *   or if it is not a file item at all.
  */
 function versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
   // In case the file is marked as text file:
@@ -1220,13 +1205,12 @@ function versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
  *   line numbers as keys (starting from 1) and a structured array as values,
  *   where each of them consists of elements with the following keys:
  *
- *   'username': The system specific VCS username of the last committer.
- *   'line': The contents of the line, without linebreak characters.
+ *   - 'username': The system specific VCS username of the last committer.
+ *   - 'line': The contents of the line, without linebreak characters.
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision,
- *   or if it is not a file item at all, or if it is marked as binary file, or
- *   if the specific backend module does not implement retrieving annotations.
+ *   or if it is not a file item at all, or if it is marked as binary file.
  */
 function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
   // In case the file is marked as text file:
@@ -1380,19 +1364,19 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
  *   repository array like the one returned by versioncontrol_get_repository(),
  *   so it consists of the following elements:
  *
- *   'repo_id': The unique repository id.
- *   'name': The user-visible name of the repository.
- *   'vcs': The unique string identifier of the version control system
- *          that powers this repository.
- *   'root': The root directory of the repository. In most cases,
- *           this will be a local directory (e.g. '/var/repos/drupal'),
- *           but it may also be some specialized string for remote repository
- *           access. How this string may look like depends on the backend.
- *   'url_backend': The prefix (excluding the trailing underscore)
- *                  for URL backend retrieval functions.
- *   '[xxx]_specific': An array of VCS specific additional repository
- *                     information. How this array looks like is defined by the
- *                     corresponding backend module (versioncontrol_[xxx]).
+ *   - 'repo_id': The unique repository id.
+ *   - 'name': The user-visible name of the repository.
+ *   - 'vcs': The unique string identifier of the version control system
+ *        that powers this repository.
+ *   - 'root': The root directory of the repository. In most cases,
+ *        this will be a local directory (e.g. '/var/repos/drupal'),
+ *        but it may also be some specialized string for remote repository
+ *        access. How this string may look like depends on the backend.
+ *   - 'url_backend': The prefix (excluding the trailing underscore)
+ *        for URL backend retrieval functions.
+ *   - '[xxx]_specific': An array of VCS specific additional repository
+ *        information. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
  */
 function versioncontrol_fakevcs_repository($op, $repository) {
   if ($op == 'delete') {
