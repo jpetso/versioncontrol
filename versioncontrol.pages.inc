@@ -59,7 +59,7 @@ function versioncontrol_account_register_page() {
   $repository_names = array();
   foreach ($repositories as $repo_id => $repository) {
     if (in_array($repo_id, $account_repo_ids)
-        && versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
+        && versioncontrol_is_account_authorized($uid, $repository)) {
       // We only want repositories in the list of repositories that are open
       // for registrations where no (authorized) account exists yet.
       continue;

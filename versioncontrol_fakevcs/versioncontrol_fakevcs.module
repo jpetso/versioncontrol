@@ -1446,6 +1446,9 @@ function versioncontrol_fakevcs_import_accounts($repository, $data) {
  *   The exported textual representation of the account list.
  */
 function versioncontrol_fakevcs_export_accounts($repository, $accounts) {
+  if (empty($accounts)) {
+    return '# '. t('no user accounts available to export');
+  }
   $accounts_flat = array();
   $uid_constraints = array();
   $params = array($repository['repo_id']);

@@ -166,21 +166,21 @@ function versioncontrol_account_status_set($status_data) {
  * Let the Version Control API know whether the given user is approved or not.
  *
  * @return
- *   FALSE if the account is not authorized, or NULL if we're indifferent.
- *   TRUE reserved for possible later usage.
+ *   TRUE if the account is authorized, or FALSE if it's not.
  */
-function versioncontrol_account_status_versioncontrol_is_account_authorized($uid, $repo_id) {
-  $result = db_query("SELECT u.status
-                      FROM {versioncontrol_repositories} r
-                       LEFT JOIN {versioncontrol_account_status_users} u
-                        ON r.repo_id = u.repo_id
-                      WHERE r.authorization_method = 'versioncontrol_account_status_repository'
-                       OR (u.uid = '%d' AND u.repo_id = '%d')", $uid, $repo_id);
+function versioncontrol_account_status_versioncontrol_is_account_authorized($uid, $repository) {
+  if ($repository['authorization_method'] != 'versioncontrol_account_status_repository') {
+    return TRUE;
+  }
+  $result = db_query("SELECT status
+                      FROM {versioncontrol_account_status_users}
+                      WHERE uid = '%d' AND repo_id = '%d'",
+                      $uid, $repository['repo_id']);
 
   while ($account = db_fetch_object($result)) {
-    return ($account->status === VERSIONCONTROL_ACCOUNT_STATUS_APPROVED);
+    return ($account->status == VERSIONCONTROL_ACCOUNT_STATUS_APPROVED);
   }
-  return NULL;
+  return FALSE;
 }
 
 /**

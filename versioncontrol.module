@@ -60,10 +60,12 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
   switch ($type) {
     case 'categories':
       return _versioncontrol_user_account_edit_items($user, 'categories');
-      break;
 
     case 'delete':
-      $accounts = versioncontrol_get_accounts(array('uids' => array($user->uid)));
+      $accounts = versioncontrol_get_accounts(array('uids' => array($user->uid)), TRUE);
+      if (empty($accounts)) {
+        return;
+      }
       $accounts_flat = array();
       $repo_ids = array();
 
@@ -82,7 +84,7 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
           );
         }
       }
-      break;
+      return;
   }
 }
 
@@ -1591,14 +1593,29 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
   $result = db_query('SELECT uid, repo_id, username
-                      FROM {versioncontrol_accounts}'.
-                      $where, $params);
+                      FROM {versioncontrol_accounts}
+                      '. $where .'
+                      ORDER BY uid', $params);
 
   // Assemble the return value.
-  $accounts = array();
+  $account_rows = array();
+  $repo_ids = array();
   while ($account = db_fetch_object($result)) {
+    $repo_ids[] = $account->repo_id;
+    $account_rows[] = $account;
+  }
+  if (empty($repo_ids)) {
+    return array();
+  }
+  $repo_ids = array_unique($repo_ids);
+
+  $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
+  $accounts = array();
+
+  foreach ($account_rows as $account) {
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
+    if ($include_unauthorized
+        || versioncontrol_is_account_authorized($account->uid, $repositories[$account->repo_id])) {
       if (!isset($accounts[$account->uid])) {
         $accounts[$account->uid] = array();
       }
@@ -1633,8 +1650,9 @@ function versioncontrol_get_account_uid_for_username($repo_id, $username, $inclu
                       $username, $repo_id);
 
   while ($account = db_fetch_object($result)) {
+    $repository = versioncontrol_get_repository($account->repo_id);
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $repository)) {
       return $account->uid;
     }
   }
@@ -1666,8 +1684,9 @@ function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_un
                       $uid, $repo_id);
 
   while ($account = db_fetch_object($result)) {
+    $repository = versioncontrol_get_repository($account->repo_id);
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $account->repo_id)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $repository)) {
       return $account->username;
     }
   }
@@ -1677,26 +1696,27 @@ function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_un
 /**
  * Returns TRUE if the account is authorized to commit to the given
  * repository, or FALSE otherwise. Only call this function on existing
- * accounts or uid 0, the return value for all other uid/repo_id combinations
- * is undefined.
+ * accounts or uid 0, the return value for all other
+ * uid/repository combinations is undefined.
  *
  * @param $uid
  *   The user id of the checked account.
- * @param $repo_id
- *   The repository id of the repository where the status should be checked.
- *   (Note that the user's authorization status may differ for each repository.)
+ * @param $repository
+ *   The repository where the status should be checked. (Note that the user's
+ *   authorization status may differ for each repository.)
  */
-function versioncontrol_is_account_authorized($uid, $repo_id) {
-  if (!$uid) {
+function versioncontrol_is_account_authorized($uid, $repository) {
+  if (!$uid || !isset($repository)) {
     return FALSE;
   }
   $approved = array();
+
   foreach (module_implements('versioncontrol_is_account_authorized') as $module) {
     $function = $module .'_versioncontrol_is_account_authorized';
 
     // If at least one hook_versioncontrol_is_account_authorized returns FALSE,
     // the account is assumed not to be approved.
-    if ($function($uid, $repo_id) === FALSE) {
+    if ($function($uid, $repository) === FALSE) {
       return FALSE;
     }
   }
@@ -2428,7 +2448,10 @@ function versioncontrol_user_autocomplete($repo_id, $string) {
                             $repo_id, $string, 0, 10);
 
   while ($user = db_fetch_object($result)) {
-    if (versioncontrol_is_account_authorized($user->uid, $repo_id)) {
+    if (!isset($repository)) {
+      $repository = versioncontrol_get_repository($repo_id);
+    }
+    if (versioncontrol_is_account_authorized($user->uid, $repository)) {
       $matches[$user->name] = check_plain($user->name);
     }
   }
