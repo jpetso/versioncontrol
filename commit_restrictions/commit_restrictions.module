@@ -134,18 +134,22 @@ function commit_restrictions_versioncontrol_extract_repository_data($form_values
  *   - 'repo_id': The unique repository id.
  *   - 'name': The user-visible name of the repository.
  *   - 'vcs': The unique string identifier of the version control system
- *            that powers this repository.
+ *        that powers this repository.
  *   - 'root': The root directory of the repository. In most cases,
- *             this will be a local directory (e.g. '/var/repos/drupal'),
- *             but it may also be some specialized string for remote repository
- *             access. How this string may look like depends on the backend.
+ *        this will be a local directory (e.g. '/var/repos/drupal'),
+ *        but it may also be some specialized string for remote repository
+ *        access. How this string may look like depends on the backend.
+ *   - 'authorization_method': The string identifier of the repository's
+ *        authorization method, that is, how users may register accounts
+ *        in this repository. Modules can provide their own methods
+ *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
- *                    for URL backend retrieval functions.
+ *        for URL backend retrieval functions.
  *   - '[xxx]_specific': An array of VCS specific additional repository
- *                       information. How this array looks like is defined by the
- *                       corresponding backend module (versioncontrol_[xxx]).
+ *        information. How this array looks like is defined by the
+ *        corresponding backend module (versioncontrol_[xxx]).
  *   - '???': Any other additions that modules added by implementing
- *            versioncontrol_extract_repository_data().
+ *        versioncontrol_extract_repository_data().
  */
 function commit_restrictions_versioncontrol_repository($op, $repository) {
   $restrictions = $repository['commit_restrictions'];

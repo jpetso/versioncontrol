@@ -937,6 +937,10 @@ function versioncontrol_delete_account($repository, $uid, $username) {
  *        this will be a local directory (e.g. '/var/repos/drupal'),
  *        but it may also be some specialized string for remote repository
  *        access. How this string may look like depends on the backend.
+ *   - 'authorization_method': The string identifier of the repository's
+ *        authorization method, that is, how users may register accounts
+ *        in this repository. Modules can provide their own methods
+ *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
  *   - '[xxx]_specific': An array of VCS specific additional repository
@@ -959,10 +963,11 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
 
   db_query(
     "INSERT INTO {versioncontrol_repositories}
-     (repo_id, name, vcs, root, url_backend)
-     VALUES ('%d', '%s', '%s', '%s', '%s')",
+     (repo_id, name, vcs, root, authorization_method, url_backend)
+     VALUES ('%d', '%s', '%s', '%s', '%s', '%s')",
      $repository['repo_id'], $repository['name'], $repository['vcs'],
-     $repository['root'], $repository['url_backend']
+     $repository['root'], $repository['authorization_method'],
+     $repository['url_backend']
   );
   // TODO: abstract out repository URLs into separate backends
   db_query(
@@ -1020,6 +1025,10 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
  *        this will be a local directory (e.g. '/var/repos/drupal'),
  *        but it may also be some specialized string for remote repository
  *        access. How this string may look like depends on the backend.
+ *   - 'authorization_method': The string identifier of the repository's
+ *        authorization method, that is, how users may register accounts
+ *        in this repository. Modules can provide their own methods
+ *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
  *   - '[xxx]_specific': An array of VCS specific additional repository
@@ -1037,10 +1046,12 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
 function versioncontrol_update_repository($repository, $repository_urls) {
   db_query(
     "UPDATE {versioncontrol_repositories}
-     SET name = '%s', vcs = '%s', root = '%s', url_backend = '%s'
+     SET name = '%s', vcs = '%s', root = '%s',
+         authorization_method = '%s', url_backend = '%s'
      WHERE repo_id = '%d'",
      $repository['name'], $repository['vcs'], $repository['root'],
-     $repository['url_backend'], $repository['repo_id']
+     $repository['authorization_method'], $repository['url_backend'],
+     $repository['repo_id']
   );
   // TODO: abstract out repository URLs into separate backends
   db_query(

@@ -8,7 +8,6 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: move the "account authorization" selection to repository edit forms only
 // TODO: add an internal weight column to repositories
 
 // Optional capabilities that backend modules can provide.
@@ -45,6 +44,8 @@ define('VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS', 3);
 
 // The admin pages.
 include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol.admin.inc');
+// The non-admin pages.
+include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol.pages.inc');
 // The backend-only part of the API.
 include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol-backend.inc');
 
@@ -91,8 +92,8 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
 function versioncontrol_menu($may_cache) {
   global $user;
   $items = array();
-  $user_access = user_access('use version control systems');
   $admin_access = user_access('administer version control systems');
+  $user_access = user_access('use version control systems') || $admin_access;
 
   if ($may_cache) {
     // If Version Control API is used without the Project module,
@@ -253,8 +254,8 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
   static $items;
   static $categories;
 
-  $user_access = user_access('use version control systems');
   $admin_access = user_access('administer version control systems');
+  $user_access = user_access('use version control systems') || $admin_access;
   $account_access = ($user_access && $uid == $user->uid) || $admin_access;
 
   // Cache the items, we don't want this being done twice.
@@ -428,9 +429,8 @@ function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constra
 
 /**
  * Determine all user account authorization methods
- * (site-wide approval, per-repository approval, ...)
+ * (free for all, only admin may create accounts, per-repository approval, ...)
  * by invoking hook_versioncontrol_authorization_methods().
- * The default method (no authorization required) is not included.
  *
  * @return
  *   A structured array with the unique string identifier of the method as keys
@@ -446,20 +446,23 @@ function versioncontrol_get_authorization_methods() {
 }
 
 /**
- * Retrieve the currently selected authorization method.
- * This either 'none' or the unique string identifier
- * of another module's authentication method.
+ * Implementation of hook_versioncontrol_authorization_methods().
+ *
+ * @return
+ *   A structured array containing information about authorization methods
+ *   provided by this module, wrapped in a structured array. Array keys are
+ *   the unique string identifiers of each authorization method, and
+ *   array values are the user-visible method descriptions (wrapped in t()).
  */
-function versioncontrol_get_current_authorization_method() {
-  $current_method = variable_get('versioncontrol_authorization_method', 'none');
-  $methods = versioncontrol_get_authorization_methods();
+function versioncontrol_versioncontrol_authorization_methods() {
+  return array(
+    'versioncontrol_admin' => t('Only administrators can create accounts'),
+    'versioncontrol_none' => t('No approval required'),
+  );
+}
 
-  if ($current_method != 'none' && !isset($methods[$current_method])) {
-    // A (currently) non-existing method is given - reset this to 'none'.
-    variable_set('versioncontrol_authorization_method', 'none');
-    $current_method = 'none';
-  }
-  return $current_method;
+function _versioncontrol_get_fallback_authorization_method() {
+  return 'versioncontrol_admin';
 }
 
 
@@ -477,6 +480,10 @@ function versioncontrol_get_current_authorization_method() {
  *        this will be a local directory (e.g. '/var/repos/drupal'),
  *        but it may also be some specialized string for remote repository
  *        access. How this string may look like depends on the backend.
+ *   - 'authorization_method': The string identifier of the repository's
+ *        authorization method, that is, how users may register accounts
+ *        in this repository. Modules can provide their own methods
+ *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
  *   - '[xxx]_specific': An array of VCS specific additional repository
@@ -526,6 +533,10 @@ function versioncontrol_get_repository($repo_id) {
  *        this will be a local directory (e.g. '/var/repos/drupal'),
  *        but it may also be some specialized string for remote repository
  *        access. How this string may look like depends on the backend.
+ *   - 'authorization_method': The string identifier of the repository's
+ *        authorization method, that is, how users may register accounts
+ *        in this repository. Modules can provide their own methods
+ *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
  *   - '[xxx]_specific': An array of VCS specific additional repository
@@ -537,6 +548,7 @@ function versioncontrol_get_repository($repo_id) {
  */
 function versioncontrol_get_repositories($constraints = array()) {
   $backends = versioncontrol_get_backends();
+  $auth_methods = versioncontrol_get_authorization_methods();
 
   list($and_constraints, $params) =
     _versioncontrol_construct_repository_constraints($constraints, $backends);
@@ -553,6 +565,9 @@ function versioncontrol_get_repositories($constraints = array()) {
     if (!isset($backends[$repository['vcs']])) {
       // don't include repositories for which no backend module exists
       continue;
+    }
+    if (!isset($auth_methods[$repository['authorization_method']])) {
+      $repository['authorization_method'] = _versioncontrol_get_fallback_authorization_method();
     }
     if (!isset($repositories_by_backend[$repository['vcs']])) {
       $repositories_by_backend[$repository['vcs']] = array();
@@ -2453,4 +2468,39 @@ function _versioncontrol_db_get_additions($table_name, $primary_key_name, $keys)
     $additions[$primary_key] = $addition;
   }
   return $additions;
+}
+
+
+/**
+ * Return preset values for strings that are used in the user interface.
+ */
+function _versioncontrol_get_string_presets() {
+  $presets = array();
+
+  $presets['versioncontrol_registration_message_unauthorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>To request access to the Drupal CVS repository you must <a href="!register">create an account</a> and <a href="!login">login</a>. Come back to this page after you have logged on.</p>',
+    array('!register' => url('user/register'), '!login' => url('user/login'))
+  );
+
+  $presets['versioncontrol_registration_message_authorized'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
+<p>If you are an open source software developer, themer, translator or documentation writer, please choose one of Drupal\'s repositories from the selection below in order to request commit access to this repository. Prior to applying, please ensure that:</p>
+<ul>
+  <li>you have a concrete idea as to what you intend to contribute.</li>
+  <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
+</ul>',
+    array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
+  );
+
+  $presets['versioncontrol_registration_message_repository'] = t('<p>The Concurrent Versioning System (CVS) is a software development tool available to volunteers with experience in software development, translation, theming, or documentation who wish to participate in the Drupal project.</p>
+<p>A version control system account is not required to contribute patches to the Drupal project or community contributed projects. Anonymous access to the Drupal CVS repository is available which can be used to accomplish this. Please peruse the <a href="!handbook">CVS handbook</a> and <a href="!patch">patch guide</a> for more information.</p>
+<p>If you are an open source software developer, themer, translator or documentation writer, please use the form below to create an account in Drupal\'s CVS repository. Prior to registering, please ensure that:</p>
+<ul>
+  <li>you have a concrete idea as to what you intend to contribute.</li>
+  <li>you are not duplicating any <a href="!projects">existing projects</a>.</li>
+</ul>',
+    array('!projects' => url('project'), '!handbook' => url('handbook/cvs'), '!patch' => url('patch'))
+  );
+
+  return $presets;
 }

@@ -71,6 +71,7 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
+        authentication_method varchar(64) NOT NULL default '',
         url_backend varchar(64) NOT NULL default '',
         PRIMARY KEY (repo_id),
         UNIQUE KEY name (name)
@@ -158,6 +159,7 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
+        authentication_method varchar(64) NOT NULL default '',
         url_backend varchar(64) NOT NULL default '',
         PRIMARY KEY (repo_id),
         UNIQUE (name)
@@ -195,7 +197,6 @@ function versioncontrol_install() {
  * Implementation of hook_uninstall().
  */
 function versioncontrol_uninstall() {
-  variable_del('versioncontrol_authorization_method');
   variable_del('versioncontrol_registration_message_unauthorized');
   variable_del('versioncontrol_registration_message_authorized');
 
