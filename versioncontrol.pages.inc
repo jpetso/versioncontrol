@@ -219,8 +219,8 @@ function versioncontrol_account_register_form_submit($form_id, $form_values) {
  * but the Account Status module needs to display this message also for
  * reapplications, which is not included in the original form.
  * But it seems to be a better solution than exposing the
- * {versioncontrol_repository_internal_data} table or even adding the message
- * to the {versioncontrol_repository} table.
+ * {versioncontrol_repository_metadata} table or even adding the message
+ * to the {versioncontrol_repository} table. For now, at least.
  *
  * @param $repo_id
  *   The repository id where the a new account is registered.
@@ -230,7 +230,7 @@ function versioncontrol_account_register_form_submit($form_id, $form_values) {
  */
 function versioncontrol_get_repository_registration_message($repo_id) {
   $result = db_query("SELECT registration_message
-                      FROM {versioncontrol_repository_internal_data}
+                      FROM {versioncontrol_repository_metadata}
                       WHERE repo_id = '%d'", $repo_id);
   while ($row = db_fetch_object($result)) {
     return $row->registration_message;

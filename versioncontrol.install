@@ -87,7 +87,7 @@ function versioncontrol_install() {
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
-      db_query("CREATE TABLE {versioncontrol_repository_internal_data} (
+      db_query("CREATE TABLE {versioncontrol_repository_metadata} (
         repo_id int unsigned NOT NULL default '0',
         weight smallint NOT NULL default '0',
         registration_message text,
@@ -176,7 +176,7 @@ function versioncontrol_install() {
         PRIMARY KEY (repo_id)
       )");
 
-      db_query("CREATE TABLE {versioncontrol_repository_internal_data} (
+      db_query("CREATE TABLE {versioncontrol_repository_metadata} (
         repo_id int NOT NULL default '0',
         weight smallint NOT NULL default '0',
         registration_message text,

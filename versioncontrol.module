@@ -8,7 +8,6 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: add an internal weight column to repositories
 
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);

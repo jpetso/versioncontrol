@@ -693,7 +693,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   );
 
   $result = db_query("SELECT registration_message
-                      FROM {versioncontrol_repository_internal_data}
+                      FROM {versioncontrol_repository_metadata}
                       WHERE repo_id = '%d'", $repo_id);
   while ($row = db_fetch_object($result)) {
     $current_registration_message = $row->registration_message;
@@ -847,7 +847,7 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
 
   if ($repository['repo_id'] > 0) {
     versioncontrol_update_repository($repository, $repository_urls);
-    db_query("UPDATE {versioncontrol_repository_internal_data}
+    db_query("UPDATE {versioncontrol_repository_metadata}
               SET registration_message = '%s'
               WHERE repo_id = '%d'",
               $registration_message, $repository['repo_id']);
@@ -857,7 +857,7 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
   }
   else {
     $repository = versioncontrol_insert_repository($repository, $repository_urls);
-    db_query("INSERT INTO {versioncontrol_repository_internal_data}
+    db_query("INSERT INTO {versioncontrol_repository_metadata}
               (repo_id, registration_message)
               VALUES ('%d', '%s')",
               $repository['repo_id'], $registration_message);
