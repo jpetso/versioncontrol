@@ -133,10 +133,10 @@ function versioncontrol_admin_account_list_page() {
       .'</p>';
   }
 
-  $uid_constraints = array();
+  $placeholders = array();
   $params = array();
   foreach ($users as $uid => $user) {
-    $uid_constraints[] = "uid = '%d'";
+    $placeholders[] = "'%d'";
     $params[] = $uid;
   }
 
@@ -145,7 +145,7 @@ function versioncontrol_admin_account_list_page() {
                        MIN(date) AS first_commit_date, MAX(date) AS last_commit_date,
                        MIN(commit_id) AS first_commit_id, MAX(commit_id) AS last_commit_id
                       FROM {versioncontrol_commits}
-                      WHERE ". implode(' OR ', $uid_constraints) ."
+                      WHERE uid IN (". implode(',', $placeholders) .")
                       GROUP BY uid", $params);
 
   $number_commits = array();

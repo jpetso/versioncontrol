@@ -549,8 +549,25 @@ function versioncontrol_get_repository($repo_id) {
  *   an empty array is returned.
  */
 function versioncontrol_get_repositories($constraints = array()) {
+  static $repository_cache = array();
+
   $backends = versioncontrol_get_backends();
   $auth_methods = versioncontrol_get_authorization_methods();
+
+  // "Normalize" repo_ids to integers so the cache doesn't distinguish
+  // between string and integer values.
+  if (isset($constraints['repo_ids'])) {
+    $repo_ids = array();
+    foreach ($constraints['repo_ids'] as $repo_id) {
+      $repo_ids[] = (int) $repo_id;
+    }
+    $constraints['repo_ids'] = $repo_ids;
+  }
+
+  $constraints_serialized = serialize($constraints);
+  if (isset($repository_cache[$constraints_serialized])) {
+    return $repository_cache[$constraints_serialized];
+  }
 
   list($and_constraints, $params) =
     _versioncontrol_construct_repository_constraints($constraints, $backends);
@@ -590,6 +607,7 @@ function versioncontrol_get_repositories($constraints = array()) {
     }
   }
 
+  $repository_cache[$constraints_serialized] = $result_repositories; // cache the results
   return $result_repositories;
 }
 
@@ -604,34 +622,34 @@ function _versioncontrol_construct_repository_constraints($constraints, $backend
 
   // Filter out repositories of which the corresponding backend is not enabled,
   // and handle the 'vcs' constraint at the same time.
-  $or_constraints = array();
+  $placeholders = array();
   foreach ($backends as $vcs => $backend) {
     if (isset($constraints['vcs']) && !in_array($vcs, $constraints['vcs'])) {
       continue; // don't include the vcs if the caller has not specified it
     }
-    $or_constraints[] = "r.vcs = '%s'";
+    $placeholders[] = "'%s'";
     $params[] = $vcs;
   }
-  if (!empty($or_constraints)) {
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  if (!empty($placeholders)) {
+    $and_constraints[] = 'r.vcs IN ('. implode(',', $placeholders) .')';
   }
 
   if (isset($constraints['repo_ids'])) {
-    $or_constraints = array();
+    $placeholders = array();
     foreach ($constraints['repo_ids'] as $repo_id) {
-      $or_constraints[] = "r.repo_id = '%d'";
+      $placeholders[] = "'%d'";
       $params[] = $repo_id;
     }
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    $and_constraints[] = 'r.repo_id IN ('. implode(',', $placeholders) .')';
   }
 
   if (isset($constraints['names'])) {
-    $or_constraints = array();
+    $placeholders = array();
     foreach ($constraints['names'] as $name) {
-      $or_constraints[] = "r.name = '%s'";
+      $placeholders[] = "'%s'";
       $params[] = $name;
     }
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    $and_constraints[] = 'r.name IN ('. implode(',', $placeholders) .')';
   }
 
   return array($and_constraints, $params);
@@ -851,16 +869,16 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
 
   // Filter out commits of which the corresponding backend is not enabled,
   // and handle the 'vcs' constraint at the same time.
-  $or_constraints = array();
+  $placeholders = array();
   foreach ($backends as $vcs => $backend) {
     if (isset($constraints['vcs']) && !in_array($vcs, $constraints['vcs'])) {
       continue; // don't include the vcs if the caller has not specified it
     }
-    $or_constraints[] = "r.vcs = '%s'";
+    $placeholders[] = "'%s'";
     $params[] = $vcs;
   }
-  if (!empty($or_constraints)) {
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  if (!empty($placeholders)) {
+    $and_constraints[] = 'r.vcs IN ('. implode(',', $placeholders) .')';
   }
 
   // Filter by item paths.
@@ -888,15 +906,15 @@ function _versioncontrol_construct_common_constraints($constraints, $primary_key
   $and_constraints = array();
   $params = array();
 
-  // Filter by commit ids.
+  // Filter by commit, branch or tag ids.
   if (isset($constraints[$primary_key_name .'s'])) {
-    $or_constraints = array();
+    $placeholders = array();
     foreach ($constraints[$primary_key_name .'s'] as $primary_key) {
-      $or_constraints[] = $table_alias .".". $primary_key_name ." = '%d'";
+      $placeholders[] = "'%d'";
       $params[] = $primary_key;
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    if (!empty($placeholders)) {
+      $and_constraints[] = $table_alias .'.'. $primary_key_name .' IN ('. implode(',', $placeholders) .')';
     }
   }
 
@@ -912,13 +930,13 @@ function _versioncontrol_construct_common_constraints($constraints, $primary_key
 
   // Filter by repository ids.
   if (isset($constraints['repo_ids'])) {
-    $or_constraints = array();
+    $placeholders = array();
     foreach ($constraints['repo_ids'] as $repo_id) {
-      $or_constraints[] = $repository_table_alias .".repo_id = '%d'";
+      $placeholders[] = "'%d'";
       $params[] = $repo_id;
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    if (!empty($placeholders)) {
+      $and_constraints[] = $repository_table_alias .'.repo_id IN ('. implode(',', $placeholders) .')';
     }
   }
 
@@ -934,25 +952,25 @@ function _versioncontrol_construct_common_constraints($constraints, $primary_key
 
   // Filter by Drupal user ids.
   if (isset($constraints['uids'])) {
-    $or_constraints = array();
+    $placeholders = array();
     foreach ($constraints['uids'] as $uid) {
-      $or_constraints[] = $table_alias .".uid = '%d'";
+      $placeholders[] = "'%d'";
       $params[] = $uid;
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    if (!empty($placeholders)) {
+      $and_constraints[] = $table_alias .'.uid IN ('. implode(',', $placeholders) .')';
     }
   }
 
   // Filter by VCS specific user names.
   if (isset($constraints['usernames'])) {
-    $or_constraints = array();
+    $placeholders = array();
     foreach ($constraints['usernames'] as $username) {
-      $or_constraints[] = $table_alias .".username = '%s'";
+      $placeholders[] = "'%s'";
       $params[] = $username;
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    if (!empty($placeholders)) {
+      $and_constraints[] = $table_alias .'.username IN ('. implode(',', $placeholders) .')';
     }
   }
 
