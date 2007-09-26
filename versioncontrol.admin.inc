@@ -183,8 +183,9 @@ function versioncontrol_admin_account_list_page() {
         continue;
       }
       if (module_exists('commitlog')) {
-        $username = theme('commitlog_account_username',
-                          $uid, $username, $repositories[$repo_id], FALSE);
+        $username = commitlog_account_username(
+          $uid, $username, $repositories[$repo_id], FALSE
+        );
         $repo_name = theme('commitlog_repository', $repositories[$repo_id]);
       }
       else {

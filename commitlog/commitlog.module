@@ -92,22 +92,6 @@ function commitlog_page() {
 }
 
 /**
- * Page callback for the 'commitlog/feed' menu path.
- */
-function commitlog_rss() {
-  if ($error_message = _commitlog_check_request()) {
-    exit();
-  }
-
-  list($constraints, $attributes) = _commitlog_get_commits();
-  $commits = commitlog_get_paged_commits($constraints);
-
-  drupal_set_header('Content-Type: text/xml; charset=utf-8');
-  print theme('commitlog_rss', $commits);
-  exit();
-}
-
-/**
  * Page callback for the 'track code' tab on the user page.
  */
 function commitlog_account_tracker($uid) {
@@ -125,6 +109,22 @@ function commitlog_account_tracker($uid) {
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
   return theme('commitlog_page', $commits, array());
+}
+
+/**
+ * Page callback for the 'commitlog/feed' menu path.
+ */
+function commitlog_rss() {
+  if ($error_message = _commitlog_check_request()) {
+    exit();
+  }
+
+  list($constraints, $attributes) = _commitlog_get_commits();
+  $commits = commitlog_get_paged_commits($constraints);
+
+  drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  print theme('commitlog_rss', $commits);
+  exit();
 }
 
 
@@ -270,7 +270,7 @@ function theme_commitlog_page($commits, $attributes) {
       $output .= "<h3>$date</h3>";
       $output .= '<ul>';
     }
-    $output .= '<li>'. theme('commitlog_commit', $commit) .'</li>';
+    $output .= '<li>'. commitlog_commit($commit, NULL, 'html') .'</li>';
   }
   $output .= '</ul>';
 
@@ -296,7 +296,7 @@ function theme_commitlog_rss($commits) {
 
   foreach ($commits as $commit) {
     $location = theme('commitlog_commit_location', $commit);
-    $username = theme('commitlog_account_username',
+    $username = commitlog_account_username(
       $commit['uid'], $commit['username'], $commit['repository']
     );
 
@@ -309,7 +309,7 @@ function theme_commitlog_rss($commits) {
         'attributes' => array('isPermaLink' => 'false'),
       ),
     );
-    $text = theme('commitlog_commit', $commit, $username);
+    $text = commitlog_commit($commit, $username, 'html');
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
@@ -324,45 +324,97 @@ function theme_commitlog_rss($commits) {
   return $output;
 }
 
-function theme_commitlog_commit($commit, $username = NULL) {
+function commitlog_commit($commit, $username = NULL, $format = 'html') {
   if (!isset($username)) {
-    $username = theme('commitlog_account_username',
+    $variables['username'] = commitlog_account_username(
       $commit['uid'], $commit['username'], $commit['repository']
     );
   }
-  $commit_actions = versioncontrol_get_commit_actions($commit);
-  $actions = theme('commitlog_commit_actions', $commit, $commit_actions);
-  $message = theme('commitlog_commit_message', $commit);
-  $branches = theme('commitlog_commit_branches', $commit);
+  $variables['id'] = theme('commitlog_commit_identifier', $commit);
+  $variables['repository_name'] = theme('commitlog_repository', $commit['repository']);
+  $variables['time'] = format_date($commit['date'], 'custom', 'H:i');
 
-  $output .= '<div class="commit">';
+  $commit_actions = versioncontrol_get_commit_actions($commit);
+  $variables['actions'] = theme('commitlog_commit_actions', $commit, $commit_actions);
+  $variables['message'] = theme('commitlog_commit_message', $commit);
+  $variables['branches'] = theme('commitlog_commit_branches', $commit);
+
+  if ($format == 'html') {
+    return theme('commitlog_commit_html', $variables);
+  }
+  return theme('commitlog_commit_plaintext', $variables);
+}
+
+function theme_commitlog_commit_html($variables) {
+  $output = '<div class="commit">';
+
   $output .= '<div class="title">';
   $output .= t('Commit !id by !name at !time in !repo:', array(
-    '!id'   => theme('commitlog_commit_identifier', $commit),
-    '!repo' => theme('commitlog_repository', $commit['repository']),
-    '!name' => $username,
-    '!time' => format_date($commit['date'], 'custom', 'H:i'),
+    '!id'   => $variables['id'],
+    '!repo' => $variables['repository_name'],
+    '!name' => $variables['username'],
+    '!time' => $variables['time'],
   ));
   $output .= "</div>\n"; // class "title"
-  $output .= '<div class="actions">'. $actions .'</div>'."\n";
-  $output .= '<div class="description"><pre>'. $message .'</pre></div>'."\n";
+
+  $output .= '<div class="actions">'. $variables['actions'] .'</div>'."\n";
+  $output .= '<div class="description"><pre>'. $variables['message'] .'</pre></div>'."\n";
+
   $output .= "</div>\n"; // class "commit"
+  return $output;
+}
+
+function theme_commitlog_commit_plaintext($variables) {
+  $output = t('Commit !id by !name at !time in !repo:', array(
+    '!id'   => $variables['id'],
+    '!repo' => $variables['repository_name'],
+    '!name' => $variables['username'],
+    '!time' => $variables['time'],
+  )) ."\n\n";
+
+  $output .= $variables['actions'] ."\n\n";
+  $output .= $variables['message'] ."\n";
 
   return $output;
 }
 
 
-function theme_commitlog_account_username($uid, $username, $repository, $replace_with_drupal_username = TRUE) {
+/**
+ * Return a the username of a VCS account.
+ *
+ * @param $uid
+ *   The Drupal user id of the user. If this is 0, the corresponding
+ *   Drupal user naturally can't be retrieved, with all implications for
+ *   displaying the username.
+ * @param $username
+ *   The VCS username for the account.
+ * @param $repository
+ *   The repository where this account is registered.
+ * @param $replace_with_drupal_username
+ *   If TRUE (which is the default), this function tries to get the
+ *   corresponding Drupal user for the supplied uid and returns the "real"
+ *   username rather than the given one.
+ *   If FALSE, the given VCS username is always returned.
+ * @param $format
+ *   If 'html', the username will be linked to the user page (if possible)
+ *   or to the commit log page containing the user's commits.
+ *   If 'plaintext', the username will be returned without markup.
+ */
+function commitlog_account_username($uid, $username, $repository, $replace_with_drupal_username = TRUE, $format = 'html') {
   if ($uid && $replace_with_drupal_username) {
     $user = user_load(array('uid' => $uid));
+
+    if ($user) {
+      return ($format == 'html') ? theme('username', $user) : $user->name;
+    }
   }
 
-  if (!$user) {
+  if ($format == 'html') {
     return l(check_plain($username), 'commitlog', NULL,
              'usernames='. check_plain($username) .'&repos='. $repository['repo_id']);
     // TODO: find out the proper URL encoding function for the second $username
   }
-  return theme('username', $user);
+  return $username;
 }
 
 function theme_commitlog_repository($repository) {
