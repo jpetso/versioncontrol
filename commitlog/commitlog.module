@@ -327,17 +327,17 @@ function theme_commitlog_rss($commits) {
 function commitlog_commit($commit, $username = NULL, $format = 'html') {
   if (!isset($username)) {
     $variables['username'] = commitlog_account_username(
-      $commit['uid'], $commit['username'], $commit['repository']
+      $commit['uid'], $commit['username'], $commit['repository'], TRUE, $format
     );
   }
-  $variables['id'] = theme('commitlog_commit_identifier', $commit);
-  $variables['repository_name'] = theme('commitlog_repository', $commit['repository']);
+  $variables['id'] = theme('commitlog_commit_identifier', $commit, $format);
+  $variables['repository_name'] = theme('commitlog_repository', $commit['repository'], $format);
   $variables['time'] = format_date($commit['date'], 'custom', 'H:i');
 
   $commit_actions = versioncontrol_get_commit_actions($commit);
-  $variables['actions'] = theme('commitlog_commit_actions', $commit, $commit_actions);
-  $variables['message'] = theme('commitlog_commit_message', $commit);
-  $variables['branches'] = theme('commitlog_commit_branches', $commit);
+  $variables['actions'] = theme('commitlog_commit_actions', $commit, $commit_actions, $format);
+  $variables['message'] = theme('commitlog_commit_message', $commit, $format);
+  $variables['branches'] = theme('commitlog_commit_branches', $commit, $format);
 
   if ($format == 'html') {
     return theme('commitlog_commit_html', $variables);
@@ -372,8 +372,8 @@ function theme_commitlog_commit_plaintext($variables) {
     '!time' => $variables['time'],
   )) ."\n\n";
 
-  $output .= $variables['actions'] ."\n\n";
-  $output .= $variables['message'] ."\n";
+  $output .= $variables['message'] ."\n\n";
+  $output .= $variables['actions'] ."\n";
 
   return $output;
 }
@@ -417,17 +417,20 @@ function commitlog_account_username($uid, $username, $repository, $replace_with_
   return $username;
 }
 
-function theme_commitlog_repository($repository) {
-  return l(check_plain($repository['name']), 'commitlog', NULL, 'repos='. $repository['repo_id']);
+function theme_commitlog_repository($repository, $format = 'html') {
+  if ($format == 'html') {
+    return l(check_plain($repository['name']), 'commitlog', NULL, 'repos='. $repository['repo_id']);
+  }
+  return check_plain($repository['name']);
 }
 
 
-function theme_commitlog_commit_location($commit, $directory_item = NULL, $html = TRUE) {
+function theme_commitlog_commit_location($commit, $directory_item = NULL, $format = 'html') {
   $item = isset($directory_item)
           ? $directory_item
           : versioncontrol_get_commit_directory_item($commit);
-  $location = theme('commitlog_item', $commit['repository'], $item, $directory_item['path'], $html);
-  $branches = theme('commitlog_commit_branches', $commit, $html);
+  $location = theme('commitlog_item', $commit['repository'], $item, $directory_item['path'], $format);
+  $branches = theme('commitlog_commit_branches', $commit, $format);
   if (!empty($branches)) {
     $location = t('!branches: !directory', array(
       '!directory' => $location,
@@ -437,26 +440,32 @@ function theme_commitlog_commit_location($commit, $directory_item = NULL, $html 
   return $location;
 }
 
-function theme_commitlog_commit_identifier($commit, $html = TRUE) {
+function theme_commitlog_commit_identifier($commit, $format = 'html') {
   $id = empty($commit['revision']) ? $commit['commit_id'] : $commit['revision'];
 
-  if ($html) {
+  if ($format == 'html') {
     $commit_url = versioncontrol_get_url_commit_view($commit);
     $id = empty($commit_url)
-          ? theme('commitlog_commit_id', $commit['commit_id'], $id)
+          ? theme('commitlog_commit_id', $commit['commit_id'], $id, $format)
           : '<a href="'. $commit_url .'">'. $id .'</a>';
   }
   return $id;
 }
 
-function theme_commitlog_commit_id($commit_id, $text = NULL) {
+function theme_commitlog_commit_id($commit_id, $text = NULL, $format = 'html') {
   if (!isset($text)) {
     $text = $commit_id;
   }
-  return l($text, 'commitlog', NULL, 'commits='. $commit_id);
+  if ($format == 'html') {
+    return l($text, 'commitlog', NULL, 'commits='. $commit_id);
+  }
+  return $text;
 }
 
-function theme_commitlog_commit_message($commit) {
+function theme_commitlog_commit_message($commit, $format = 'html') {
+  if ($format != 'html') {
+    return $commit['message'];
+  }
   // Link to issues whose numbers are given in the commit message.
   $message = htmlspecialchars($commit['message']);
   $matches = array();
@@ -472,20 +481,20 @@ function theme_commitlog_commit_message($commit) {
   return $message;
 }
 
-function theme_commitlog_commit_branches($commit, $html = TRUE) {
+function theme_commitlog_commit_branches($commit, $format = 'html') {
   $branches = versioncontrol_get_commit_branches($commit);
 
   if (empty($branches)) {
     return '';
   }
-  if ($html) {
+  if ($format == 'html') {
     return l(implode(', ', $branches), 'commitlog', NULL, 'branches='. implode(',', $branches));
   }
   return implode(', ', $branches);
 }
 
 
-function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) {
+function theme_commitlog_commit_actions($commit, $commit_actions, $format = 'html') {
   if (empty($commit_actions)) {
     return '';
   }
@@ -498,7 +507,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
       $project_item = versioncontrol_get_parent_item(
         $commit['repository'], $commit_directory_item, $project['directory']
       );
-      $project_string = theme('commitlog_project', $commit['repository'], $project, $html);
+      $project_string = theme('commitlog_project', $commit['repository'], $project, $format);
     }
   }
   $directory_item = isset($project_item) ? $project_item : $commit_directory_item;
@@ -523,11 +532,11 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
       $item_path = t('!path [directory]', array('!path' => $item_path));
     }
-    $item_string = theme('commitlog_item', $commit['repository'], $item, $item_path, $html);
+    $item_string = theme('commitlog_item', $commit['repository'], $item, $item_path, $format);
 
     if (isset($action['source items'])) {
       $oldrev_string = theme('commitlog_item_revision',
-        $commit['repository'], $action['source items'][0], $html
+        $commit['repository'], $action['source items'][0], $format
       );
     }
 
@@ -535,13 +544,13 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
       $olditems = array();
       foreach ($action['source items'] as $source_item) {
         $item_path = substr($source_item['path'], strlen($directory_item['path']) + 1);
-        $olditems[] = theme('commitlog_item', $commit['repository'], $source_item, $item_path, $html);
+        $olditems[] = theme('commitlog_item', $commit['repository'], $source_item, $item_path, $format);
       }
       $olditems_string = implode(', ', $olditems);
     }
 
     $show_diff = FALSE;
-    if ($html) {
+    if ($format == 'html') {
       $diff_string = theme('commitlog_diff_link', $commit, $action);
       if (!empty($diff_string)) {
         $show_diff = TRUE;
@@ -579,14 +588,14 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
         return 'Error: action type enum value not known: '. $action['action'];
     }
 
-    if ($html && isset($item_project)) {
+    if ($format == 'html' && isset($item_project)) {
       $project_string = isset($project_string)
                         ? $project_string
-                        : theme('commitlog_project', $commit['repository'], $item_project, $html);
+                        : theme('commitlog_project', $commit['repository'], $item_project, $format);
       $action_string = t('!project: !action', array('!action' => $action_string));
     }
 
-    $lines[] = strtr('  '. $action_string, array(
+    $lines[] = strtr($action_string, array(
       '!project'  => $project_string,
       '!item'     => $item_string,
       '!path'     => $item_path,
@@ -596,15 +605,23 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $html = TRUE) 
     ));
   }
 
-  $location = t('on !location', array(
-    '!location' => theme('commitlog_commit_location', $commit, $directory_item),
-  ));
-  $output = '<div class="location">'. $location .'</div>'."\n";
-  $output .= ($html ? '<div class="items">'. theme('item_list', $lines) .'</div>' : implode("\n", $lines)) ."\n";
+  $location = theme('commitlog_commit_location', $commit, $directory_item, $format);
+
+  if ($format == 'html') {
+    $output = '<div class="location">'. $location .'</div>'."\n";
+    $output .= '<div class="items">'. theme('item_list', $lines) ."</div>\n";
+    return $output;
+  }
+  // else: plaintext
+  $output = $location ."\n";
+  foreach ($lines as $key => $line) {
+    $lines[$key] = '- '. $line;
+  }
+  $output .= implode("\n", $lines);
   return $output;
 }
 
-function theme_commitlog_item($repository, $item, $path = NULL, $html = TRUE) {
+function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html') {
   $backends = versioncontrol_get_backends();
 
   if (!isset($backends[$repository['vcs']])) {
@@ -627,7 +644,7 @@ function theme_commitlog_item($repository, $item, $path = NULL, $html = TRUE) {
   // in the commit title.
   if (empty($item['revision']) || $has_atomic_commits) {
     $output = $path;
-    if ($html) {
+    if ($format == 'html') {
       $view_url = versioncontrol_get_url_item_view($repository, $item);
       if (!empty($view_url)) {
         $output = '<a href="'. $view_url .'">'. $path .'</a>';
@@ -636,17 +653,17 @@ function theme_commitlog_item($repository, $item, $path = NULL, $html = TRUE) {
     return $output;
   }
   else {
-    return $path .' '. theme('commitlog_item_revision', $repository, $item, $html);
+    return $path .' '. theme('commitlog_item_revision', $repository, $item, $format);
   }
 }
 
-function theme_commitlog_item_revision($repository, $item, $html = TRUE) {
+function theme_commitlog_item_revision($repository, $item, $format = 'html') {
   if (empty($item['revision'])) {
     return '';
   }
   $revision = $item['revision'];
 
-  if ($html) {
+  if ($format == 'html') {
     $view_url = versioncontrol_get_url_item_view($repository, $item);
     if (!empty($view_url)) {
       $revision = '<a href="'. $view_url .'">'. $item['revision'] .'</a>';
@@ -670,10 +687,10 @@ function theme_commitlog_diff_link($commit, $commit_action) {
   return '';
 }
 
-function theme_commitlog_project($repository, $project, $html = TRUE) {
+function theme_commitlog_project($repository, $project, $format = 'html') {
   $project_node = node_load($project['nid']);
   if ($project_node) {
-    if ($html) {
+    if ($format == 'html') {
       return l(check_plain($project_node->title), 'node/'. $project_node->nid);
     }
     return check_plain($project_node->title);
