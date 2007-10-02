@@ -8,6 +8,9 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: also send out tag and branch mails.
+// TODO: right, the above includes compositing those into some output.
+//       but we need to do it sometime anyways, so what the hell.
 
 /**
  * Implementation of hook_menu().

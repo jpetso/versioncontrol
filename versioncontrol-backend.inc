@@ -773,6 +773,9 @@ function _versioncontrol_get_common_directory($paths) {
     $dirparts = $new_dirparts;
   }
 
+  if (count($dirparts) == 1) {
+    return '/';
+  }
   return implode('/', $dirparts);
 }
 
