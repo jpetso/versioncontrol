@@ -8,7 +8,6 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: mailing out commit messages to the version control admin.
 
 /**
  * Implementation of hook_menu().
@@ -93,6 +92,12 @@ function commitlog_form_alter($form_id, &$form) {
       '#collapsed' => TRUE,
       '#weight' => 3,
     );
+    $form['commitlog']['commitlog_send_notification_mails'] = array(
+      '#type' => 'checkbox',
+      '#title' => 'Send commit notification mails to the VCS administrator',
+      '#description' => 'If this is enabled, each commit that is recorded on this site causes a notification mail to be sent to the VCS administrator\'s e-mail address. This mail includes all relevant commit data like the commit message and the files and directories that were changed. Note that disabling the Commit Log module also disables notification mails.',
+      '#default_value' => variable_get('commitlog_send_notification_mails', 0),
+    );
     $form['commitlog']['commitlog_pager'] = array(
       '#type' => 'textfield',
       '#title' => t('Number of commits per page'),
@@ -117,6 +122,105 @@ function commitlog_settings_validate($form_id, $form_values) {
  */
 function commitlog_settings_submit($form_id, $form_values) {
   variable_set('commitlog_pager', $form_values['commitlog_pager']);
+  variable_set('commitlog_send_notification_mails', $form_values['commitlog_send_notification_mails']);
+}
+
+
+/**
+ * Implementation of hook_versioncontrol_commit():
+ * If enabled, send out a notification mail to the VCS admin.
+ *
+ * @param $op
+ *   'insert' when the commit has just been recorded and inserted into the
+ *   database, or 'delete' if it will be deleted right after this hook
+ *   has been called.
+ *
+ * @param $commit
+ *   A commit array containing basic information about a commit.
+ *   It consists of the following elements:
+ *
+ *   - 'commit_id': The Drupal-specific commit identifier (a simple integer)
+ *        which is unique among all commits in all repositories.
+ *   - 'repository': The repository where this commit occurred.
+ *        This is a structured array, like a single element of
+ *        what is returned by versioncontrol_get_repositories().
+ *   - 'date': The time when the revision was committed,
+ *        given as Unix timestamp.
+ *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
+ *        could be associated to the committer.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'directory': The deepest-level directory in the repository that is
+ *        common to all the changed items, e.g. '/src' if the commit changed
+ *        the files '/src/subdir/code.php' and '/src/README.txt'.
+ *   - 'message': The commit message.
+ *   - 'revision': The VCS specific repository-wide revision identifier,
+ *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
+ *        distributed version control systems. If there is no such revision
+ *        (which may be the case for version control systems that don't support
+ *        atomic commits) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': An array of VCS specific additional commit information.
+ *        How this array looks like is defined by the corresponding
+ *        backend module (versioncontrol_[xxx]).
+ *
+ * @param $commit_actions
+ *   A structured array containing the exact details of what happened to
+ *   each item in this commit. Array keys are the current/new paths, also for
+ *   VERSIONCONTROL_ACTION_DELETED actions even if the file actually doesn't
+ *   exist anymore. The corresponding array values are again structured arrays
+ *   and consist of elements with the following keys:
+ *
+ *   - 'action': Specifies how the item was modified.
+ *        One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   - 'modified': Boolean value, specifies if a file was modified in addition
+ *        to the other action in the 'action' element of the array.
+ *        Only exists for the VERSIONCONTROL_ACTION_MOVED
+ *        and VERSIONCONTROL_ACTION_COPIED actions.
+ *   - 'current item': The updated state of the modified item.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
+ *   - 'source items': An array with the previous state(s) of the modified item.
+ *        Path and branch will always be the same as in the current item
+ *        except for the VERSIONCONTROL_ACTION_MOVED,
+ *        VERSIONCONTROL_ACTION_COPIED and VERSIONCONTROL_ACTION_MERGED actions.
+ *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
+ *
+ *   Item values are structured arrays and consist of elements
+ *   with the following keys:
+ *
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - '[xxx]_specific': May be set by the backend to remember additional
+ *        item info. ("[xxx]" is the unique string identifier of the respective
+ *        version control system.)
+ */
+function commitlog_versioncontrol_commit($op, $commit, $commit_actions) {
+  if ($op == 'insert') {
+    $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+    commitlog_send_commit_mail($admin_mail, $commit, $commit_actions);
+  }
+}
+
+/**
+ * Send out a notification mail to the given mail address.
+ */
+function commitlog_send_commit_mail($to, $commit, $commit_actions) {
+  $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+  $location = theme('commitlog_commit_location', $commit, NULL, 'plaintext');
+  $username = commitlog_account_username(
+    $commit['uid'], $commit['username'], $commit['repository'], TRUE, 'plaintext'
+  );
+
+  $from = "$username <$admin_mail>";
+  $subject = $location;
+  $message = commitlog_commit($commit, $commit_actions, $username, 'plaintext');
+
+  drupal_mail(
+    'commitlog_notification_email', $to,
+    $subject, $message, $from, array('X-Mailer' => 'Drupal')
+  );
 }
 
 
@@ -305,6 +409,8 @@ function theme_commitlog_page($commits, $attributes) {
   $initial = TRUE;
 
   foreach ($commits as $commit) {
+    $commit_actions = versioncontrol_get_commit_actions($commit);
+
     $date = _commitlog_date($commit['date']);
     if (isset($date)) { // begin a new list for each day
       if (!$initial) {
@@ -314,7 +420,7 @@ function theme_commitlog_page($commits, $attributes) {
       $output .= "<h3>$date</h3>";
       $output .= '<ul>';
     }
-    $output .= '<li>'. commitlog_commit($commit, NULL, 'html') .'</li>';
+    $output .= '<li>'. commitlog_commit($commit, $commit_actions, NULL, 'html') .'</li>';
   }
   $output .= '</ul>';
 
@@ -339,6 +445,8 @@ function theme_commitlog_rss($commits) {
   $items = '';
 
   foreach ($commits as $commit) {
+    $commit_actions = versioncontrol_get_commit_actions($commit);
+
     $location = theme('commitlog_commit_location', $commit);
     $username = commitlog_account_username(
       $commit['uid'], $commit['username'], $commit['repository']
@@ -353,7 +461,7 @@ function theme_commitlog_rss($commits) {
         'attributes' => array('isPermaLink' => 'false'),
       ),
     );
-    $text = commitlog_commit($commit, $username, 'html');
+    $text = commitlog_commit($commit, $commit_actions, $username, 'html');
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
@@ -368,8 +476,11 @@ function theme_commitlog_rss($commits) {
   return $output;
 }
 
-function commitlog_commit($commit, $username = NULL, $format = 'html') {
-  if (!isset($username)) {
+function commitlog_commit($commit, $commit_actions, $username = NULL, $format = 'html') {
+  if (isset($username)) {
+    $variables['username'] = $username;
+  }
+  else {
     $variables['username'] = commitlog_account_username(
       $commit['uid'], $commit['username'], $commit['repository'], TRUE, $format
     );
@@ -378,7 +489,6 @@ function commitlog_commit($commit, $username = NULL, $format = 'html') {
   $variables['repository_name'] = theme('commitlog_repository', $commit['repository'], $format);
   $variables['time'] = format_date($commit['date'], 'custom', 'H:i');
 
-  $commit_actions = versioncontrol_get_commit_actions($commit);
   $variables['actions'] = theme('commitlog_commit_actions', $commit, $commit_actions, $format);
   $variables['message'] = theme('commitlog_commit_message', $commit, $format);
   $variables['branches'] = theme('commitlog_commit_branches', $commit, $format);
@@ -532,7 +642,11 @@ function theme_commitlog_commit_branches($commit, $format = 'html') {
     return '';
   }
   if ($format == 'html') {
-    return l(implode(', ', $branches), 'commitlog', NULL, 'branches='. implode(',', $branches));
+    $branch_links = array();
+    foreach ($branches as $branch) {
+      $branch_links[] = l($branch, 'commitlog', NULL, 'branches='. $branch);
+    }
+    return implode(', ', $branch_links);
   }
   return implode(', ', $branches);
 }

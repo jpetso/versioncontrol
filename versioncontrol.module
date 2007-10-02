@@ -765,7 +765,8 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *        what is returned by versioncontrol_get_repositories().
  *   - 'date': The time when the revision was committed,
  *        given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer.
+ *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
+ *        could be associated to the committer.
  *   - 'username': The system specific VCS username of the committer.
  *   - 'directory': The deepest-level directory in the repository that is
  *        common to all the changed items, e.g. '/src' if the commit changed
@@ -1152,7 +1153,8 @@ function _versioncontrol_page_commits($commits, $page, $limit) {
  *      VERSIONCONTROL_ACTION_MOVED if was renamed,
  *      or VERSIONCONTROL_ACTION_DELETED if was deleted.
  *   - 'date': The time when the branching was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer.
+ *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
+ *        could be associated to the committer.
  *   - 'username': The system specific VCS username of the committer.
  *   - 'repository': The repository where the branching occurred,
  *        given as a structured array, like the return value
@@ -1193,7 +1195,8 @@ function versioncontrol_get_branch_operation($branch_op_id) {
  *        VERSIONCONTROL_ACTION_MOVED if was renamed,
  *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
  *   - 'date': The time when the tagging was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer.
+ *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
+ *        could be associated to the committer.
  *   - 'username': The system specific VCS username of the committer.
  *   - 'repository': The repository where the tagging occurred,
  *        given as a structured array, like the return value
@@ -1271,7 +1274,8 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *        VERSIONCONTROL_ACTION_MOVED if was renamed,
  *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
  *   - 'date': The time when the branching was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer.
+ *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
+ *        could be associated to the committer.
  *   - 'username': The system specific VCS username of the committer.
  *   - 'repository': The repository where the branching occurred,
  *        given as a structured array, like the return value
@@ -1421,7 +1425,8 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  *        VERSIONCONTROL_ACTION_MOVED if was renamed,
  *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
  *   - 'date': The time when the tagging was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer.
+ *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
+ *        could be associated to the committer.
  *   - 'username': The system specific VCS username of the committer.
  *   - 'repository': The repository where the tagging occurred,
  *        given as a structured array, like the return value
