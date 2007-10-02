@@ -260,7 +260,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
   $vcs_name = $backends[$repository['vcs']]['name'];
   $admin_access = user_access('administer version control systems');
 
-  $form['#id'] = 'vcs-account-form';
+  $form['#id'] = 'versioncontrol-account-form';
   $form['#repository'] = $repository;
   $form['#vcs'] = $repository['vcs'];
   $form['#validate'] = array('versioncontrol_account_edit_form_validate' => array());

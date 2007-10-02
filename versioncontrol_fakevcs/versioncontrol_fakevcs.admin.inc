@@ -19,10 +19,10 @@ define('VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH', 5);
  * administrative forms that the Version Control API provides.
  */
 function versioncontrol_fakevcs_form_alter($form_id, &$form) {
-  if ($form['#id'] == 'vcs-repository-form' && $form['#vcs'] == 'fakevcs') {
+  if ($form['#id'] == 'versioncontrol-repository-form' && $form['#vcs'] == 'fakevcs') {
     versioncontrol_fakevcs_repository_admin_form_alter($form_id, $form);
   }
-  else if ($form['#id'] == 'vcs-account-form' && $form['#vcs'] == 'fakevcs') {
+  else if ($form['#id'] == 'versioncontrol-account-form' && $form['#vcs'] == 'fakevcs') {
     versioncontrol_fakevcs_account_form_alter($form_id, $form);
   }
 }

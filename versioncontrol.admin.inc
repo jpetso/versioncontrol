@@ -272,7 +272,7 @@ function versioncontrol_admin_account_list_filter_form($repositories) {
     $_SESSION['versioncontrol_filter_repo_id'] = 0;
   }
 
-  $form['#id'] = 'vcs-account-filter-form';
+  $form['#id'] = 'versioncontrol-account-filter-form';
 
   $form['fieldset'] = array(
     '#type' => 'fieldset',
@@ -650,7 +650,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   $vcs = isset($repository) ? $repository['vcs'] : $vcs;
 
   $form = array();
-  $form['#id'] = 'vcs-repository-form';
+  $form['#id'] = 'versioncontrol-repository-form';
   $form['#vcs'] = $vcs;
   $form['#repository'] = $repository;
 

@@ -303,11 +303,11 @@ function _versioncontrol_account_status_get_cell($uid, $usernames_by_repository,
  */
 function versioncontrol_account_status_form_alter($form_id, &$form) {
   switch ($form['#id']) {
-    case 'vcs-repository-form':
+    case 'versioncontrol-repository-form':
       versioncontrol_account_status_form_alter_repository_settings($form_id, $form);
       break;
 
-    case 'vcs-account-form':
+    case 'versioncontrol-account-form':
       if ($form['#repository']['authorization_method'] == 'versioncontrol_account_status_repository') {
         versioncontrol_account_status_form_alter_account(
           $form_id, $form, $form['#repository']['repo_id']
@@ -315,7 +315,7 @@ function versioncontrol_account_status_form_alter($form_id, &$form) {
       }
       break;
 
-    case 'vcs-account-filter-form':
+    case 'versioncontrol-account-filter-form':
       versioncontrol_account_status_form_alter_account_filter($form_id, $form);
       break;
   }
@@ -870,7 +870,8 @@ function _versioncontrol_account_status_form_alter_status_admin(&$form, $status_
 }
 
 /**
- * The validation handler for the application form (wherever it occurs).
+ * Validation handler for the application form:
+ * Make sure that all conditions have been answered with "Yes".
  */
 function versioncontrol_account_status_application_validate($form_id, $form_values) {
   $strings = _versioncontrol_account_status_get_strings(

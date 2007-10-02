@@ -77,6 +77,50 @@ function commitlog_perm() {
 
 
 /**
+ * Implementation of hook_form_alter():
+ * Add a fieldset for to the general settings form so that the user can
+ * enable/disable admin notification mails and configure the pager limit.
+ */
+function commitlog_form_alter($form_id, &$form) {
+  if ($form['#id'] == 'versioncontrol-settings-form') {
+    $form['#validate']['commitlog_settings_validate'] = array();
+    $form['#submit']['commitlog_settings_submit'] = array();
+
+    $form['commitlog'] = array(
+      '#type' => 'fieldset',
+      '#title' => t('Commit Log'),
+      '#collapsible' => TRUE,
+      '#collapsed' => TRUE,
+      '#weight' => 3,
+    );
+    $form['commitlog']['commitlog_pager'] = array(
+      '#type' => 'textfield',
+      '#title' => t('Number of commits per page'),
+      '#description' => t('Controls how many commits can be shown on a single page of the !commitlog. Paging is used when there are more commits to show than specified by this value.', array('!commitlog' => l(t('Commit Log'), 'commitlog'))),
+      '#default_value' => variable_get('commitlog_pager', 10),
+    );
+  }
+}
+
+/**
+ * Validation handler for the settings form:
+ * Make sure that the pager limit is a positive number.
+ */
+function commitlog_settings_validate($form_id, $form_values) {
+  if (!is_numeric($form_values['commitlog_pager']) || $form_values['commitlog_pager'] <= 0) {
+    form_set_error('commitlog_pager', t('The number of commits per page needs to be a positive number.'));
+  }
+}
+
+/**
+ * Submit handler for the settings form.
+ */
+function commitlog_settings_submit($form_id, $form_values) {
+  variable_set('commitlog_pager', $form_values['commitlog_pager']);
+}
+
+
+/**
  * Page callback for the 'commitlog' menu path.
  */
 function commitlog_page() {
