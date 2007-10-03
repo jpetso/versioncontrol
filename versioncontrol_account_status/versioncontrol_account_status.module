@@ -964,7 +964,7 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
       versioncontrol_account_status_set($status_data);
 
       if ($additional_data['admin_message']['is_send']) {
-        $contents = $additional_data['admin_message'];
+        $contents = $additional_data['admin_message']['contents'];
         _versioncontrol_account_status_send_status_update_mails($status_data, $contents);
       }
       if ($additional_data['send_application_mails']) {
