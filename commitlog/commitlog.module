@@ -689,7 +689,8 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $format = 'htm
       }
     }
 
-    $item_path = substr($item['path'], strlen($directory_item['path']) + 1);
+    $offset = ($directory_item['path'] == '/') ? 0 : 1;
+    $item_path = substr($item['path'], strlen($directory_item['path']) + $offset);
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
       $item_path = t('!path [directory]', array('!path' => $item_path));
     }
