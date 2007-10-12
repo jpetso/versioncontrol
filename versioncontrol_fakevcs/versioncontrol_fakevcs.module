@@ -389,13 +389,15 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_commit_directory_item():
+ * Implementation of [versioncontrol_backend]_get_directory_item():
  * Retrieve the item of the deepest-level directory in the repository that is
- * common to all the changed items in a commit. In other words, this function
- * gets you the item for $commit['directory'].
+ * common to all the changed/branched/tagged items in a commit, branch or
+ * tag operation. In other words, this function gets you the item
+ * for $operation['directory'].
  *
- * @param $commit
- *   The commit whose deepest-level changed directory should be retrieved.
+ * @param $operation
+ *   The commit, branch or tag operation whose deepest-level
+ *   changed/branched/tagged directory should be retrieved.
  *
  * @return
  *   The requested directory item. Item values are structured arrays and
@@ -403,7 +405,8 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
  *
  *   - 'type': Specifies the item type, which in this case can only be
  *        VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the directory at the time of the commit.
+ *   - 'path': The path of the directory, which will be the same
+ *        as $operation['directory'].
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
@@ -411,9 +414,9 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
  *        item info. ("[xxx]" is the unique string identifier
  *        of the respective version control system.)
  */
-function versioncontrol_fakevcs_get_commit_directory_item($commit) {
-  // Assuming $commit is a single commit array that looks like this:
-  $commit = array(
+function versioncontrol_cvs_get_directory_item($operation) {
+  // Assuming $operation is a single commit array that looks like this:
+  $operation = array(
     'commit_id' => 2345,
     'repository' => $drupal_cvs,
     'date' => time(),
@@ -427,7 +430,7 @@ function versioncontrol_fakevcs_get_commit_directory_item($commit) {
 
   return array(
     'type' => VERSIONCONTROL_ITEM_DIRECTORY,
-    'path' => $commit['directory'],
+    'path' => $operation['directory'],
     'revision' => '',
     'fakevcs_specific' => array('selected_branch_name' => 'DRUPAL-5--1'),
   );

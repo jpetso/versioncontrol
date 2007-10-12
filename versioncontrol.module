@@ -866,21 +866,7 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
   // Filter by a set of common constraints whose code is shared with the
   // branch and tag retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, 'commit_id', 'c', 'r');
-
-  // Filter out commits of which the corresponding backend is not enabled,
-  // and handle the 'vcs' constraint at the same time.
-  $placeholders = array();
-  foreach ($backends as $vcs => $backend) {
-    if (isset($constraints['vcs']) && !in_array($vcs, $constraints['vcs'])) {
-      continue; // don't include the vcs if the caller has not specified it
-    }
-    $placeholders[] = "'%s'";
-    $params[] = $vcs;
-  }
-  if (!empty($placeholders)) {
-    $and_constraints[] = 'r.vcs IN ('. implode(',', $placeholders) .')';
-  }
+    _versioncontrol_construct_common_constraints($constraints, $backends, 'commit_id', 'c', 'r');
 
   // Filter by item paths.
   if (isset($constraints['paths'])) {
@@ -903,9 +889,23 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
  * Assemble a list of SQL "AND" constraints that both the commit and
  * the branch/tag retrieval functions make use of.
  */
-function _versioncontrol_construct_common_constraints($constraints, $primary_key_name, $table_alias, $repository_table_alias = 'r') {
+function _versioncontrol_construct_common_constraints($constraints, $backends, $primary_key_name, $table_alias, $repository_table_alias = 'r') {
   $and_constraints = array();
   $params = array();
+
+  // Filter out entries of which the corresponding backend is not enabled,
+  // and handle the 'vcs' constraint at the same time.
+  $placeholders = array();
+  foreach ($backends as $vcs => $backend) {
+    if (isset($constraints['vcs']) && !in_array($vcs, $constraints['vcs'])) {
+      continue; // don't include the vcs if the caller has not specified it
+    }
+    $placeholders[] = "'%s'";
+    $params[] = $vcs;
+  }
+  if (!empty($placeholders)) {
+    $and_constraints[] = $repository_table_alias .'.vcs IN ('. implode(',', $placeholders) .')';
+  }
 
   // Filter by commit, branch or tag ids.
   if (isset($constraints[$primary_key_name .'s'])) {
@@ -1015,6 +1015,11 @@ function _versioncontrol_construct_path_constraint($column, $path) {
 function _versioncontrol_amend_objects(&$objects, $primary_keys_by_backend,
                                        $repositories, $vcs, $constraints,
                                        $type, $primary_key_name, $is_autoadd) {
+  foreach ($objects as $key => $object) {
+    $objects[$key]['repository'] = $repositories[$object['repo_id']];
+    unset($objects[$key]['repo_id']);
+  }
+
   if ($is_autoadd) {
     $additions = _versioncontrol_db_get_additions(
       // e.g. 'versioncontrol_fakevcs_commits' or 'versioncontrol_cvs_tag_operations'
@@ -1027,11 +1032,9 @@ function _versioncontrol_amend_objects(&$objects, $primary_keys_by_backend,
       $additions_by_primary_key[$primary_key] = $additions;
     }
 
-    // Apply the additions to their respective commits.
+    // Apply the additions to their respective commit/tag/branch operations.
     foreach ($objects as $key => $object) {
-      $objects[$key]['repository'] = $repositories[$object['repo_id']];
       $objects[$key][$vcs .'_specific'] = $additions_by_primary_key[$object[$primary_key_name]];
-      unset($objects[$key]['repo_id']);
     }
   }
 
@@ -1234,6 +1237,10 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *
  *   - 'repo_ids': An array of repository ids. If given, only branch operations
  *        for the corresponding repositories will be returned.
+ *   - 'vcs': An array of strings, like array('cvs', 'svn', 'git').
+ *        If given, only branches for these backends will be returned.
+ *   - 'branch_names': An array of branch names. If given, only
+ *        branch operations with these names will be returned.
  *   - 'branch_op_ids': An array of branch operation ids. If given, only
  *        branch operations matching those ids will be returned.
  *   - 'branch_op_id_lower': A branch operation id. If given, the result set
@@ -1297,7 +1304,7 @@ function versioncontrol_get_branch_operations($constraints = array()) {
   // Filter by a set of common constraints whose code is shared with the
   // commit and tag retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, 'branch_op_id', 'bo', 'r');
+    _versioncontrol_construct_common_constraints($constraints, $backends, 'branch_op_id', 'bo', 'r');
 
   // Filter by branch names.
   if (isset($constraints['branch_names'])) {
@@ -1373,7 +1380,6 @@ function versioncontrol_get_branch_operations($constraints = array()) {
                                   $repositories, $vcs, $constraints,
                                   'branch_operations', 'branch_op_id', $is_autoadd);
   }
-
   return $branches;
 }
 
@@ -1387,6 +1393,10 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  *
  *   - 'repo_ids': An array of repository ids. If given, only tag operations
  *        for the corresponding repositories will be returned.
+ *   - 'vcs': An array of strings, like array('cvs', 'svn', 'git').
+ *        If given, only tags for these backends will be returned.
+ *   - 'tag_names': An array of tag names. If given, only tag operations
+ *        with these names will be returned.
  *   - 'tag_op_ids': An array of tag operation ids. If given,
  *        only tag operations matching those ids will be returned.
  *   - 'tag_op_id_lower': A tag operation id. If given, the result set will not
@@ -1449,9 +1459,9 @@ function versioncontrol_get_tag_operations($constraints = array()) {
   // Filter by a set of common constraints whose code is shared with the
   // commit and branch retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, 'tag_op_id', 't', 'r');
+    _versioncontrol_construct_common_constraints($constraints, $backends, 'tag_op_id', 't', 'r');
 
-  // Filter by branch names.
+  // Filter by tag names.
   if (isset($constraints['tag_names'])) {
     $or_constraints = array();
     foreach ($constraints['tag_names'] as $tag_name) {
@@ -1522,7 +1532,6 @@ function versioncontrol_get_tag_operations($constraints = array()) {
                                   $repositories, $vcs, $constraints,
                                   'tag_operations', 'tag_op_id', $is_autoadd);
   }
-
   return $tags;
 }
 
@@ -1953,11 +1962,13 @@ function versioncontrol_get_affected_item($commit_action) {
 
 /**
  * Retrieve the item of the deepest-level directory in the repository that is
- * common to all the changed items in a commit. In other words, this function
- * gets you the item for $commit['directory'].
+ * common to all the changed/branched/tagged items in a commit, branch or
+ * tag operation. In other words, this function gets you the item
+ * for $operation['directory'].
  *
- * @param $commit
- *   The commit whose deepest-level changed directory should be retrieved.
+ * @param $operation
+ *   The commit, branch or tag operation whose deepest-level
+ *   changed/branched/tagged directory should be retrieved.
  *
  * @return
  *   The requested directory item. Item values are structured arrays and
@@ -1965,7 +1976,8 @@ function versioncontrol_get_affected_item($commit_action) {
  *
  *   - 'type': Specifies the item type, which in this case can only be
  *        VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the directory at the time of the commit.
+ *   - 'path': The path of the directory, which will be the same
+ *        as $operation['directory'].
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
@@ -1973,9 +1985,9 @@ function versioncontrol_get_affected_item($commit_action) {
  *        item info. ("[xxx]" is the unique string identifier
  *        of the respective version control system.)
  */
-function versioncontrol_get_commit_directory_item($commit) {
+function versioncontrol_get_directory_item($operation) {
   return _versioncontrol_call_backend(
-    $commit['repository']['vcs'], 'get_commit_directory_item', array($commit)
+    $operation['repository']['vcs'], 'get_directory_item', array($operation)
   );
 }
 
