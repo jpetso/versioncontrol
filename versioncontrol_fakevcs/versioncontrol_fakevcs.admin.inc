@@ -31,27 +31,25 @@ function versioncontrol_fakevcs_form_alter($form_id, &$form) {
  * Add CVS specific elements to the add/edit repository form.
  */
 function versioncontrol_fakevcs_repository_admin_form_alter($form_id, &$form) {
-  if ($form['#id'] == 'repository-form' && $form['#vcs'] == 'fakevcs') {
-    $repository = $form['#repository'];
+  $repository = $form['#repository'];
 
-    $form['repository_information']['root']['#description'] = t(
-      'The location of the repository\'s root directory. Examples: /path or ssh+fakevcs://path.'
-    );
+  $form['repository_information']['root']['#description'] = t(
+    'The location of the repository\'s root directory. Examples: /path or ssh+fakevcs://path.'
+  );
 
-    $form['repository_information']['update_method'] = array(
-      '#type' => 'radios',
-      '#title' => t('Update method'),
-      '#description' => t('Automatic log retrieval requires cron.'),
-      '#default_value' => isset($repository)
-                          ? $repository['fakevcs_specific']['update_method']
-                          : VERSIONCONTROL_FAKEVCS_UPDATE_CRON,
-      '#weight' => 10,
-      '#options' => array(
-        VERSIONCONTROL_FAKEVCS_UPDATE_CRON => t('Automatic log retrieval.'),
-        VERSIONCONTROL_FAKEVCS_UPDATE_SCRIPT => t('Use external script to insert data.'),
-      ),
-    );
-  }
+  $form['repository_information']['update_method'] = array(
+    '#type' => 'radios',
+    '#title' => t('Update method'),
+    '#description' => t('Automatic log retrieval requires cron.'),
+    '#default_value' => isset($repository)
+                        ? $repository['fakevcs_specific']['update_method']
+                        : VERSIONCONTROL_FAKEVCS_UPDATE_CRON,
+    '#weight' => 10,
+    '#options' => array(
+      VERSIONCONTROL_FAKEVCS_UPDATE_CRON => t('Automatic log retrieval.'),
+      VERSIONCONTROL_FAKEVCS_UPDATE_SCRIPT => t('Use external script to insert data.'),
+    ),
+  );
 }
 
 /**
