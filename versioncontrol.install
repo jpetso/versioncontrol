@@ -71,7 +71,7 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
-        authentication_method varchar(64) NOT NULL default '',
+        authorization_method varchar(64) NOT NULL default '',
         url_backend varchar(64) NOT NULL default '',
         PRIMARY KEY (repo_id),
         UNIQUE KEY name (name)
@@ -160,7 +160,7 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
-        authentication_method varchar(64) NOT NULL default '',
+        authorization_method varchar(64) NOT NULL default '',
         url_backend varchar(64) NOT NULL default '',
         PRIMARY KEY (repo_id),
         UNIQUE (name)
