@@ -1015,6 +1015,10 @@ function theme_commitlog_branches_tags_page($type, $branch_or_tag_ops, $attribut
   $initial = TRUE;
 
   foreach ($branch_or_tag_ops as $branch_or_tag_op) {
+    $items = ($type == 'branch')
+             ? versioncontrol_get_branched_items($branch_or_tag_op)
+             : versioncontrol_get_tagged_items($branch_or_tag_op);
+
     $date = _commitlog_date($branch_or_tag_op['date']);
     if (isset($date)) { // begin a new list for each day
       if (!$initial) {
@@ -1025,7 +1029,7 @@ function theme_commitlog_branches_tags_page($type, $branch_or_tag_ops, $attribut
       $output .= '<ul>';
     }
     $output .= '<li>';
-    $output .= commitlog_branch_or_tag_operation($type, $branch_or_tag_op, NULL, NULL, 'html');
+    $output .= commitlog_branch_or_tag_operation($type, $branch_or_tag_op, $items, NULL, 'html');
     $output .= '</li>';
   }
   $output .= '</ul>';
@@ -1047,13 +1051,7 @@ function theme_commitlog_branches_tags_page($type, $branch_or_tag_ops, $attribut
   return $output;
 }
 
-function commitlog_branch_or_tag_operation($type, $op, $items = NULL, $username = NULL, $format = 'html') {
-  if (!isset($items)) {
-    $items = ($type == 'branch')
-             ? versioncontrol_get_branched_items($op)
-             : versioncontrol_get_tagged_items($op);
-  }
-
+function commitlog_branch_or_tag_operation($type, $op, $items, $username = NULL, $format = 'html') {
   if (isset($username)) {
     $variables['username'] = $username;
   }
@@ -1073,6 +1071,7 @@ function commitlog_branch_or_tag_operation($type, $op, $items = NULL, $username 
   $variables['time'] = format_date($op['date'], 'custom', 'H:i');
   $variables['action'] = $op['action'];
   $variables['message'] = $op['message'];
+  $variables['items'] = $items;
 
   $directory_item = versioncontrol_get_directory_item($op);
   $variables['directory'] = theme('commitlog_item',
@@ -1146,7 +1145,7 @@ function theme_commitlog_branch_or_tag_action_message($type, $variables, $format
 
   // If the branch or tag has been assigned for the whole repository,
   // it doesn't make sense to mention the directory.
-  if (empty($items)) {
+  if (empty($variables['items'])) {
     switch ($variables['action']) {
       case VERSIONCONTROL_ACTION_ADDED:
         return t('!type !name created by !username.', $params);
