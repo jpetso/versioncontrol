@@ -8,9 +8,6 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: also send out tag and branch mails.
-// TODO: right, the above includes compositing those into some output.
-//       but we need to do it sometime anyways, so what the hell.
 
 /**
  * Implementation of hook_menu().
@@ -146,82 +143,44 @@ function commitlog_settings_submit($form_id, $form_values) {
 /**
  * Implementation of hook_versioncontrol_commit():
  * If enabled, send out a notification mail to the VCS admin.
- *
- * @param $op
- *   'insert' when the commit has just been recorded and inserted into the
- *   database, or 'delete' if it will be deleted right after this hook
- *   has been called.
- *
- * @param $commit
- *   A commit array containing basic information about a commit.
- *   It consists of the following elements:
- *
- *   - 'commit_id': The Drupal-specific commit identifier (a simple integer)
- *        which is unique among all commits in all repositories.
- *   - 'repository': The repository where this commit occurred.
- *        This is a structured array, like a single element of
- *        what is returned by versioncontrol_get_repositories().
- *   - 'date': The time when the revision was committed,
- *        given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all the changed items, e.g. '/src' if the commit changed
- *        the files '/src/subdir/code.php' and '/src/README.txt'.
- *   - 'message': The commit message.
- *   - 'revision': The VCS specific repository-wide revision identifier,
- *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
- *        distributed version control systems. If there is no such revision
- *        (which may be the case for version control systems that don't support
- *        atomic commits) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': An array of VCS specific additional commit information.
- *        How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]).
- *
- * @param $commit_actions
- *   A structured array containing the exact details of what happened to
- *   each item in this commit. Array keys are the current/new paths, also for
- *   VERSIONCONTROL_ACTION_DELETED actions even if the file actually doesn't
- *   exist anymore. The corresponding array values are again structured arrays
- *   and consist of elements with the following keys:
- *
- *   - 'action': Specifies how the item was modified.
- *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'modified': Boolean value, specifies if a file was modified in addition
- *        to the other action in the 'action' element of the array.
- *        Only exists for the VERSIONCONTROL_ACTION_MOVED
- *        and VERSIONCONTROL_ACTION_COPIED actions.
- *   - 'current item': The updated state of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
- *   - 'source items': An array with the previous state(s) of the modified item.
- *        Path and branch will always be the same as in the current item
- *        except for the VERSIONCONTROL_ACTION_MOVED,
- *        VERSIONCONTROL_ACTION_COPIED and VERSIONCONTROL_ACTION_MERGED actions.
- *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
- *
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  */
 function commitlog_versioncontrol_commit($op, $commit, $commit_actions) {
   if ($op == 'insert') {
-    $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-    commitlog_send_commit_mail($admin_mail, $commit, $commit_actions);
+    if (variable_get('commitlog_send_notification_mails', 0)) {
+      $to = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+      commitlog_send_commit_mail($to, $commit, $commit_actions);
+    }
   }
 }
 
 /**
- * Send out a notification mail to the given mail address.
+ * Implementation of hook_versioncontrol_branch_operation():
+ * If enabled, send out a notification mail to the VCS admin.
+ */
+function commitlog_versioncontrol_branch_operation($op, $branch, $branched_items) {
+  if ($op == 'insert') {
+    if (variable_get('commitlog_send_notification_mails', 0)) {
+      $to = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+      commitlog_send_branch_or_tag_mail('branch', $to, $branch, $branched_items);
+    }
+  }
+}
+
+/**
+ * Implementation of hook_versioncontrol_tag_operation():
+ * If enabled, send out a notification mail to the VCS admin.
+ */
+function commitlog_versioncontrol_tag_operation($op, $tag, $tagged_items) {
+  if ($op == 'insert') {
+    if (variable_get('commitlog_send_notification_mails', 0)) {
+      $to = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+      commitlog_send_branch_or_tag_mail('tag', $to, $tag, $tagged_items);
+    }
+  }
+}
+
+/**
+ * Send out a commit notification mail to the given mail address.
  */
 function commitlog_send_commit_mail($to, $commit, $commit_actions) {
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
@@ -233,6 +192,32 @@ function commitlog_send_commit_mail($to, $commit, $commit_actions) {
   $from = "$username <$admin_mail>";
   $subject = $location;
   $message = commitlog_commit($commit, $commit_actions, $username, 'plaintext');
+
+  drupal_mail(
+    'commitlog_notification_email', $to,
+    $subject, $message, $from, array('X-Mailer' => 'Drupal')
+  );
+}
+
+/**
+ * Send out a branch or tag notification mail to the given mail address.
+ *
+ * @param $type
+ *   Either 'branch' or 'tag'.
+ */
+function commitlog_send_branch_or_tag_mail($type, $to, $op, $items) {
+  $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+  $username = commitlog_account_username(
+    $op['uid'], $op['username'], $op['repository'], TRUE, 'plaintext'
+  );
+
+  $from = "$username <$admin_mail>";
+  $subject = theme('commitlog_branch_or_tag_email_subject',
+    $type, $op, $items, $username
+  );
+  $message = commitlog_branch_or_tag_operation(
+    $type, $op, $items, $username, 'plaintext'
+  );
 
   drupal_mail(
     'commitlog_notification_email', $to,
@@ -885,10 +870,10 @@ function commitlog_branches_page() {
   }
 
   list($constraints, $attributes) = _commitlog_get_branch_tag_constraints();
-  $commits = versioncontrol_get_branch_operations($constraints);
+  $branches = commitlog_get_paged_branch_operations($constraints);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_branches_tags_page', $commits, $attributes, 'branch');
+  return theme('commitlog_branches_tags_page', 'branch', $branches, $attributes);
 }
 
 /**
@@ -900,10 +885,10 @@ function commitlog_tags_page() {
   }
 
   list($constraints, $attributes) = _commitlog_get_branch_tag_constraints();
-  $commits = versioncontrol_get_tag_operations($constraints);
+  $tags = commitlog_get_paged_tag_operations($constraints);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_branches_tags_page', $commits, $attributes, 'tag');
+  return theme('commitlog_branches_tags_page', 'tag', $tags, $attributes);
 }
 
 
@@ -961,18 +946,64 @@ function _commitlog_get_branch_tag_constraints() {
 }
 
 /**
+ * Return an array of tag operations, resulting from a
+ * versioncontrol_get_tag_operations() call.
+ * Paging is also used by emulating pager_query().
+ */
+function commitlog_get_paged_tag_operations($constraints, $element = 0) {
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : '';
+  $pager_page_array = explode(',', $page);
+  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
+
+  $limit = variable_get('commitlog_pager', 10);
+
+  $tags = versioncontrol_get_tag_operations($constraints, $result_count, $page, $limit);
+
+  // Emulate pager_query() in order to get a proper theme('pager').
+  $pager_total_items[$element] = $result_count;
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
+
+  return $tags;
+}
+
+/**
+ * Return an array of branch operations, resulting from a
+ * versioncontrol_get_branch_operations() call.
+ * Paging is also used by emulating pager_query().
+ */
+function commitlog_get_paged_branch_operations($constraints, $element = 0) {
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : '';
+  $pager_page_array = explode(',', $page);
+  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
+
+  $limit = variable_get('commitlog_pager', 10);
+
+  $branches = versioncontrol_get_branch_operations($constraints, $result_count, $page, $limit);
+
+  // Emulate pager_query() in order to get a proper theme('pager').
+  $pager_total_items[$element] = $result_count;
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
+
+  return $branches;
+}
+
+/**
  * Return formatted output for displaying the given commits on an HTML page.
  *
+ * @param $type
+ *   Either 'branch' or 'tag'.
  * @param $operations
  *   The branch or tag operations array that was retrieved by calling
  *   versioncontrol_get_{branch,tag}_operations().
  * @param $attributes
  *   The request attributes, so that they can be incorporated
  *   into links on this page.
- * @param $type
- *   Either 'branch' or 'tag'.
  */
-function theme_commitlog_branches_tags_page($branch_or_tag_ops, $attributes, $type) {
+function theme_commitlog_branches_tags_page($type, $branch_or_tag_ops, $attributes) {
   if (empty($branch_or_tag_ops)) {
     return '<div id="commitlog"><p>'.
            (($type == 'branch')
@@ -993,9 +1024,15 @@ function theme_commitlog_branches_tags_page($branch_or_tag_ops, $attributes, $ty
       $output .= "<h3>$date</h3>";
       $output .= '<ul>';
     }
-    $output .= '<li>'. commitlog_branch_or_tag_operation($branch_or_tag_op, $type, NULL, 'html') .'</li>';
+    $output .= '<li>';
+    $output .= commitlog_branch_or_tag_operation($type, $branch_or_tag_op, NULL, NULL, 'html');
+    $output .= '</li>';
   }
   $output .= '</ul>';
+
+  if ($pager = theme('pager', NULL, variable_get('commitlog_pager', 10), 0, $attributes)) {
+    $output .= $pager;
+  }
   $output .= '</div>';
 
   /*
@@ -1010,7 +1047,13 @@ function theme_commitlog_branches_tags_page($branch_or_tag_ops, $attributes, $ty
   return $output;
 }
 
-function commitlog_branch_or_tag_operation($op, $type, $username = NULL, $format = 'html') {
+function commitlog_branch_or_tag_operation($type, $op, $items = NULL, $username = NULL, $format = 'html') {
+  if (!isset($items)) {
+    $items = ($type == 'branch')
+             ? versioncontrol_get_branched_items($op)
+             : versioncontrol_get_tagged_items($op);
+  }
+
   if (isset($username)) {
     $variables['username'] = $username;
   }
@@ -1020,7 +1063,12 @@ function commitlog_branch_or_tag_operation($op, $type, $username = NULL, $format
     );
   }
 
-  $variables['name'] = ($type == 'branch') ? $op['branch_name'] : $op['tag_name'];
+  if ($type == 'branch') {
+    $variables['name'] = l($op['branch_name'], 'commitlog', NULL, 'branches='. $op['branch_name']);
+  }
+  else {
+    $variables['name'] = $op['tag_name'];
+  }
   $variables['repository_name'] = theme('commitlog_repository', $op['repository'], $format);
   $variables['time'] = format_date($op['date'], 'custom', 'H:i');
   $variables['action'] = $op['action'];
@@ -1037,31 +1085,31 @@ function commitlog_branch_or_tag_operation($op, $type, $username = NULL, $format
   return theme('commitlog_branch_or_tag_plaintext', $type, $variables);
 }
 
-function theme_commitlog_branch_or_tag_html($type, $variables) {
+function theme_commitlog_branch_or_tag_email_subject($type, $op, $items, $username) {
   $params = array(
-    '!username' => $variables['username'],
-    '!name' => $variables['name'],
-    '!directory' => $variables['directory'],
-    '!time' => $variables['time'],
-    '!repo' => $variables['repository_name'],
     '!type' => ($type == 'branch') ? t('Branch') : t('Tag'),
+    '!name' => ($type == 'branch') ? $op['branch_name'] : $op['tag_name'],
+    '!directory' => $op['directory'],
   );
-  switch ($variables['action']) {
-    case VERSIONCONTROL_ACTION_ADDED:
-      $action_text = t('!type !name created by !username in !directory.', $params);
-      break;
-    case VERSIONCONTROL_ACTION_MOVED:
-      $action_text = t('!type renamed to !name by !username in !directory.', $params);
-      break;
-    case VERSIONCONTROL_ACTION_DELETED:
-      $action_text = t('!type !name by !username in !directory.', $params);
-      break;
+
+  // If the branch or tag has been assigned for the whole repository,
+  // it doesn't make sense to mention the directory.
+  if (empty($items)) {
+    return t('!type !name', $params);
   }
+  return t('!type !name in !directory', $params);
+}
+
+function theme_commitlog_branch_or_tag_html($type, $variables) {
+  $action_text = theme('commitlog_branch_or_tag_action_message', $type, $variables, 'html');
 
   $output = '<div class="commit">';
-
   $output .= '<div class="title">';
-  $output .= t('In !repo, at !time:', $params) .'<br/>'. $action_text;
+  $output .= t('In !repo, at !time:', array(
+    '!time' => $variables['time'],
+    '!repo' => $variables['repository_name'],
+  ));
+  $output .= '<br/>'. $action_text;
   $output .= "</div>\n"; // class "title"
 
   if (!empty($variables['message'])) { // only for tags and non-CVS version control systems
@@ -1073,14 +1121,48 @@ function theme_commitlog_branch_or_tag_html($type, $variables) {
 }
 
 function theme_commitlog_branch_or_tag_plaintext($type, $variables) {
-  $output = t('Commit !id by !name at !time in !repo:', array(
-    '!id'   => $variables['id'],
-    '!repo' => $variables['repository_name'],
-    '!name' => $variables['username'],
-    '!time' => $variables['time'],
-  )) ."\n\n";
+  $action_text = theme('commitlog_branch_or_tag_action_message', $type, $variables, 'plaintext');
 
-  $output .= $variables['message'] ."\n";
+  $output = t('In !repo, at !time:', array(
+    '!time' => $variables['time'],
+    '!repo' => $variables['repository_name'],
+  ));
+  $output .= "\n". $action_text ."\n";
+
+  if (!empty($variables['message'])) { // only for tags and non-CVS version control systems
+    $output .= "\n". $variables['message'] ."\n";
+  }
 
   return $output;
+}
+
+function theme_commitlog_branch_or_tag_action_message($type, $variables, $format) {
+  $params = array(
+    '!username' => $variables['username'],
+    '!name' => $variables['name'],
+    '!directory' => $variables['directory'],
+    '!type' => ($type == 'branch') ? t('Branch') : t('Tag'),
+  );
+
+  // If the branch or tag has been assigned for the whole repository,
+  // it doesn't make sense to mention the directory.
+  if (empty($items)) {
+    switch ($variables['action']) {
+      case VERSIONCONTROL_ACTION_ADDED:
+        return t('!type !name created by !username.', $params);
+      case VERSIONCONTROL_ACTION_MOVED:
+        return t('!type renamed to !name by !username.', $params);
+      case VERSIONCONTROL_ACTION_DELETED:
+        return t('!type !name by !username.', $params);
+    }
+  }
+
+  switch ($variables['action']) {
+    case VERSIONCONTROL_ACTION_ADDED:
+      return t('!type !name created by !username in !directory.', $params);
+    case VERSIONCONTROL_ACTION_MOVED:
+      return t('!type renamed to !name by !username in !directory.', $params);
+    case VERSIONCONTROL_ACTION_DELETED:
+      return t('!type !name by !username in !directory.', $params);
+  }
 }
