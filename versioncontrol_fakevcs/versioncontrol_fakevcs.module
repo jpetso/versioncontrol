@@ -573,9 +573,9 @@ function versioncontrol_fakevcs_get_branched_items($branch) {
  *   - 'revision': The (file-level) revision when the item was changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - 'source tag': Optional, may be set by the backend if the source tag
- *        (the one that this one tagged off) can be retrieved.
- *        If given, this is a string with the original tag name.
+ *   - 'source branch': Optional, may be set by the backend if the
+ *        source branch (the one that this tag comes from) can be retrieved.
+ *        If given, this is a string with the original branch name.
  *   - '[xxx]_specific': May be set by the backend to remember additional
  *        item info. ("[xxx]" is the unique string identifier of the respective
  *        version control system.)

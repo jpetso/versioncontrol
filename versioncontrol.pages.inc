@@ -113,7 +113,8 @@ function versioncontrol_account_register_page() {
 /**
  * Implementation of hook_versioncontrol_alter_repository_selection():
  * Alter the list of repositories that are available for user registration
- * and editing.
+ * and editing. This hook is called for all users except those with
+ * "administer version control systems" permissions.
  *
  * @param $repository_names
  *   The list of repository names as it is shown in the select box

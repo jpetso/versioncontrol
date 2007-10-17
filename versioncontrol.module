@@ -852,7 +852,7 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
   $result_count = count($commits);
 
   if (isset($page)) {
-    return _versioncontrol_page_commits($commits, $page, $limit);
+    return _versioncontrol_page_objects($commits, $page, $limit);
   }
   return $commits;
 }
@@ -1125,18 +1125,18 @@ function _versioncontrol_filter_commits(&$commits, $constraints) {
 }
 
 /**
- * Return a subset of the given commit according to the $page and $limit values.
+ * Return a subset of the given objects according to the $page and $limit values.
  */
-function _versioncontrol_page_commits($commits, $page, $limit) {
+function _versioncontrol_page_objects($objects, $page, $limit) {
   $i = 0;
-  $paged_commits = array();
-  foreach ($commits as $commit) {
+  $paged_objects = array();
+  foreach ($objects as $object) {
     if ($i >= ($page * $limit) && $i < (($page+1) * $limit)) {
-      $paged_commits[] = $commit;
+      $paged_objects[] = $object;
     }
     ++$i;
   }
-  return $paged_commits;
+  return $paged_objects;
 }
 
 
@@ -1268,6 +1268,17 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *        thisconstraint, so in theory you can provide one of those
  *        for each backend in one single query.
  *
+ * @param $result_count
+ *   This variable will be set to the overall number of branch operations that
+ *   matched the constraints. You're likely to need this if you use paging,
+ *   in all other cases this will be the same value as count($branch_ops).
+ * @param $page
+ *   If given, this function only return a subset of the result, where
+ *   $page == 0 would return the first $limit matching branch operations,
+ *   $page == 1 would return the second set, and so on.
+ * @param $limit
+ *   The number of query results to return per page.
+ *
  * @return
  *   An array of branch operations, reversely sorted by the time of the branching.
  *   Each element contains a structured array with the following keys:
@@ -1298,7 +1309,7 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *   If not a single branch operation matches these constraints,
  *   an empty array is returned.
  */
-function versioncontrol_get_branch_operations($constraints = array()) {
+function versioncontrol_get_branch_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   $backends = versioncontrol_get_backends();
 
   // Filter by a set of common constraints whose code is shared with the
@@ -1380,6 +1391,11 @@ function versioncontrol_get_branch_operations($constraints = array()) {
                                   $repositories, $vcs, $constraints,
                                   'branch_operations', 'branch_op_id', $is_autoadd);
   }
+  $result_count = count($branches);
+
+  if (isset($page)) {
+    return _versioncontrol_page_objects($branches, $page, $limit);
+  }
   return $branches;
 }
 
@@ -1423,6 +1439,17 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  *        this constraint, so in theory you can provide one of those
  *        for each backend in one single query.
  *
+ * @param $result_count
+ *   This variable will be set to the overall number of tag operations that
+ *   matched the constraints. You're likely to need this if you use paging,
+ *   in all other cases this will be the same value as count($tag_ops).
+ * @param $page
+ *   If given, this function only return a subset of the result, where
+ *   $page == 0 would return the first $limit matching tag operations,
+ *   $page == 1 would return the second set, and so on.
+ * @param $limit
+ *   The number of query results to return per page.
+ *
  * @return
  *   An array of tag operations, reversely sorted by the time of the tagging.
  *   Each element contains a structured array with the following keys:
@@ -1453,7 +1480,7 @@ function versioncontrol_get_branch_operations($constraints = array()) {
  *   If not a single tag operation matches these constraints,
  *   an empty array is returned.
  */
-function versioncontrol_get_tag_operations($constraints = array()) {
+function versioncontrol_get_tag_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   $backends = versioncontrol_get_backends();
 
   // Filter by a set of common constraints whose code is shared with the
@@ -1531,6 +1558,11 @@ function versioncontrol_get_tag_operations($constraints = array()) {
     _versioncontrol_amend_objects($tags, $tag_op_ids_by_backend,
                                   $repositories, $vcs, $constraints,
                                   'tag_operations', 'tag_op_id', $is_autoadd);
+  }
+  $result_count = count($tags);
+
+  if (isset($page)) {
+    return _versioncontrol_page_objects($tags, $page, $limit);
   }
   return $tags;
 }
@@ -2059,8 +2091,8 @@ function versioncontrol_get_branched_items($branch) {
  *   - 'revision': The (file-level) revision when the item was changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - 'source tag': Optional, may be set by the backend if the source tag
- *        (the one that this one tagged off) can be retrieved.
+ *   - 'source branch': Optional, may be set by the backend if the
+ *        source branch (the one that this tag comes from) can be retrieved.
  *        If given, this is a string with the original tag name.
  *   - '[xxx]_specific': May be set by the backend to remember additional
  *        item info. ("[xxx]" is the unique string identifier of the respective
