@@ -13,12 +13,15 @@ needs at least one VCS backend module that provides the specific VCS's
 functionality.
 
 For the API documentation, have a look at the module file or run doxygen/phpdoc
-on it to get a fancier version of the docs.
+on it to get a fancier version of the docs. The provided hooks for API users
+are documented in hook_versioncontrol.php while backend authors find an
+example backend module in the versioncontrol_fakecvs directory.
 
 In subdirectories, you can find three modules that extend the basic
 administration functionality of Version Control API with additional
 functionality:
-- Commit Log displays a history of commits.
+- Commit Log displays a history of commits and sends out notification mails
+  to the version control administrator.
 - Commit Restrictions grants or denies repository access
   based on path, branch or tag.
 - Version Control Account Status requires users to submit motivation texts
