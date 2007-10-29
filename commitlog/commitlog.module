@@ -250,15 +250,15 @@ function commitlog_account_tracker($uid) {
     drupal_not_found();
     exit();
   }
-  $_REQUEST['uid'] = $uid;
+  $_REQUEST['uids'] = (string) $uid;
   drupal_set_title($user->name);
 
   list($constraints, $attributes) = _commitlog_get_commit_constraints();
   $commits = commitlog_get_paged_commits($constraints);
-  unset($_REQUEST['uid']);
+  unset($_REQUEST['uids']);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_commits_page', $commits, array());
+  return theme('commitlog_commits_page', $commits, $attributes);
 }
 
 /**
