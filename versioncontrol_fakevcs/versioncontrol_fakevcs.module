@@ -1275,15 +1275,15 @@ function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
         db_query(
           "INSERT INTO {versioncontrol_fakevcs_item_revisions}
           (commit_id, type, path, revision, action, source_revision)
-          VALUES ('%d', '%d', '%s', '%s', '%d', '%d')",
+          VALUES (%d, %d, '%s', '%s', %d, %d)",
           $commit['commit_id'], $type, $path, $revision, $action['action'],
           $source_revision
         );
         break;
 
     case 'delete':
-      db_query("DELETE FROM {versioncontrol_fakevcs_item_revisions}
-                WHERE commit_id = '%d'", $commit['commit_id']);
+      db_query('DELETE FROM {versioncontrol_fakevcs_item_revisions}
+                WHERE commit_id = %d', $commit['commit_id']);
       break;
   }
 }
@@ -1321,7 +1321,7 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
       }
       db_query("INSERT INTO {versioncontrol_fakevcs_accounts}
                 (uid, repo_id, password)
-                VALUES ('%d', '%d', '%s')",
+                VALUES (%d, %d, '%s')",
                 $uid, $repository['repo_id'], $fakevcs_specific['password']);
       break;
 
@@ -1331,7 +1331,7 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
       }
       db_query("UPDATE {versioncontrol_fakevcs_accounts}
                 SET password = '%s'
-                WHERE uid = '%d' AND repo_id = '%d'",
+                WHERE uid = %d AND repo_id = %d",
                 $fakevcs_specific['password'], $uid, $repository['repo_id']);
 
       if (!user_access('administer version control systems')) {
@@ -1341,8 +1341,8 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
       break;
 
     case 'delete':
-      db_query("DELETE FROM {versioncontrol_fakevcs_accounts}
-                WHERE uid = '%d' AND repo_id = '%d'",
+      db_query('DELETE FROM {versioncontrol_fakevcs_accounts}
+                WHERE uid = %d AND repo_id = %d',
                 $uid, $repository['repo_id']);
       break;
   }
@@ -1387,8 +1387,8 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
  */
 function versioncontrol_fakevcs_repository($op, $repository) {
   if ($op == 'delete') {
-    db_query("DELETE FROM {versioncontrol_fakevcs_repository_ponies}
-              WHERE repo_id = '%d'", $repository['repo_id']);
+    db_query('DELETE FROM {versioncontrol_fakevcs_repository_ponies}
+              WHERE repo_id = %d', $repository['repo_id']);
   }
 }
 
@@ -1459,14 +1459,14 @@ function versioncontrol_fakevcs_export_accounts($repository, $accounts) {
   foreach ($accounts as $uid => $usernames_per_repository) {
     foreach ($usernames_per_repository as $repo_id => $username) {
       $accounts_flat[$uid] = array('uid' => $uid, 'username' => $username);
-      $uid_constraints[] = "uid = '%d'";
+      $uid_constraints[] = 'uid = %d';
       $params[] = $uid;
     }
   }
 
-  $result = db_query("SELECT uid, password FROM {versioncontrol_fakevcs_accounts}
-                      WHERE repo_id = '%d'
-                       AND (". implode(' OR ', $uid_constraints) .")",
+  $result = db_query('SELECT uid, password FROM {versioncontrol_fakevcs_accounts}
+                      WHERE repo_id = %d
+                       AND ('. implode(' OR ', $uid_constraints) .')',
                       $params);
   while ($account = db_fetch_object($result)) {
     $accounts_flat[$account->uid]['password'] = $account->password;

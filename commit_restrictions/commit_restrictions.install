@@ -16,10 +16,10 @@ function commit_restrictions_install() {
     case 'mysqli':
     case 'mysql':
       db_query("CREATE TABLE {commit_restrictions} (
-        repo_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default 0,
         allowed_paths text,
         forbidden_paths text,
-        deny_undefined_paths tinyint NOT NULL default '0',
+        deny_undefined_paths tinyint NOT NULL default 0,
         valid_branch_tag_paths text,
         valid_branches text,
         valid_tags text,
@@ -29,10 +29,10 @@ function commit_restrictions_install() {
 
     case 'pgsql':
       db_query("CREATE TABLE {commit_restrictions} (
-        repo_id int NOT NULL default '0',
+        repo_id int NOT NULL default 0,
         allowed_paths text,
         forbidden_paths text,
-        deny_undefined_paths smallint NOT NULL default '0',
+        deny_undefined_paths smallint NOT NULL default 0,
         valid_branch_tag_paths text,
         valid_branches text,
         valid_tags text,
@@ -47,5 +47,5 @@ function commit_restrictions_install() {
  * Implementation of hook_uninstall().
  */
 function commit_restrictions_uninstall() {
-  db_query("DROP TABLE {commit_restrictions}");
+  db_query('DROP TABLE {commit_restrictions}');
 }

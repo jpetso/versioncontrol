@@ -637,7 +637,7 @@ function _versioncontrol_construct_repository_constraints($constraints, $backend
   if (isset($constraints['repo_ids'])) {
     $placeholders = array();
     foreach ($constraints['repo_ids'] as $repo_id) {
-      $placeholders[] = "'%d'";
+      $placeholders[] = '%d';
       $params[] = $repo_id;
     }
     $and_constraints[] = 'r.repo_id IN ('. implode(',', $placeholders) .')';
@@ -911,7 +911,7 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
   if (isset($constraints[$primary_key_name .'s'])) {
     $placeholders = array();
     foreach ($constraints[$primary_key_name .'s'] as $primary_key) {
-      $placeholders[] = "'%d'";
+      $placeholders[] = '%d';
       $params[] = $primary_key;
     }
     if (!empty($placeholders)) {
@@ -921,11 +921,11 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
 
   // Filter by lower and/or upper commit id bounds.
   if (isset($constraints[$primary_key_name .'_lower'])) {
-    $and_constraints[] = "(". $table_alias .".". $primary_key_name ." >= '%d')";
+    $and_constraints[] = '('. $table_alias .'.'. $primary_key_name .' >= %d)';
     $params[] = $constraints[$primary_key_name .'_lower'];
   }
   if (isset($constraints[$primary_key_name .'_upper'])) {
-    $and_constraints[] = "(". $table_alias .".". $primary_key_name ." <= '%d')";
+    $and_constraints[] = '('. $table_alias .'.'. $primary_key_name .' <= %d)';
     $params[] = $constraints[$primary_key_name .'_upper'];
   }
 
@@ -933,7 +933,7 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
   if (isset($constraints['repo_ids'])) {
     $placeholders = array();
     foreach ($constraints['repo_ids'] as $repo_id) {
-      $placeholders[] = "'%d'";
+      $placeholders[] = '%d';
       $params[] = $repo_id;
     }
     if (!empty($placeholders)) {
@@ -943,11 +943,11 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
 
   // Filter by lower and/or upper date bounds.
   if (isset($constraints['date_lower'])) {
-    $and_constraints[] = "(". $table_alias .".date >= '%d')";
+    $and_constraints[] = '('. $table_alias .'.date >= %d)';
     $params[] = $constraints['date_lower'];
   }
   if (isset($constraints['date_upper'])) {
-    $and_constraints[] = "(". $table_alias .".date <= '%d')";
+    $and_constraints[] = '('. $table_alias .'.date <= %d)';
     $params[] = $constraints['date_upper'];
   }
 
@@ -955,7 +955,7 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
   if (isset($constraints['uids'])) {
     $placeholders = array();
     foreach ($constraints['uids'] as $uid) {
-      $placeholders[] = "'%d'";
+      $placeholders[] = '%d';
       $params[] = $uid;
     }
     if (!empty($placeholders)) {
@@ -1606,7 +1606,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
   if (isset($constraints['uids'])) {
     $or_constraints = array();
     foreach ($constraints['uids'] as $uid) {
-      $or_constraints[] = "uid = '%d'";
+      $or_constraints[] = 'uid = %d';
       $params[] = $uid;
     }
     $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
@@ -1616,7 +1616,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
   if (isset($constraints['repo_ids'])) {
     $or_constraints = array();
     foreach ($constraints['repo_ids'] as $repo_id) {
-      $or_constraints[] = "repo_id = '%d'";
+      $or_constraints[] = 'repo_id = %d';
       $params[] = $repo_id;
     }
     $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
@@ -1636,7 +1636,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
   if (isset($constraints['usernames_by_repository'])) {
     $or_constraints = array();
     foreach ($usernames_by_repository as $repo_id => $usernames) {
-      $repo_constraint = "repo_id = '%d'";
+      $repo_constraint = 'repo_id = %d';
       $params[] = $repo_id;
 
       $username_constraints = array();
@@ -1710,7 +1710,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
 function versioncontrol_get_account_uid_for_username($repo_id, $username, $include_unauthorized = FALSE) {
   $result = db_query("SELECT uid, repo_id
                       FROM {versioncontrol_accounts}
-                      WHERE username = '%s' AND repo_id = '%d'",
+                      WHERE username = '%s' AND repo_id = %d",
                       $username, $repo_id);
 
   while ($account = db_fetch_object($result)) {
@@ -1742,9 +1742,9 @@ function versioncontrol_get_account_uid_for_username($repo_id, $username, $inclu
  *   and repository, or NULL if no VCS account could be associated to those.
  */
 function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_unauthorized = FALSE) {
-  $result = db_query("SELECT uid, username, repo_id
+  $result = db_query('SELECT uid, username, repo_id
                       FROM {versioncontrol_accounts}
-                      WHERE uid = '%d' AND repo_id = '%d'",
+                      WHERE uid = %d AND repo_id = %d',
                       $uid, $repo_id);
 
   while ($account = db_fetch_object($result)) {
@@ -1913,8 +1913,8 @@ function _versioncontrol_get_repository_urls($repository) {
   static $urls_by_repository = array();
 
   if (!isset($urls_by_repository[$repository['repo_id']])) {
-    $result = db_query("SELECT * FROM {versioncontrol_repository_urls}
-                        WHERE repo_id = '%d'", $repository['repo_id']);
+    $result = db_query('SELECT * FROM {versioncontrol_repository_urls}
+                        WHERE repo_id = %d', $repository['repo_id']);
 
     while ($urls = db_fetch_array($result)) {
       unset($urls['repo_id']);
@@ -2644,11 +2644,11 @@ function versioncontrol_block($op = 'list', $delta = 0) {
       $interval = 7 * 24 * 60 * 60;
       $length = 15;
 
-      $result = db_query_range("SELECT COUNT(c.commit_id) AS count, c.uid, u.name
+      $result = db_query_range('SELECT COUNT(c.commit_id) AS count, c.uid, u.name
                                 FROM {versioncontrol_commits} c
                                  INNER JOIN {users} u ON c.uid = u.uid
                                   AND c.uid != 0 AND c.date > %d
-                                GROUP BY c.uid ORDER BY count DESC",
+                                GROUP BY c.uid ORDER BY count DESC',
                                 time() - $interval, 0, $length);
 
       $usernames = array();
@@ -2681,7 +2681,7 @@ function versioncontrol_user_autocomplete($repo_id, $string) {
                             FROM {users} u
                              INNER JOIN {versioncontrol_accounts} a
                               ON u.uid = a.uid
-                            WHERE repo_id = '%d'
+                            WHERE repo_id = %d
                              AND LOWER(u.name) LIKE LOWER('%s%%')",
                             $repo_id, $string, 0, 10);
 
@@ -2709,7 +2709,7 @@ function _versioncontrol_db_get_additions($table_name, $primary_key_name, $keys)
   $placeholders = array();
 
   foreach ($keys as $key) {
-    $placeholders[] = "'%d'";
+    $placeholders[] = '%d';
   }
 
   $result = db_query('SELECT * FROM {'. $table_name .'}

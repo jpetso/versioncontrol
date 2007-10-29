@@ -17,15 +17,15 @@ function versioncontrol_account_status_install() {
     case 'mysqli':
     case 'mysql':
       db_query("CREATE TABLE {versioncontrol_account_status_users} (
-        uid int unsigned NOT NULL default '0',
-        repo_id int unsigned NOT NULL default '0',
+        uid int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
         motivation text,
-        status tinyint NOT NULL default '0',
+        status tinyint NOT NULL default 0,
         PRIMARY KEY (uid, repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_account_status_strings} (
-        repo_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default 0,
         default_condition_description text,
         default_condition_error text,
         motivation_description text,
@@ -41,15 +41,15 @@ function versioncontrol_account_status_install() {
 
     case 'pgsql':
       db_query("CREATE TABLE {versioncontrol_account_status_users} (
-        uid int NOT NULL default '0',
-        repo_id int NOT NULL default '0',
+        uid int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
         motivation text,
-        status smallint NOT NULL default '0',
+        status smallint NOT NULL default 0,
         PRIMARY KEY (uid, repo_id)
       )");
 
       db_query("CREATE TABLE {versioncontrol_account_status_strings} (
-        repo_id int NOT NULL default '0',
+        repo_id int NOT NULL default 0,
         default_condition_description text,
         default_condition_error text,
         motivation_description text,
@@ -70,6 +70,6 @@ function versioncontrol_account_status_install() {
  * Implementation of hook_uninstall().
  */
 function versioncontrol_account_status_uninstall() {
-  db_query("DROP TABLE {versioncontrol_account_status_users}");
-  db_query("DROP TABLE {versioncontrol_account_status_strings}");
+  db_query('DROP TABLE {versioncontrol_account_status_users}');
+  db_query('DROP TABLE {versioncontrol_account_status_strings}');
 }

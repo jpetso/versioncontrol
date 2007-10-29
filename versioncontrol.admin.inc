@@ -136,17 +136,17 @@ function versioncontrol_admin_account_list_page() {
   $placeholders = array();
   $params = array();
   foreach ($users as $uid => $user) {
-    $placeholders[] = "'%d'";
+    $placeholders[] = '%d';
     $params[] = $uid;
   }
 
   // Retrieve total, first and last commits of each user.
-  $result = db_query("SELECT uid, COUNT(commit_id) AS number_commits,
+  $result = db_query('SELECT uid, COUNT(commit_id) AS number_commits,
                        MIN(date) AS first_commit_date, MAX(date) AS last_commit_date,
                        MIN(commit_id) AS first_commit_id, MAX(commit_id) AS last_commit_id
                       FROM {versioncontrol_commits}
-                      WHERE uid IN (". implode(',', $placeholders) .")
-                      GROUP BY uid", $params);
+                      WHERE uid IN ('. implode(',', $placeholders) .')
+                      GROUP BY uid', $params);
 
   $number_commits = array();
   $first_commits = array();
@@ -693,9 +693,9 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#maxlength' => 255,
   );
 
-  $result = db_query("SELECT registration_message
+  $result = db_query('SELECT registration_message
                       FROM {versioncontrol_repository_metadata}
-                      WHERE repo_id = '%d'", $repo_id);
+                      WHERE repo_id = %d', $repo_id);
   while ($row = db_fetch_object($result)) {
     $current_registration_message = $row->registration_message;
   }
@@ -850,7 +850,7 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
     versioncontrol_update_repository($repository, $repository_urls);
     db_query("UPDATE {versioncontrol_repository_metadata}
               SET registration_message = '%s'
-              WHERE repo_id = '%d'",
+              WHERE repo_id = %d",
               $registration_message, $repository['repo_id']);
 
     drupal_set_message(t('The %repository repository has been updated.',
@@ -860,7 +860,7 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
     $repository = versioncontrol_insert_repository($repository, $repository_urls);
     db_query("INSERT INTO {versioncontrol_repository_metadata}
               (repo_id, registration_message)
-              VALUES ('%d', '%s')",
+              VALUES (%d, '%s')",
               $repository['repo_id'], $registration_message);
 
     drupal_set_message(t('The %repository repository has been added.',

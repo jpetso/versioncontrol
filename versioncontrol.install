@@ -18,10 +18,10 @@ function versioncontrol_install() {
     case 'mysqli':
     case 'mysql':
       db_query("CREATE TABLE {versioncontrol_commits} (
-        commit_id int unsigned NOT NULL default '0',
-        repo_id int unsigned NOT NULL default '0',
-        date bigint NOT NULL default '0',
-        uid int unsigned NOT NULL default '0',
+        commit_id int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
+        date bigint NOT NULL default 0,
+        uid int unsigned NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         message text,
@@ -33,19 +33,19 @@ function versioncontrol_install() {
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_branches} (
-        branch_id int unsigned NOT NULL default '0',
-        repo_id int unsigned NOT NULL default '0',
+        branch_id int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
         branch_name varchar(255) NOT NULL default '',
         PRIMARY KEY (branch_id),
         UNIQUE KEY (repo_id, branch_name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_branch_operations} (
-        branch_op_id int unsigned NOT NULL default '0',
-        branch_id int unsigned NOT NULL default '0',
-        action tinyint unsigned NOT NULL default '0',
-        date bigint NOT NULL default '0',
-        uid int unsigned NOT NULL default '0',
+        branch_op_id int unsigned NOT NULL default 0,
+        branch_id int unsigned NOT NULL default 0,
+        action tinyint unsigned NOT NULL default 0,
+        date bigint NOT NULL default 0,
+        uid int unsigned NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         PRIMARY KEY (branch_op_id),
@@ -53,12 +53,12 @@ function versioncontrol_install() {
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_tag_operations} (
-        tag_op_id int unsigned NOT NULL default '0',
-        repo_id int unsigned NOT NULL default '0',
+        tag_op_id int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
         tag_name varchar(255) NOT NULL default '',
-        action tinyint unsigned NOT NULL default '0',
-        date bigint NOT NULL default '0',
-        uid int unsigned NOT NULL default '0',
+        action tinyint unsigned NOT NULL default 0,
+        date bigint NOT NULL default 0,
+        uid int unsigned NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         message text,
@@ -67,7 +67,7 @@ function versioncontrol_install() {
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
-        repo_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default 0,
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
@@ -78,7 +78,7 @@ function versioncontrol_install() {
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_repository_urls} (
-        repo_id int unsigned NOT NULL default '0',
+        repo_id int unsigned NOT NULL default 0,
         commit_view varchar(255) NOT NULL default '',
         file_view varchar(255) NOT NULL default '',
         directory_view varchar(255) NOT NULL default '',
@@ -88,15 +88,15 @@ function versioncontrol_install() {
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_repository_metadata} (
-        repo_id int unsigned NOT NULL default '0',
-        weight smallint NOT NULL default '0',
+        repo_id int unsigned NOT NULL default 0,
+        weight smallint NOT NULL default 0,
         registration_message text,
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_accounts} (
-        uid int unsigned NOT NULL default '0',
-        repo_id int unsigned NOT NULL default '0',
+        uid int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         PRIMARY KEY (uid, repo_id),
         UNIQUE KEY (repo_id, username)
@@ -105,10 +105,10 @@ function versioncontrol_install() {
 
     case 'pgsql':
       db_query("CREATE TABLE {versioncontrol_commits} (
-        commit_id int NOT NULL default '0',
-        repo_id int NOT NULL default '0',
-        date bigint NOT NULL default '0',
-        uid int NOT NULL default '0',
+        commit_id int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
+        date bigint NOT NULL default 0,
+        uid int NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         message text,
@@ -120,19 +120,19 @@ function versioncontrol_install() {
       db_query("CREATE INDEX {versioncontrol_commits}_date_idx ON {versioncontrol_commits} (date)");
 
       db_query("CREATE TABLE {versioncontrol_branches} (
-        branch_id int NOT NULL default '0',
-        repo_id int NOT NULL default '0',
+        branch_id int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
         branch_name varchar(255) NOT NULL default '',
         PRIMARY KEY (branch_id),
         UNIQUE (repo_id, branch_name)
       )");
 
       db_query("CREATE TABLE {versioncontrol_branch_operations} (
-        branch_op_id int NOT NULL default '0',
-        branch_id int NOT NULL default '0',
-        action smallint NOT NULL default '0',
-        date bigint NOT NULL default '0',
-        uid int NOT NULL default '0',
+        branch_op_id int NOT NULL default 0,
+        branch_id int NOT NULL default 0,
+        action smallint NOT NULL default 0,
+        date bigint NOT NULL default 0,
+        uid int NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         PRIMARY KEY (branch_op_id)
@@ -141,12 +141,12 @@ function versioncontrol_install() {
                 ON {versioncontrol_branch_operations} (branch_id)");
 
       db_query("CREATE TABLE {versioncontrol_tag_operations} (
-        tag_op_id int NOT NULL default '0',
-        repo_id int NOT NULL default '0',
+        tag_op_id int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
         tag_name varchar(255) NOT NULL default '',
-        action smallint NOT NULL default '0',
-        date bigint NOT NULL default '0',
-        uid int NOT NULL default '0',
+        action smallint NOT NULL default 0,
+        date bigint NOT NULL default 0,
+        uid int NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         message text,
@@ -156,7 +156,7 @@ function versioncontrol_install() {
                 ON {versioncontrol_tag_operations} (tag_id)");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
-        repo_id int NOT NULL default '0',
+        repo_id int NOT NULL default 0,
         name varchar(255) NOT NULL default '',
         vcs varchar(8) NOT NULL default '',
         root varchar(255) NOT NULL default '',
@@ -167,7 +167,7 @@ function versioncontrol_install() {
       )");
 
       db_query("CREATE TABLE {versioncontrol_repository_urls} (
-        repo_id int NOT NULL default '0',
+        repo_id int NOT NULL default 0,
         commit_view varchar(255) NOT NULL default '',
         file_view varchar(255) NOT NULL default '',
         directory_view varchar(255) NOT NULL default '',
@@ -177,15 +177,15 @@ function versioncontrol_install() {
       )");
 
       db_query("CREATE TABLE {versioncontrol_repository_metadata} (
-        repo_id int NOT NULL default '0',
-        weight smallint NOT NULL default '0',
+        repo_id int NOT NULL default 0,
+        weight smallint NOT NULL default 0,
         registration_message text,
         PRIMARY KEY (repo_id)
       )");
 
       db_query("CREATE TABLE {versioncontrol_accounts} (
-        uid int NOT NULL default '0',
-        repo_id int NOT NULL default '0',
+        uid int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         PRIMARY KEY (uid, repo_id),
         UNIQUE (repo_id, username)
@@ -199,14 +199,22 @@ function versioncontrol_install() {
  * Implementation of hook_uninstall().
  */
 function versioncontrol_uninstall() {
-  variable_del('versioncontrol_registration_message_unauthorized');
-  variable_del('versioncontrol_registration_message_authorized');
+  $variables = array(
+    'versioncontrol_email_address',
+    'versioncontrol_allow_unauthorized_access',
+    'versioncontrol_registration_message_unauthorized',
+    'versioncontrol_registration_message_authorized',
+    'versioncontrol_admin_account_pager',
+  );
+  foreach ($variables as $variable) {
+    variable_del($variable);
+  }
 
-  db_query("DROP TABLE {versioncontrol_commits}");
-  db_query("DROP TABLE {versioncontrol_branches}");
-  db_query("DROP TABLE {versioncontrol_branch_operations}");
-  db_query("DROP TABLE {versioncontrol_tag_operations}");
-  db_query("DROP TABLE {versioncontrol_repositories}");
-  db_query("DROP TABLE {versioncontrol_repository_urls}");
-  db_query("DROP TABLE {versioncontrol_accounts}");
+  db_query('DROP TABLE {versioncontrol_commits}');
+  db_query('DROP TABLE {versioncontrol_branches}');
+  db_query('DROP TABLE {versioncontrol_branch_operations}');
+  db_query('DROP TABLE {versioncontrol_tag_operations}');
+  db_query('DROP TABLE {versioncontrol_repositories}');
+  db_query('DROP TABLE {versioncontrol_repository_urls}');
+  db_query('DROP TABLE {versioncontrol_accounts}');
 }

@@ -230,9 +230,9 @@ function versioncontrol_account_register_form_submit($form_id, $form_values) {
  *   The registration message if it has been set, or an empty string otherwise.
  */
 function versioncontrol_get_repository_registration_message($repo_id) {
-  $result = db_query("SELECT registration_message
+  $result = db_query('SELECT registration_message
                       FROM {versioncontrol_repository_metadata}
-                      WHERE repo_id = '%d'", $repo_id);
+                      WHERE repo_id = %d', $repo_id);
   while ($row = db_fetch_object($result)) {
     return $row->registration_message;
   }

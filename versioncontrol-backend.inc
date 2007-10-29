@@ -359,7 +359,7 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
   db_query(
     "INSERT INTO {versioncontrol_commits}
      (commit_id, repo_id, date, uid, username, directory, message, revision)
-     VALUES ('%d', '%d', '%d', '%d', '%s', '%s', '%s', '%s')",
+     VALUES (%d, %d, %d, %d, '%s', '%s', '%s', '%s')",
     $commit['commit_id'], $commit['repository']['repo_id'],
     $commit['date'], $commit['uid'], $commit['username'], $commit['directory'],
     $commit['message'], $commit['revision']
@@ -448,7 +448,7 @@ function versioncontrol_insert_branch_operation($branch, $branched_items) {
 
   db_query("INSERT INTO {versioncontrol_branch_operations}
             (branch_op_id, branch_id, action, date, uid, username, directory)
-            VALUES ('%d', '%d', '%d', '%d', '%d', '%s', '%s')",
+            VALUES (%d, %d, %d, %d, %d, '%s', '%s')",
             $branch['branch_op_id'], $branch_id, $branch['action'],
             $branch['date'], $branch['uid'], $branch['username'],
             $branch['directory']);
@@ -525,7 +525,7 @@ function versioncontrol_insert_tag_operation($tag, $tagged_items) {
   db_query("INSERT INTO {versioncontrol_tag_operations}
             (tag_op_id, repo_id, tag_name, action, date, uid, username,
              directory, message)
-            VALUES ('%d', '%d', '%s', '%d', '%d', '%d', '%s', '%s', '%s')",
+            VALUES (%d, %d, '%s', %d, %d, %d, '%s', '%s', '%s')",
             $tag['tag_op_id'], $tag['repository']['repo_id'], $tag['tag_name'],
             $tag['action'], $tag['date'], $tag['uid'], $tag['username'],
             $tag['directory'], $tag['message']);
@@ -589,8 +589,8 @@ function versioncontrol_delete_commit($commit) {
                                  array('delete', $commit, $commit_actions));
   }
 
-  db_query("DELETE FROM {versioncontrol_commits}
-            WHERE commit_id = '%d'", $commit['commit_id']);
+  db_query('DELETE FROM {versioncontrol_commits}
+            WHERE commit_id = %d', $commit['commit_id']);
 }
 
 /**
@@ -655,8 +655,8 @@ function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, 
     );
   }
 
-  db_query("DELETE FROM {versioncontrol_'. $type .'_operations}
-            WHERE ". $type ."_op_id = '%d'", $branch_or_tag[$type .'_op_id']);
+  db_query('DELETE FROM {versioncontrol_'. $type .'_operations}
+            WHERE '. $type .'_op_id = %d', $branch_or_tag[$type .'_op_id']);
 }
 
 
@@ -797,7 +797,7 @@ function _versioncontrol_get_common_directory($paths) {
 function versioncontrol_insert_account($repository, $uid, $username, $additional_data = array()) {
   db_query(
     "INSERT INTO {versioncontrol_accounts} (uid, repo_id, username)
-     VALUES ('%d', '%d', '%s')", $uid, $repository['repo_id'], $username
+     VALUES (%d, %d, '%s')", $uid, $repository['repo_id'], $username
   );
 
   // Provide an opportunity for the backend to add its own stuff.
@@ -810,8 +810,8 @@ function versioncontrol_insert_account($repository, $uid, $username, $additional
 
   // Update the commits table.
   db_query("UPDATE {versioncontrol_commits}
-            SET uid = '%d'
-            WHERE username = '%s' AND repo_id = '%d'",
+            SET uid = %d
+            WHERE username = '%s' AND repo_id = %d",
             $uid, $username, $repository['repo_id']);
 
   // Everything's done, let the world know about it!
@@ -848,7 +848,7 @@ function versioncontrol_update_account($repository, $uid, $username, $additional
   if ($username_changed) {
     db_query("UPDATE {versioncontrol_accounts}
               SET username = '%s'
-              WHERE uid = '%d' AND repo_id = '%d'",
+              WHERE uid = %d AND repo_id = %d",
               $username, $uid, $repository['repo_id']
     );
   }
@@ -864,12 +864,12 @@ function versioncontrol_update_account($repository, $uid, $username, $additional
   // Update the commits table.
   if ($username_changed) {
     db_query("UPDATE {versioncontrol_commits}
-              SET uid = '0'
-              WHERE uid = '%d' AND repo_id = '%d'",
+              SET uid = 0
+              WHERE uid = %d AND repo_id = %d",
               $uid, $repository['repo_id']);
     db_query("UPDATE {versioncontrol_commits}
-              SET uid = '%d'
-              WHERE username = '%s' AND repo_id = '%d'",
+              SET uid = %d
+              WHERE username = '%s' AND repo_id = %d",
               $uid, $username, $repository['repo_id']);
   }
 
@@ -897,9 +897,9 @@ function versioncontrol_update_account($repository, $uid, $username, $additional
  */
 function versioncontrol_delete_account($repository, $uid, $username) {
   // Update the commits table.
-  db_query("UPDATE {versioncontrol_commits}
-            SET uid = '0'
-            WHERE uid = '%d' AND repo_id = '%d'",
+  db_query('UPDATE {versioncontrol_commits}
+            SET uid = 0
+            WHERE uid = %d AND repo_id = %d',
             $uid, $repository['repo_id']);
 
   // Announce deletion of the account before anything has happened.
@@ -915,8 +915,8 @@ function versioncontrol_delete_account($repository, $uid, $username) {
     );
   }
 
-  db_query("DELETE FROM {versioncontrol_accounts}
-            WHERE uid = '%d' AND repo_id = '%d'",
+  db_query('DELETE FROM {versioncontrol_accounts}
+            WHERE uid = %d AND repo_id = %d',
             $uid, $repository['repo_id']);
 
   watchdog('special',
@@ -967,7 +967,7 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
   db_query(
     "INSERT INTO {versioncontrol_repositories}
      (repo_id, name, vcs, root, authorization_method, url_backend)
-     VALUES ('%d', '%s', '%s', '%s', '%s', '%s')",
+     VALUES (%d, '%s', '%s', '%s', '%s', '%s')",
      $repository['repo_id'], $repository['name'], $repository['vcs'],
      $repository['root'], $repository['authorization_method'],
      $repository['url_backend']
@@ -976,7 +976,7 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
   db_query(
     "INSERT INTO {versioncontrol_repository_urls}
      (repo_id, commit_view, file_view, directory_view, diff, tracker)
-     VALUES ('%d', '%s', '%s', '%s', '%s', '%s')",
+     VALUES (%d, '%s', '%s', '%s', '%s', '%s')",
      $repository['repo_id'], $repository_urls['commit_view'],
      $repository_urls['file_view'], $repository_urls['directory_view'],
      $repository_urls['diff'], $repository_urls['tracker']
@@ -1051,7 +1051,7 @@ function versioncontrol_update_repository($repository, $repository_urls) {
     "UPDATE {versioncontrol_repositories}
      SET name = '%s', vcs = '%s', root = '%s',
          authorization_method = '%s', url_backend = '%s'
-     WHERE repo_id = '%d'",
+     WHERE repo_id = %d",
      $repository['name'], $repository['vcs'], $repository['root'],
      $repository['authorization_method'], $repository['url_backend'],
      $repository['repo_id']
@@ -1061,7 +1061,7 @@ function versioncontrol_update_repository($repository, $repository_urls) {
     "UPDATE {versioncontrol_repository_urls}
      SET commit_view = '%s', file_view = '%s', directory_view = '%s',
          diff = '%s', tracker = '%s'
-     WHERE repo_id = '%d'",
+     WHERE repo_id = %d",
      $repository_urls['commit_view'], $repository_urls['file_view'],
      $repository_urls['directory_view'], $repository_urls['diff'],
      $repository_urls['tracker'], $repository['repo_id']
@@ -1113,8 +1113,8 @@ function versioncontrol_delete_repository($repository) {
   foreach ($branches as $branch) {
     versioncontrol_delete_branch_operation($branch);
   }
-  db_query("DELETE FROM {versioncontrol_branches}
-            WHERE repo_id = '%d'", $repository['repo_id']);
+  db_query('DELETE FROM {versioncontrol_branches}
+            WHERE repo_id = %d', $repository['repo_id']);
 
   // Delete commits.
   $commits = versioncontrol_get_commits(array('repo_ids' => array($repository['repo_id'])));
@@ -1152,10 +1152,10 @@ function versioncontrol_delete_repository($repository) {
   }
 
   // Phew, everything's cleaned up. Finally, delete the repository.
-  db_query("DELETE FROM {versioncontrol_repositories} WHERE repo_id = '%d'",
+  db_query('DELETE FROM {versioncontrol_repositories} WHERE repo_id = %d',
            $repository['repo_id']);
   // TODO: abstract out repository URLs into separate backends
-  db_query("DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = '%d'",
+  db_query('DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = %d',
            $repository['repo_id']);
 
   watchdog('special',
@@ -1181,9 +1181,9 @@ function versioncontrol_get_branch($branch_id) {
     return $branch_cache[$branch_id]; // return the cached branch array
   }
 
-  $result = db_query("SELECT branch_id, repo_id, branch_name
+  $result = db_query('SELECT branch_id, repo_id, branch_name
                       FROM {versioncontrol_branches}
-                      WHERE branch_id = '%d'", $branch_id);
+                      WHERE branch_id = %d', $branch_id);
 
   while ($branch = db_fetch_array($result)) {
     $branch_cache[$branch_id] = $branch;
@@ -1212,7 +1212,7 @@ function versioncontrol_get_branch_id($branch_name, $repo_id) {
 
   $result = db_query("SELECT branch_id
                       FROM {versioncontrol_branches}
-                      WHERE repo_id = '%d' AND branch_name = '%s'",
+                      WHERE repo_id = %d AND branch_name = '%s'",
                       $repo_id, $branch_name);
 
   while ($branch = db_fetch_object($result)) {
@@ -1235,7 +1235,7 @@ function versioncontrol_ensure_branch($branch_name, $repo_id) {
   if (!isset($branch_id)) {
     $branch_id = db_next_id('{versioncontrol_branches}_branch_id');
     db_query("INSERT INTO {versioncontrol_branches} (branch_id, repo_id, branch_name)
-              VALUES ('%d', '%d', '%s')", $branch_id, $repo_id, $branch_name);
+              VALUES (%d, %d, '%s')", $branch_id, $repo_id, $branch_name);
   }
   return $branch_id;
 }
@@ -1273,7 +1273,7 @@ function _versioncontrol_db_insert_additions($table_name, $elements) {
   foreach ($elements as $key => $value) {
     $keys[] = $key;
     $params[] = is_numeric($value) ? $value : serialize($value);
-    $types[] = is_numeric($value) ? "'%d'" : "'%s'";
+    $types[] = is_numeric($value) ? '%d' : "'%s'";
   }
 
   db_query(
@@ -1297,7 +1297,7 @@ function _versioncontrol_db_update_additions($table_name, $primary_key_name, $el
     if ($key == $primary_key_name) {
       continue;
     }
-    $type = is_numeric($value) ? "'%d'" : "'%s'";
+    $type = is_numeric($value) ? '%d' : "'%s'";
     $set_statements[] = $key .' = '. $type;
     $params[] = is_numeric($value) ? $value : serialize($value);
   }
@@ -1306,7 +1306,7 @@ function _versioncontrol_db_update_additions($table_name, $primary_key_name, $el
   db_query(
     'UPDATE {'. $table_name .'}
      SET '. implode(', ', $set_statements) .'
-     WHERE '. $primary_key_name ." = '%d'", $params
+     WHERE '. $primary_key_name .' = %d', $params
   );
 }
 
@@ -1318,5 +1318,5 @@ function _versioncontrol_db_update_additions($table_name, $primary_key_name, $el
  */
 function _versioncontrol_db_delete_additions($table_name, $primary_key_name, $primary_key) {
   db_query('DELETE FROM {'. $table_name .'}
-            WHERE '. $primary_key_name ." = '%d'", $primary_key);
+            WHERE '. $primary_key_name .' = %d', $primary_key);
 }

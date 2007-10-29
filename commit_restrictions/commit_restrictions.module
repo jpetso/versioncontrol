@@ -156,7 +156,7 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
 
   switch ($op) {
     case 'update':
-      db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
+      db_query('DELETE FROM {commit_restrictions} WHERE repo_id = %d',
                 $repository['repo_id']);
       // fall through
 
@@ -166,7 +166,7 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
                   (repo_id, allowed_paths, forbidden_paths,
                    deny_undefined_paths, valid_branch_tag_paths,
                    valid_branches, valid_tags)
-                  VALUES ('%d', '%s', '%s', '%d', '%s', '%s', '%s')",
+                  VALUES (%d, '%s', '%s', %d, '%s', '%s', '%s')",
                   $repository['repo_id'], $restrictions['allowed_paths'],
                   $restrictions['forbidden_paths'], $restrictions['deny_undefined_paths'],
                   $restrictions['valid_branch_tag_paths'],
@@ -175,7 +175,7 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
       break;
 
     case 'delete':
-      db_query("DELETE FROM {commit_restrictions} WHERE repo_id = '%d'",
+      db_query('DELETE FROM {commit_restrictions} WHERE repo_id = %d',
                 $repository['repo_id']);
       break;
   }
@@ -196,11 +196,11 @@ function commit_restrictions_versioncontrol_repository($op, $repository) {
  */
 function _commit_restrictions_load($repo_id) {
   if ($repo_id) {
-    $result = db_query("SELECT allowed_paths, forbidden_paths,
+    $result = db_query('SELECT allowed_paths, forbidden_paths,
                                deny_undefined_paths, valid_branch_tag_paths,
                                valid_branches, valid_tags
                         FROM {commit_restrictions}
-                        WHERE repo_id = '%d'", $repo_id);
+                        WHERE repo_id = %d', $repo_id);
 
     while ($restrictions = db_fetch_object($result)) {
       return array(
