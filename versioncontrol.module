@@ -2460,6 +2460,177 @@ function versioncontrol_get_file_annotation($repository, $file_item) {
 
 
 /**
+ * Print a list of contributors for the specified project.
+ * The parameters are directly relayed to versioncontrol_get_user_statistics()
+ * and determine how and for which commits the statistics are displayed.
+ * @see versioncontrol_get_user_statistics
+ */
+function theme_versioncontrol_user_statistics($constraints, $order_by = 'last_commit', $limit = NULL) {
+  $statistics = versioncontrol_get_user_statistics($constraints, $order_by, $limit);
+  $header = array(t('User'), t('Last commit'), t('First commit'), t('Commits'));
+  $rows = array();
+
+  foreach ($statistics as $user_stats) {
+    $uid = $user_stats['uid'];
+
+    $last_commit = t('!time ago', array(
+      '!time' => format_interval(time() - $user_stats['last_commit']['date'], 1))
+    );
+    $first_commit = t('!time ago', array(
+      '!time' => format_interval(time() - $user_stats['first_commit']['date'], 1))
+    );
+    $number_commits = format_plural(
+      $user_stats['number_commits'], '1 commit', '@count commits'
+    );
+
+    if (module_exists('commitlog')) {
+      $last_commit = theme('commitlog_commit_id',
+        $user_stats['last_commit']['commit_id'], $last_commit
+      );
+      $first_commit = theme('commitlog_commit_id',
+        $user_stats['first_commit']['commit_id'], $first_commit
+      );
+      $number_commits = l($number_commits, 'user/'. $uid .'/track/code');
+    }
+
+    $rows[] = array(
+      // $user_stats contains 'uid' and 'name', which is enough for theming
+      theme('username', (object) $user_stats),
+      $last_commit,
+      $first_commit,
+      $number_commits,
+    );
+  }
+  return theme('table', $header, $rows);
+}
+
+/**
+ * Retrieve statistics about users from a set of commits.
+ *
+ * @param $constraints
+ *   The constraints (as passed to versioncontrol_get_commits()) that define
+ *   which commits are taken into consideration for the statistics.
+ * @param $order_by
+ *   Determines how the result array is ordered:
+ *   - 'last_commit' for descending order of the last commit's date (in other
+ *        words, the first item corresponds to the most recent committer).
+ *   - 'number_commits' for descending order of the commit count (in other
+ *        words, the first item corresponds to the most active committer).
+ * @param $limit
+ *   If given, only the n most active users (in terms of commits)
+ *   will be included in the result.
+ *
+ * @return
+ *   An array of information about the projects. Each element contains
+ *   one user's statistics and consists of the following elements:
+ *   - 'uid': The Drupal user id to which these statistics correspond.
+ *   - 'name': The respective Drupal username.
+ *   - 'number_commits': The number of commits by this user
+ *        (out of the given commits).
+ *   - 'first_commit': The commit array of the first commit by this user
+ *        (out of the given commits).
+ *   - 'last_commit': The commit array of the last commit by this user
+ *        (out of the given commits).
+ *
+ *   The order of the items in this array is determined by the
+ *   $order_by parameter. If no commits matching the given constraints
+ *   can be found, an empty array is returned.
+ */
+function versioncontrol_get_user_statistics($constraints, $order_by = 'last_commit', $limit = NULL) {
+  $uids = array();
+  $first_commits = array();
+  $last_commits = array();
+
+  $commits = versioncontrol_get_commits($constraints);
+
+  // Find out which projects are affected, and how active they have been.
+  $i = 0;
+  foreach ($commits as $commit) {
+    $uid = $commit['uid'];
+    $uids[] = $uid;
+
+    // Write the first commit for each iteration, the last one encountered is
+    // the first one in time. ($commits is sorted reverse chronologically.)
+    $first_commits[$uid] = $commit;
+
+    // Similar for the last commit which is the first one that we get to see.
+    if (!isset($last_commits[$uid])) {
+      $last_commits[$uid] = $commit;
+    }
+  }
+
+  // Sort by commit count.
+  $commit_counts = array_count_values($uids);
+  arsort($commit_counts);
+
+  // Default sorting: Put users with more recent commits first.
+  if ($order_by == 'last_commit') {
+    $limited_uids = array();
+    $i = 0;
+    foreach (array_unique($uids) as $uid) {
+      $limited_uids[] = $uid;
+      ++$i;
+      if (isset($limit) && $i >= $limit) {
+        break;
+      }
+    }
+    $uids = $limited_uids;
+  }
+  // Alternative sorting: Put users with the most commits first.
+  else { // if ($order_by == 'number_commits') {
+    $limited_commit_counts = array();
+    $i = 0;
+    foreach ($commit_counts as $uid => $count) {
+      $limited_commit_counts[$uid] = $count;
+      ++$i;
+      if (isset($limit) && $i >= $limit) {
+        break;
+      }
+    }
+    $uids = array_unique(array_keys($limited_commit_counts));
+    $commit_counts = $limited_commit_counts;
+  }
+
+  // No projects in the result, so we can return right now.
+  if (empty($uids)) {
+    return array();
+  }
+
+  // Ok, now construct a query and get the desired node titles
+  $placeholders = array();
+  foreach ($uids as $uid) {
+    $placeholders[] = '%d';
+  }
+  $result = db_query('SELECT uid, name FROM {users}
+                      WHERE uid IN ('. implode(',', $placeholders) .')',
+                      $uids);
+  $sorted_statistics = array();
+
+  while ($user = db_fetch_object($result)) {
+    $statistics[$user->uid] = array(
+      'uid' => $user->uid,
+      'name' => $user->name,
+      'number_commits' => $commit_counts[$user->uid],
+      'first_commit' => $first_commits[$user->uid],
+      'last_commit' => $last_commits[$user->uid],
+    );
+  }
+
+  if (empty($statistics)) {
+    return array();
+  }
+
+  $sorted_statistics = array();
+  foreach ($uids as $uid) { // the $uids array is already in the right order
+    if (isset($statistics[$uid])) {
+      $sorted_statistics[] = $statistics[$uid];
+    }
+  }
+  return $sorted_statistics;
+}
+
+
+/**
  * Implementation of hook_block():
  * Present a list of the most active developers.
  */
