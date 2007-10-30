@@ -80,6 +80,7 @@ function versioncontrol_install() {
       db_query("CREATE TABLE {versioncontrol_repository_urls} (
         repo_id int unsigned NOT NULL default 0,
         commit_view varchar(255) NOT NULL default '',
+        file_log_view varchar(255) NOT NULL default '',
         file_view varchar(255) NOT NULL default '',
         directory_view varchar(255) NOT NULL default '',
         diff varchar(255) NOT NULL default '',
@@ -169,6 +170,7 @@ function versioncontrol_install() {
       db_query("CREATE TABLE {versioncontrol_repository_urls} (
         repo_id int NOT NULL default 0,
         commit_view varchar(255) NOT NULL default '',
+        file_log_view varchar(255) NOT NULL default '',
         file_view varchar(255) NOT NULL default '',
         directory_view varchar(255) NOT NULL default '',
         diff varchar(255) NOT NULL default '',
@@ -217,4 +219,27 @@ function versioncontrol_uninstall() {
   db_query('DROP TABLE {versioncontrol_repositories}');
   db_query('DROP TABLE {versioncontrol_repository_urls}');
   db_query('DROP TABLE {versioncontrol_accounts}');
+}
+
+
+// Update functions.
+
+function versioncontrol_update_1() {
+  $ret = array();
+
+  // Remove the unique key (repo_id, directory) because there can be multiple
+  // "empty" projects with keys (0, ''). Instead, have a non-unique index.
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_repository_urls}
+                           ADD COLUMN file_log_view varchar(255) NOT NULL default ''
+                           AFTER commit_view");
+      break;
+    case 'pgsql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_repository_urls}
+                           ADD COLUMN file_log_view varchar(255) NOT NULL default ''");
+      break;
+  }
+  return $ret;
 }

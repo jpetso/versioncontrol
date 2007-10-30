@@ -567,8 +567,7 @@ function commitlog_account_username($uid, $username, $repository, $replace_with_
 
   if ($format == 'html') {
     return l(check_plain($username), 'commitlog', NULL,
-             'usernames='. check_plain($username) .'&repos='. $repository['repo_id']);
-    // TODO: find out the proper URL encoding function for the second $username
+             'usernames='. urlencode($username) .'&repos='. $repository['repo_id']);
   }
   return $username;
 }
@@ -814,6 +813,12 @@ function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html'
     return $output;
   }
   else {
+    if ($format == 'html') {
+      $log_url = versioncontrol_get_url_log_view($repository, $item);
+      if (!empty($log_url)) {
+        $path = '<a href="'. $log_url .'">'. $path .'</a>';
+      }
+    }
     return $path .' '. theme('commitlog_item_revision', $repository, $item, $format);
   }
 }

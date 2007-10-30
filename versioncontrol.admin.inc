@@ -758,17 +758,25 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#maxlength' => 255,
     '#description' => t('Enter URL to the commit view web site. Use the %revision variable in the right place to represent the global revision identifier of the commit.'),
   );
+  $form['repository_urls']['file_log_view'] = array(
+    '#type' => 'textfield',
+    '#title' => t('File log URL'),
+    '#default_value' => isset($repo_urls) ? $repo_urls['file_log_view'] : '',
+    '#size' => 40,
+    '#maxlength' => 255,
+    '#description' => t('Enter URL to the log view of a file in the repository. Use the %path, %revision and %branch variables in the right place to represent the path, revision and branch of the originating version of the file for the log.'),
+  );
   $form['repository_urls']['file_view'] = array(
     '#type' => 'textfield',
-    '#title' => t('File view URL'),
+    '#title' => t('File content URL'),
     '#default_value' => isset($repo_urls) ? $repo_urls['file_view'] : '',
     '#size' => 40,
     '#maxlength' => 255,
-    '#description' => t('Enter URL to the display view of a file in the repository. Use the %path, %revision and %branch variables in the right place to represent the path, revision and branch of the file.'),
+    '#description' => t('Enter URL to the content view of a file in the repository. Use the %path, %revision and %branch variables in the right place to represent the path, revision and branch of the file.'),
   );
   $form['repository_urls']['directory_view'] = array(
     '#type' => 'textfield',
-    '#title' => t('Directory view URL'),
+    '#title' => t('Directory listing URL'),
     '#default_value' => isset($repo_urls) ? $repo_urls['directory_view'] : '',
     '#size' => 40,
     '#maxlength' => 255,
@@ -824,6 +832,10 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
   // Reconstruct the repository from the $form_values that were passed.
   $repository = array();
   $repository_urls = array();
+  $repository_url_keys = array(
+    'commit_view', 'file_log_view', 'file_view', 'directory_view',
+    'diff', 'tracker'
+  );
 
   foreach ($form_values as $key => $value) {
     if (in_array($key, array('repo_id', 'vcs', 'root', 'authorization_method'))) {
@@ -832,7 +844,7 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
     else if ($key == 'repo_name') {
       $repository['name'] = $form_values[$key];
     }
-    else if (in_array($key, array('commit_view', 'file_view', 'directory_view', 'diff', 'tracker'))) {
+    else if (in_array($key, $repository_url_keys)) {
       $repository_urls[$key] = $form_values[$key];
     }
     else if ($key == 'registration_message') {
@@ -901,6 +913,8 @@ function versioncontrol_admin_repository_delete_confirm($repo_id) {
 function versioncontrol_admin_repository_delete_confirm_submit($form_id, $form_values) {
   $repository = versioncontrol_get_repository($form_values['repo_id']);
   versioncontrol_delete_repository($repository);
+  db_query("DELETE FROM {versioncontrol_repository_metadata}
+            WHERE repo_id = %d", $repository['repo_id']);
   drupal_set_message(t('The %repository repository has been deleted.',
                       array('%repository' => $repository['name'])));
 

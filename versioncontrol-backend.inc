@@ -975,11 +975,12 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
   // TODO: abstract out repository URLs into separate backends
   db_query(
     "INSERT INTO {versioncontrol_repository_urls}
-     (repo_id, commit_view, file_view, directory_view, diff, tracker)
-     VALUES (%d, '%s', '%s', '%s', '%s', '%s')",
+     (repo_id, commit_view, file_log_view, file_view, directory_view, diff, tracker)
+     VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s')",
      $repository['repo_id'], $repository_urls['commit_view'],
-     $repository_urls['file_view'], $repository_urls['directory_view'],
-     $repository_urls['diff'], $repository_urls['tracker']
+     $repository_urls['file_log_view'], $repository_urls['file_view'],
+     $repository_urls['directory_view'], $repository_urls['diff'],
+     $repository_urls['tracker']
   );
 
   // Auto-add repository info from $repository['[xxx]_specific'] into the database.
@@ -1059,12 +1060,13 @@ function versioncontrol_update_repository($repository, $repository_urls) {
   // TODO: abstract out repository URLs into separate backends
   db_query(
     "UPDATE {versioncontrol_repository_urls}
-     SET commit_view = '%s', file_view = '%s', directory_view = '%s',
-         diff = '%s', tracker = '%s'
+     SET commit_view = '%s', file_log_view = '%s', file_view = '%s',
+         directory_view = '%s', diff = '%s', tracker = '%s'
      WHERE repo_id = %d",
-     $repository_urls['commit_view'], $repository_urls['file_view'],
-     $repository_urls['directory_view'], $repository_urls['diff'],
-     $repository_urls['tracker'], $repository['repo_id']
+     $repository_urls['commit_view'], $repository_urls['file_log_view'],
+     $repository_urls['file_view'], $repository_urls['directory_view'],
+     $repository_urls['diff'], $repository_urls['tracker'],
+     $repository['repo_id']
   );
 
   // Auto-add commit info from $commit['[xxx]_specific'] into the database.
