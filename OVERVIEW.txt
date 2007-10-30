@@ -1,0 +1,106 @@
+$Id$
+
+This is a short overview of the Version Control API (subsequently called
+"the API") on a more conceptual level rather than detailed function
+descriptions, as you've already got those in the module file itself.
+
+The Version Control API module contains the central API and admin screens,
+where the latter includes repository management, account management and
+general settings.
+
+
+User visible stuff
+------------------
+
+Repository management is very pluggable for both VCS backends and
+external modules, so every module that needs to add some information
+to repositories can do so. Repository settings at least include the name
+and root path/URL of the repository, as well as a repository-specific
+account registration message and URLs of external repository viewers
+and/or issue trackers.
+
+Furthermore, one of multiple authorization methods (also extensible by
+other modules like Account Status) can be defined for each repository.
+Version Control API itself provides two of them: 'none' which means that
+every user with the 'use version control systems' permission can create
+new accounts, and 'admin' which means that only administrators can
+create any VCS accounts on the site.
+
+Account management, in its vanilla form, is relatively bare-bone when compared
+to repository options, and only shows a simple mapping of Drupal users
+to VCS accounts, with a link to the edit account form on the user page.
+
+General settings include the VCS admin email address and messages
+shown on the account creation page.
+
+
+API introduction
+----------------
+
+The API is a mixture of retrieving stuff from the database and delegating
+to backend modules. It's extensively (some would say ridiculously) documented
+with phpdoc compatible function descriptions, in order to make it very
+straightforward for higher-level modules to use the API and for backends
+to implement it.
+
+For that matter, there also exists an example backend implementation called
+"FakeVCS backend" which demonstrates how functions and their result data
+might look like. This is a free-for-all especially for backend module authors
+who can simply copy-and-paste apidox and function signatures into their own
+backends and then use the demo code as a template for their implementations.
+API users will probably gain a little more insight from the
+hook_versioncontrol.module file which documents all the user-level hooks.
+
+
+API concepts
+------------
+
+In essence, the API is built around various types of arrays
+(think of them as objects) which can be retrieved and passed around:
+
+- Repositories: contain fundamental information about the repository, like
+    its name, root path/URL and the backend that powers this repository.
+
+- Items: Files or directories inside a specific repository, including
+    information about its path, type (file or directory) and (file-level)
+    revision, if applicable.
+
+- Accounts: Not represented as an array but rather as a combination of
+    Drupal uid, VCS username and repository.
+
+- Operations (commits, branch operations, tag operations): Those provide
+    information about the author, repository, containing directory,
+    and date/time of the operation. Commits additionally include the
+    repository-wide revision (if applicable) and the commit message.
+
+- Commit actions: A set of modifications that happened during a commit,
+    including information about the type of the action (added, modified, moved,
+    copied, merged or deleted), the new/current version of the affected item,
+    and its predecessor(s).
+
+Repositories, accounts and operations are managed by the API module itself,
+and can be amended by backends and other modules by implementing the
+appropriate hooks (hook_versioncontrol_*(), where * is one of 'repository',
+'account', 'commit', 'branch_operation' and 'tag_operation').
+Items and commit actions are managed by the backends.
+
+Each of those objects may contain additional VCS specific information -
+for example, the CVS backend adds passwords to accounts, modules and
+log retrieval information to repositories, and the commit branch to commits.
+All in all, that makes for pretty good flexiblility.
+
+A backend does not need to implement all functions that the Version Control API
+defines. The idea is that functionality for retrieving fundamental
+log information - that is, items and actions that correspond to commits and
+branch/tag operations - is mandatory and likely to be stored in the database,
+whereas more advanced functionality like item history, directory/file contents,
+file annotations, and listing all branches and tags of an item, is optional
+for backends. That's because it's likely to directly interface to the VCS
+instead of querying the database, and this functionality is both harder
+to implement and potentially slower than the log retrieval functions.
+
+If a module makes use of an optional function then it has to check
+for its availability before calling it.
+
+
+So... that's it for the overview. Good luck!

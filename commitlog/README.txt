@@ -13,6 +13,9 @@ but the list of commits can be filtered by passing appropriate URLs.
 If the Version Control API knows about URLs of repository viewers and
 issue trackers, this module provides links to those in the commit logs.
 
+Additionally, Commit Log can send out these logs to the version control
+administrator's e-mail address if the corresponding option is enabled.
+
 Commit Log depends on the Version Control API module.
 
 
