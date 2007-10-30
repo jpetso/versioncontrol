@@ -1826,7 +1826,7 @@ function versioncontrol_get_url_commit_view($commit) {
  *   (and if not even Commit Log is enabled), or if the item cannot be viewed
  *   for any reason.
  */
-function versioncontrol_get_url_log_view($repository, $item) {
+function versioncontrol_get_url_item_log_view($repository, $item) {
   $urls = _versioncontrol_get_repository_urls($repository);
   $current_branch = versioncontrol_get_current_item_branch($repository, $item);
 
