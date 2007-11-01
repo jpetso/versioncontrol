@@ -151,10 +151,10 @@ function versioncontrol_install() {
         username varchar(64) NOT NULL default '',
         directory varchar(255) NOT NULL default '',
         message text,
-        PRIMARY KEY (branch_op_id)
+        PRIMARY KEY (tag_op_id)
       )");
-      db_query("CREATE INDEX {versioncontrol_tag_operations}_tag_id_idx
-                ON {versioncontrol_tag_operations} (tag_id)");
+      db_query("CREATE INDEX {versioncontrol_tag_operations}_repo_id_tag_name_idx
+                ON {versioncontrol_tag_operations} (repo_id, tag_name)");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
         repo_id int NOT NULL default 0,
