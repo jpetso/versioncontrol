@@ -679,6 +679,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#title' => t('Repository name'),
     '#description' => t('A label for the repository that will be used in all user visible messages.'),
     '#default_value' => isset($repository) ? check_plain($repository['name']) : '',
+    '#required' => TRUE,
     '#weight' => 0,
     '#size' => 40,
     '#maxlength' => 255,
@@ -707,7 +708,6 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
   $form['account_registration'] = array(
     '#type' => 'fieldset',
     '#title' => t('Account registration'),
-    '#description' => t('The following message is shown on the !account-registration-page for this repository.', array('!account-registration-page' => l(t('account registration page'), 'versioncontrol/register/demo/'. $repo_id))),
     '#collapsible' => TRUE,
     '#collapsed' => TRUE,
     '#weight' => 1,
@@ -913,8 +913,6 @@ function versioncontrol_admin_repository_delete_confirm($repo_id) {
 function versioncontrol_admin_repository_delete_confirm_submit($form_id, $form_values) {
   $repository = versioncontrol_get_repository($form_values['repo_id']);
   versioncontrol_delete_repository($repository);
-  db_query("DELETE FROM {versioncontrol_repository_metadata}
-            WHERE repo_id = %d", $repository['repo_id']);
   drupal_set_message(t('The %repository repository has been deleted.',
                       array('%repository' => $repository['name'])));
 

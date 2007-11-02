@@ -113,7 +113,7 @@ versioncontrol_fakevcs_versioncontrol_backends() {
  *   for filtering by module.
  */
 versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_specific_constraints = array()) {
-  foreach ($commits as $repo_id => $repository) {
+  foreach ($repositories as $repo_id => $repository) {
     // Retrieve our own custom stuff.
     $additions = array(
       'modules' => array('drupal', 'contributions'),

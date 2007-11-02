@@ -33,10 +33,14 @@ function versioncontrol_fakevcs_form_alter($form_id, &$form) {
 function versioncontrol_fakevcs_repository_admin_form_alter($form_id, &$form) {
   $repository = $form['#repository'];
 
+  $form['versioncontrol_fakevcs'] = array(
+    '#type' => 'value',
+    '#value' => TRUE,
+  );
+
   $form['repository_information']['root']['#description'] = t(
     'The location of the repository\'s root directory. Examples: /path or ssh+fakevcs://path.'
   );
-
   $form['repository_information']['update_method'] = array(
     '#type' => 'radios',
     '#title' => t('Update method'),
@@ -58,6 +62,9 @@ function versioncontrol_fakevcs_repository_admin_form_alter($form_id, &$form) {
  * editing/adding form's submitted values.
  */
 function versioncontrol_fakevcs_versioncontrol_extract_repository_data($form_values) {
+  if (!isset($form_values['versioncontrol_fakevcs'])) {
+    return array();
+  }
   return array(
     'fakevcs_specific' => array(
       'update_method' => $form_values['update_method'],
@@ -113,6 +120,11 @@ function versioncontrol_fakevcs_versioncontrol_alter_repository_list($vcs, $repo
  * Add FakeVCS specific elements to the edit/register user account form.
  */
 function versioncontrol_fakevcs_account_form_alter($form_id, &$form) {
+  $form['versioncontrol_fakevcs'] = array(
+    '#type' => 'value',
+    '#value' => TRUE,
+  );
+
   if (empty($form['original_username']['#value'])) { // creating the account
     $description = t('Choose a password to access the FakeCVS repository with.');
   }
@@ -146,7 +158,7 @@ function versioncontrol_fakevcs_account_form_validate($form_id, $form_values) {
  * from the edit/register user account form's submitted values.
  */
 function versioncontrol_fakevcs_versioncontrol_extract_account_data($form_values) {
-  if (empty($form_values['account_password'])) {
+  if (!isset($form_values['versioncontrol_fakevcs']) || empty($form_values['account_password'])) {
     return array();
   }
   return array(

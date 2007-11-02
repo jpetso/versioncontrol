@@ -376,7 +376,6 @@ function versioncontrol_insert_commit($commit, $commit_actions) {
     $elements['commit_id'] = $commit['commit_id'];
     _versioncontrol_db_insert_additions($table_name, $elements);
   }
-
   // Provide an opportunity for the backend to add its own stuff.
   if (versioncontrol_backend_implements($vcs, 'commit')) {
     _versioncontrol_call_backend($vcs, 'commit',
@@ -589,6 +588,17 @@ function versioncontrol_delete_commit($commit) {
                                  array('delete', $commit, $commit_actions));
   }
 
+  // Auto-delete commit info from $commit['[xxx]_specific'] from the database.
+  $backends = versioncontrol_get_backends();
+  if (isset($backends[$vcs])) { // not the case when called from uninstall
+    $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_COMMITS,
+                           $backends[$vcs]['flags']);
+  }
+  if ($is_autoadd) {
+    $table_name = 'versioncontrol_'. $vcs .'_commits';
+    _versioncontrol_db_delete_additions($table_name, 'commit_id', $commit['commit_id']);
+  }
+
   db_query('DELETE FROM {versioncontrol_commits}
             WHERE commit_id = %d', $commit['commit_id']);
 }
@@ -644,10 +654,12 @@ function _versioncontrol_delete_branch_or_tag_operation($branch_or_tag, $items, 
                                  array('delete', $branch_or_tag, $items));
   }
 
-  // Auto-delete additional tag info from $tag['repository']['[xxx]_specific']
-  // from the database.
+  // Auto-delete additional tag info from
+  // $branch_or_tag['repository']['[xxx]_specific'] from the database.
   $backends = versioncontrol_get_backends();
-  $is_autoadd = in_array($autoadd_flag, $backends[$vcs]['flags']);
+  if (isset($backends[$vcs])) { // not the case when called from uninstall
+    $is_autoadd = in_array($autoadd_flag, $backends[$vcs]['flags']);
+  }
   if ($is_autoadd) {
     $table_name = 'versioncontrol_'. $vcs .'_'. $type .'_operations';
     _versioncontrol_db_delete_additions(
@@ -1146,8 +1158,10 @@ function versioncontrol_delete_repository($repository) {
 
   // Auto-delete repository info from $repository['[xxx]_specific'] from the database.
   $backends = versioncontrol_get_backends();
-  $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
-                         $backends[$vcs]['flags']);
+  if (isset($backends[$vcs])) { // not the case when called from uninstall
+    $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
+                           $backends[$vcs]['flags']);
+  }
   if ($is_autoadd) {
     $table_name = 'versioncontrol_'. $vcs .'_repositories';
     _versioncontrol_db_delete_additions($table_name, 'repo_id', $repository['repo_id']);
@@ -1158,6 +1172,8 @@ function versioncontrol_delete_repository($repository) {
            $repository['repo_id']);
   // TODO: abstract out repository URLs into separate backends
   db_query('DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = %d',
+           $repository['repo_id']);
+  db_query('DELETE FROM {versioncontrol_repository_metadata} WHERE repo_id = %d',
            $repository['repo_id']);
 
   watchdog('special',
