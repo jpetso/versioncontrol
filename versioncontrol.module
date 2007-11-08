@@ -1852,7 +1852,7 @@ function versioncontrol_get_url_item_log_view($repository, $item) {
   else if (module_exists('commitlog')) { // fallback, as 'file_log_view' is empty
     return url('commitlog',
       'repos='. $repository['repo_id']
-      .'&paths='. urlencode($item['path'])
+      .'&paths='. drupal_urlencode($item['path'])
       . (isset($current_branch) ? '&branches='. $current_branch : '')
     );
   }

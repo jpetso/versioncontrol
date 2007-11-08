@@ -567,7 +567,7 @@ function commitlog_account_username($uid, $username, $repository, $replace_with_
 
   if ($format == 'html') {
     return l(check_plain($username), 'commitlog', NULL,
-             'usernames='. urlencode($username) .'&repos='. $repository['repo_id']);
+             'usernames='. drupal_urlencode($username) .'&repos='. $repository['repo_id']);
   }
   return $username;
 }
