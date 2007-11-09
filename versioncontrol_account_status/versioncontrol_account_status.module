@@ -240,11 +240,11 @@ function versioncontrol_account_status_versioncontrol_alter_account_list($accoun
   $status_column_index = NULL;
   $new_header = array();
 
-  // insert a new 'Status' column after the 'Accounts' one
+  // insert a new 'Account status' column after the 'Accounts' one
   foreach ($header as $index => $column) {
     if ($index == $accounts_column_index) {
       $new_header[] = $column;
-      $new_header[] = t('Status');
+      $new_header[] = t('Account status');
     }
     else {
       $new_header[] = $column;
@@ -365,6 +365,9 @@ function versioncontrol_account_status_account_filter_form_submit($form_id, $for
  *   may be unset by this filter function.
  */
 function versioncontrol_account_status_versioncontrol_filter_accounts(&$accounts) {
+  if (empty($accounts)) {
+    return;
+  }
   if (!isset($_SESSION['versioncontrol_account_status_filter'])) {
     $_SESSION['versioncontrol_account_status_filter'] = 0;
   }

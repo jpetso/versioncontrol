@@ -318,6 +318,9 @@ function versioncontrol_admin_account_list_filter_form_submit($form_id, $form_va
  *   may be unset by this filter function.
  */
 function versioncontrol_versioncontrol_filter_accounts(&$accounts) {
+  if (empty($accounts)) {
+    return;
+  }
   if (!isset($_SESSION['versioncontrol_filter_repo_id'])) {
     $_SESSION['versioncontrol_filter_repo_id'] = 0;
   }

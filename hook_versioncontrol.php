@@ -629,6 +629,9 @@ function hook_versioncontrol_is_account_authorized($uid, $repository) {
  * @ingroup Target audience: Authorization control modules
  */
 function hook_versioncontrol_filter_accounts(&$accounts) {
+  if (empty($accounts)) {
+    return;
+  }
   // Use a default value if the session variable hasn't yet been set.
   if (!isset($_SESSION['mymodule_filter_username'])) {
     $_SESSION['mymodule_filter_username'] = 'chx';

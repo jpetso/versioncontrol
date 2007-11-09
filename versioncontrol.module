@@ -626,33 +626,43 @@ function _versioncontrol_construct_repository_constraints($constraints, $backend
   if (isset($constraints['vcs'])) {
     $vcses = array_intersect($vcses, $constraints['vcs']);
   }
-  if (!empty($vcses)) {
+  if (empty($vcses)) {
+    $and_constraints[] = 'FALSE'; // no backends are enabled of those that have been requested
+  }
+  else {
     foreach ($vcses as $vcs) {
       $placeholders[] = "'%s'";
       $params[] = $vcs;
     }
     $and_constraints[] = 'r.vcs IN ('. implode(',', $placeholders) .')';
   }
-  else {
-    $and_constraints[] = '0 = 1'; // no backends are enabled of those that have been requested
-  }
 
   if (isset($constraints['repo_ids'])) {
-    $placeholders = array();
-    foreach ($constraints['repo_ids'] as $repo_id) {
-      $placeholders[] = '%d';
-      $params[] = $repo_id;
+    if (empty($constraints['repo_ids'])) {
+      $and_constraints[] = 'FALSE';
     }
-    $and_constraints[] = 'r.repo_id IN ('. implode(',', $placeholders) .')';
+    else {
+      $placeholders = array();
+      foreach ($constraints['repo_ids'] as $repo_id) {
+        $placeholders[] = '%d';
+        $params[] = $repo_id;
+      }
+      $and_constraints[] = 'r.repo_id IN ('. implode(',', $placeholders) .')';
+    }
   }
 
   if (isset($constraints['names'])) {
-    $placeholders = array();
-    foreach ($constraints['names'] as $name) {
-      $placeholders[] = "'%s'";
-      $params[] = $name;
+    if (empty($constraints['names'])) {
+      $and_constraints[] = 'FALSE';
     }
-    $and_constraints[] = 'r.name IN ('. implode(',', $placeholders) .')';
+    else {
+      $placeholders = array();
+      foreach ($constraints['names'] as $name) {
+        $placeholders[] = "'%s'";
+        $params[] = $name;
+      }
+      $and_constraints[] = 'r.name IN ('. implode(',', $placeholders) .')';
+    }
   }
 
   return array($and_constraints, $params);
@@ -873,15 +883,20 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
 
   // Filter by item paths.
   if (isset($constraints['paths'])) {
-    $or_constraints = array();
-    foreach ($constraints['paths'] as $path) {
-      list($path_or_constraints, $path_params) =
-        _versioncontrol_construct_path_constraint('c.directory', $path);
-      $or_constraints = array_merge($or_constraints, $path_or_constraints);
-      $params = array_merge($params, $path_params);
+    if (empty($constraints['paths'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($constraints['paths'] as $path) {
+        list($path_or_constraints, $path_params) =
+          _versioncontrol_construct_path_constraint('c.directory', $path);
+        $or_constraints = array_merge($or_constraints, $path_or_constraints);
+        $params = array_merge($params, $path_params);
+      }
+      if (!empty($or_constraints)) {
+        $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+      }
     }
   }
 
@@ -903,26 +918,31 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
   if (isset($constraints['vcs'])) {
     $vcses = array_intersect($vcses, $constraints['vcs']);
   }
-  if (!empty($vcses)) {
+  if (empty($vcses)) {
+    $and_constraints[] = 'FALSE'; // no backends are enabled of those that have been requested
+  }
+  else {
     foreach ($vcses as $vcs) {
       $placeholders[] = "'%s'";
       $params[] = $vcs;
     }
     $and_constraints[] = $repository_table_alias .'.vcs IN ('. implode(',', $placeholders) .')';
   }
-  else {
-    $and_constraints[] = '0 = 1'; // no backends are enabled of those that have been requested
-  }
 
   // Filter by commit, branch or tag ids.
   if (isset($constraints[$primary_key_name .'s'])) {
-    $placeholders = array();
-    foreach ($constraints[$primary_key_name .'s'] as $primary_key) {
-      $placeholders[] = '%d';
-      $params[] = $primary_key;
+    if (empty($constraints[$primary_key_name .'s'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($placeholders)) {
-      $and_constraints[] = $table_alias .'.'. $primary_key_name .' IN ('. implode(',', $placeholders) .')';
+    else {
+      $placeholders = array();
+      foreach ($constraints[$primary_key_name .'s'] as $primary_key) {
+        $placeholders[] = '%d';
+        $params[] = $primary_key;
+      }
+      if (!empty($placeholders)) {
+        $and_constraints[] = $table_alias .'.'. $primary_key_name .' IN ('. implode(',', $placeholders) .')';
+      }
     }
   }
 
@@ -938,13 +958,18 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
 
   // Filter by repository ids.
   if (isset($constraints['repo_ids'])) {
-    $placeholders = array();
-    foreach ($constraints['repo_ids'] as $repo_id) {
-      $placeholders[] = '%d';
-      $params[] = $repo_id;
+    if (empty($constraints['repo_ids'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($placeholders)) {
-      $and_constraints[] = $repository_table_alias .'.repo_id IN ('. implode(',', $placeholders) .')';
+    else {
+      $placeholders = array();
+      foreach ($constraints['repo_ids'] as $repo_id) {
+        $placeholders[] = '%d';
+        $params[] = $repo_id;
+      }
+      if (!empty($placeholders)) {
+        $and_constraints[] = $repository_table_alias .'.repo_id IN ('. implode(',', $placeholders) .')';
+      }
     }
   }
 
@@ -960,25 +985,35 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
 
   // Filter by Drupal user ids.
   if (isset($constraints['uids'])) {
-    $placeholders = array();
-    foreach ($constraints['uids'] as $uid) {
-      $placeholders[] = '%d';
-      $params[] = $uid;
+    if (empty($constraints['uids'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($placeholders)) {
-      $and_constraints[] = $table_alias .'.uid IN ('. implode(',', $placeholders) .')';
+    else {
+      $placeholders = array();
+      foreach ($constraints['uids'] as $uid) {
+        $placeholders[] = '%d';
+        $params[] = $uid;
+      }
+      if (!empty($placeholders)) {
+        $and_constraints[] = $table_alias .'.uid IN ('. implode(',', $placeholders) .')';
+      }
     }
   }
 
   // Filter by VCS specific user names.
   if (isset($constraints['usernames'])) {
-    $placeholders = array();
-    foreach ($constraints['usernames'] as $username) {
-      $placeholders[] = "'%s'";
-      $params[] = $username;
+    if (empty($constraints['usernames'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($placeholders)) {
-      $and_constraints[] = $table_alias .'.username IN ('. implode(',', $placeholders) .')';
+    else {
+      $placeholders = array();
+      foreach ($constraints['usernames'] as $username) {
+        $placeholders[] = "'%s'";
+        $params[] = $username;
+      }
+      if (!empty($placeholders)) {
+        $and_constraints[] = $table_alias .'.username IN ('. implode(',', $placeholders) .')';
+      }
     }
   }
 
@@ -1326,13 +1361,18 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
 
   // Filter by branch names.
   if (isset($constraints['branch_names'])) {
-    $or_constraints = array();
-    foreach ($constraints['branch_names'] as $branch_name) {
-      $or_constraints[] = "b.name = '%s'";
-      $params[] = $branch_name;
+    if (empty($constraints['branch_names'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($constraints['branch_names'] as $branch_name) {
+        $or_constraints[] = "b.name = '%s'";
+        $params[] = $branch_name;
+      }
+      if (!empty($or_constraints)) {
+        $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+      }
     }
   }
 
@@ -1497,13 +1537,18 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
 
   // Filter by tag names.
   if (isset($constraints['tag_names'])) {
-    $or_constraints = array();
-    foreach ($constraints['tag_names'] as $tag_name) {
-      $or_constraints[] = "t.name = '%s'";
-      $params[] = $tag_name;
+    if (empty($constraints['tag_names'])) {
+      $and_constraints[] = 'FALSE';
     }
-    if (!empty($or_constraints)) {
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($constraints['tag_names'] as $tag_name) {
+        $or_constraints[] = "t.name = '%s'";
+        $params[] = $tag_name;
+      }
+      if (!empty($or_constraints)) {
+        $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+      }
     }
   }
 
@@ -1611,51 +1656,71 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
 
   // Filter by Drupal user id.
   if (isset($constraints['uids'])) {
-    $or_constraints = array();
-    foreach ($constraints['uids'] as $uid) {
-      $or_constraints[] = 'uid = %d';
-      $params[] = $uid;
+    if (empty($constraints['uids'])) {
+      $and_constraints[] = 'FALSE';
     }
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($constraints['uids'] as $uid) {
+        $or_constraints[] = 'uid = %d';
+        $params[] = $uid;
+      }
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
   }
 
   // Filter by repository id.
   if (isset($constraints['repo_ids'])) {
-    $or_constraints = array();
-    foreach ($constraints['repo_ids'] as $repo_id) {
-      $or_constraints[] = 'repo_id = %d';
-      $params[] = $repo_id;
+    if (empty($constraints['repo_ids'])) {
+      $and_constraints[] = 'FALSE';
     }
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($constraints['repo_ids'] as $repo_id) {
+        $or_constraints[] = 'repo_id = %d';
+        $params[] = $repo_id;
+      }
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
   }
 
   // Filter by VCS username.
   if (isset($constraints['usernames'])) {
-    $or_constraints = array();
-    foreach ($constraints['usernames'] as $username) {
-      $or_constraints[] = "username = '%s'";
-      $params[] = $username;
+    if (empty($constraints['usernames'])) {
+      $and_constraints[] = 'FALSE';
     }
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($constraints['usernames'] as $username) {
+        $or_constraints[] = "username = '%s'";
+        $params[] = $username;
+      }
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
   }
 
   // Filter by usernames-by-repository.
   if (isset($constraints['usernames_by_repository'])) {
-    $or_constraints = array();
-    foreach ($usernames_by_repository as $repo_id => $usernames) {
-      $repo_constraint = 'repo_id = %d';
-      $params[] = $repo_id;
-
-      $username_constraints = array();
-      foreach ($usernames as $username) {
-        $username_constraints[] = "username = '%s'";
-        $params[] = $username;
-      }
-
-      $or_constraints[] = '('. $repo_constraint
-                          .' AND ('. implode(' OR ', $username_constraints) .'))';
+    if (empty($constraints['usernames_by_repository'])) {
+      $and_constraints[] = 'FALSE';
     }
-    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    else {
+      $or_constraints = array();
+      foreach ($usernames_by_repository as $repo_id => $usernames) {
+        $repo_constraint = 'repo_id = %d';
+        $params[] = $repo_id;
+
+        $username_constraints = array();
+        foreach ($usernames as $username) {
+          $username_constraints[] = "username = '%s'";
+          $params[] = $username;
+        }
+
+        $or_constraints[] = '('. $repo_constraint
+                            .' AND ('. implode(' OR ', $username_constraints) .'))';
+      }
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
   }
 
   // Execute the query.
