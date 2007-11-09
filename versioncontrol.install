@@ -218,6 +218,7 @@ function versioncontrol_uninstall() {
   db_query('DROP TABLE {versioncontrol_tag_operations}');
   db_query('DROP TABLE {versioncontrol_repositories}');
   db_query('DROP TABLE {versioncontrol_repository_urls}');
+  db_query('DROP TABLE {versioncontrol_repository_metadata}');
   db_query('DROP TABLE {versioncontrol_accounts}');
 }
 
