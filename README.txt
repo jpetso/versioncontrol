@@ -28,6 +28,9 @@ functionality:
   and meet approval of version control administrators before their VCS account
   is enabled.
 
+CAVEATS
+------
+This module is not compatible with PHP versions less than PHP 5.
 
 AUTHOR
 ------
