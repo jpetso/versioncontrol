@@ -389,6 +389,97 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
 }
 
 /**
+ * Implementation of [versioncontrol_backend]_get_commit_statistics():
+ * Retrieve general statistics about what happened in a single commit. For more granular
+ * details about what happened in a single commit, use versioncontrol_get_commit_actions.
+ *
+ * @param $commit
+ *   The commit to retrieve statistics about
+ *
+ * @return
+ *  A structured array containing general statistics about this commit. The array will consist
+ *  of elements with the following keys:
+ *
+ *   - 'lines_added': Total number of lines added during this commit
+ *   - 'lines_removed': Total number of lines removed during this commit
+ *   - 'action_count': Total number of actions within this commit
+ *   - 'per_action_statistics': An array containing statistics on individual actions. Array keys are
+ *        the current/new paths (just as with versioncontrol_get_commit_actions). The corresponding
+ *        array values are again structured arrays and consist of elements with the following keys:
+ *   
+ *   - 'lines_added': Number of lines added in this action
+ *   - 'lines_removed': Number of lines removed in this action
+ */
+function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions = NULL) {
+  // Assuming $commit is a single commit array that looks like this:
+  $commit = array(
+    // The commit id, a simple running number. Doesn't have any specific
+    // meaning, but is necessary for indexing and joining tables.
+    'commit_id' => 2345,
+    // The repository that was affected by this commit.
+    'repository' => $affected_repository,
+    // The time when the commit was executed, in Unix timestamp format.
+    'date' => time(),
+    // User id of the committer's Drupal user account.
+    // 0 if no corresponding account exists.
+    'uid' => $user->uid,
+    // The committer's username known to the repository itself. In most cases
+    // this will probably be the name of the committer's Unix user account.
+    'username' => 'jpetso',
+    // The deepest-level directory in the repository that is common to
+    // all the changed items in this commit.
+    'directory' => '/',
+    // The commit message, which is expected to span one or more lines.
+    'message' => 'All kinds of demonstrative changes.',
+    // The revision identifier of the commit, in the VCS's proprietary format -
+    // running number, SHA-1 hash, or whatever. If there is no single revision
+    // identifier for the whole commit (which should only be the case for CVS)
+    // then the value for this key is set to NULL.
+    'revision' => '404', // for this commit, let's assume this is an SVN repository
+  );
+  
+  return array(
+    'lines_added' => 30, // 15 + 5 + 7 + 3
+    'lines_removed' => 20, // 3 + 17
+    'action_count' => 8,
+    'per_action_statistics' => array(
+      '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
+        'lines_added' => 15,
+        'lines_removed' => 0,
+      ),
+      '/trunk/contributions/modules/versioncontrol/versioncontrol.install' => array(
+        'lines_added' => 5,
+        'lines_removed' => 3,
+      ),
+      '/branches/sandbox/jpetso/versioncontrol-notes.txt' => array(
+        'lines_added' => 0,
+        'lines_removed' => 17,
+      ),
+      '/trunk/contributions/modules/versioncontrol/versioncontrol.info' => array(
+        'lines_added' => 0,
+        'lines_removed' => 0,
+      ),
+      '/trunk/contributions/modules/versioncontrol/README.txt' => array(
+        'lines_added' => 7,
+        'lines_removed' => 0,
+      ),
+      '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
+        'lines_added' => 0,
+        'lines_removed' => 0,
+      ),
+      '/branches/5.x-1.x/contributions/modules/cvslog' => array(
+        'lines_added' => 3,
+        'lines_removed' => 0,
+      ),
+      '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
+        'lines_added' => 0,
+        'lines_removed' => 0,
+      ),
+    ),
+  );
+}
+
+/**
  * Implementation of [versioncontrol_backend]_get_directory_item():
  * Retrieve the item of the deepest-level directory in the repository that is
  * common to all the changed/branched/tagged items in a commit, branch or
