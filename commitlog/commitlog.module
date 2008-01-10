@@ -298,6 +298,10 @@ function _commitlog_get_commit_constraints() {
     $constraints['commit_ids'] = explode(',', $_REQUEST['commits']);
     $attributes['commits'] = $_REQUEST['commits'];
   }
+  if (isset($_REQUEST['commit'])) { // cvs.module backwards compatibility
+    $constraints['commit_ids'] = array($_REQUEST['commit']);
+    $attributes['commits'] = $_REQUEST['commit'];
+  }
   if (isset($_REQUEST['usernames'])) {
     $constraints['usernames'] = explode(',', $_REQUEST['usernames']);
     $attributes['usernames'] = $_REQUEST['usernames'];
