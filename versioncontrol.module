@@ -2098,31 +2098,37 @@ function versioncontrol_get_commit_actions($commit) {
  * Retrieve general statistics about what happened in a single commit. For more granular
  * details about what happened in a single commit, use versioncontrol_get_commit_actions.
  *
- * @param $commit
- *   The commit to retrieve statistics about
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_commit_statistics')
+ * if the particular backend actually implements it.
  *
+ * @param $commit
+ *   The commit to retrieve statistics about.
  * @param $commit_actions
- *   The actions of the commit. Can be passed by the caller if the caller already has the actions,
- *   or can be left absent and they will be automatically obtained.
+ *   The commit actions array belonging to the above commit. Can be passed by
+ *   the caller if the caller already has the actions, or can be left absent
+ *   and they will be automatically obtained.
  *
  * @return
- *  A structured array containing general statistics about this commit. The array will consist
- *  of elements with the following keys:
+ *   A structured array containing general statistics about this commit.
+ *   The array will consist of elements with the following keys:
  *
- *   - 'lines_added': Total number of lines added during this commit
- *   - 'lines_removed': Total number of lines removed during this commit
- *   - 'action_count': Total number of actions within this commit
- *   - 'per_action_statistics': An array containing statistics on individual actions. Array keys are
- *        the current/new paths (just as with versioncontrol_get_commit_actions). The corresponding
- *        array values are again structured arrays and consist of elements with the following keys:
- *   
- *   - 'lines_added': Number of lines added in this action
- *   - 'lines_removed': Number of lines removed in this action
+ *   - 'lines_added': Total number of lines added during this commit.
+ *   - 'lines_removed': Total number of lines removed during this commit.
+ *   - 'action_count': Total number of actions within this commit.
+ *   - 'per_action_statistics': An array containing statistics on individual
+ *        actions. Array keys are the current/new paths (just as with
+ *        versioncontrol_get_commit_actions()).
  *
- *   These values are designed so that statistics from several commits can be combined, hence why totals
- *   are given rather than averages. A real-life example of such a result array can be found in the FakeVCS 
- *   example module.
- *   
+ *   The array values of the 'per_action_statistics' element are again
+ *   structured arrays and consist of elements with the following keys:
+ *
+ *   - 'lines_added': Number of lines added to this item.
+ *   - 'lines_removed': Number of lines removed to this item.
+ *
+ *   These values are designed so that statistics from several commits can be
+ *   combined, hence why totals are given rather than averages. A real-life
+ *   example of such a result array can be found in the FakeVCS example module.
  */
 function versioncontrol_get_commit_statistics($commit, $commit_actions = NULL) {
   return _versioncontrol_call_backend(
