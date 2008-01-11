@@ -146,7 +146,7 @@ function versioncontrol_account_register_form($uid, $repository_names, $first_re
     drupal_set_title(t('No more registrations possible'));
     $form['no_registration'] = array(
       '#type' => 'markup',
-      '#value' => t('You already have an account for all the repositories known to this site. Go to your !user-account-page to configure repository account settings.',
+      '#value' => t('You already have an account for all the repositories where you can register. Go to your !user-account-page to configure repository account settings.',
         array('!user-account-page' => l(t('user account page'), 'user/'. $uid .'/edit'))
       ),
       '#prefix' => '<p>',
