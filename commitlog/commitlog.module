@@ -483,6 +483,8 @@ function theme_commitlog_rss($commits) {
 }
 
 function commitlog_commit($commit, $commit_actions, $username = NULL, $format = 'html') {
+  $variables = array();
+
   if (isset($username)) {
     $variables['username'] = $username;
   }
@@ -494,13 +496,15 @@ function commitlog_commit($commit, $commit_actions, $username = NULL, $format = 
   $variables['id'] = theme('commitlog_commit_identifier', $commit, $format);
   $variables['repository_name'] = theme('commitlog_repository', $commit['repository'], $format);
   $variables['time'] = format_date($commit['date'], 'custom', 'H:i');
-  
-  $statistics = versioncontrol_get_commit_statistics($commit, $commit_actions);
 
   $variables['actions'] = theme('commitlog_commit_actions', $commit, $commit_actions, $format);
-  $variables['statistics'] = theme('commitlog_commit_statistics', $commit, $statistics, $format);
   $variables['message'] = theme('commitlog_commit_message', $commit, $format);
   $variables['branches'] = theme('commitlog_commit_branches', $commit, $format);
+
+  if (versioncontrol_backend_implements($commit['repository']['vcs'], 'get_commit_statistics')) {
+    $statistics = versioncontrol_get_commit_statistics($commit, $commit_actions);
+    $variables['statistics'] = theme('commitlog_commit_statistics', $commit, $statistics, $format);
+  }
 
   if ($format == 'html') {
     return theme('commitlog_commit_html', $variables);
@@ -518,7 +522,9 @@ function theme_commitlog_commit_html($variables) {
     '!name' => $variables['username'],
     '!time' => $variables['time'],
   ));
-  $output .= ' ('. $variables['statistics'] .')';
+  if (isset($variables['statistics'])) {
+    $output .= ' ('. $variables['statistics'] .')';
+  }
   $output .= "</div>\n"; // class "title"
 
   $output .= '<div class="actions">'. $variables['actions'] .'</div>'."\n";
@@ -662,10 +668,10 @@ function theme_commitlog_commit_branches($commit, $format = 'html') {
 
 function theme_commitlog_commit_statistics($commit, $commit_statistics, $format = 'html') {
   $lines = array();
-  
+
   $lines[] = t('@line_count added', array('@line_count' => format_plural($commit_statistics['lines_added'], '1 line', '@count lines')));
   $lines[] = t('@line_count removed', array('@line_count' => format_plural($commit_statistics['lines_removed'], '1 line', '@count lines')));
-  
+
   return implode(", ", $lines);
 }
 
