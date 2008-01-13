@@ -894,7 +894,7 @@ function versioncontrol_fakevcs_get_parent_item($repository, $item, $parent_path
  *   NULL is returned if the given item is not inside the repository at the
  *   time of 'revision'.
  */
-function versioncontrol_fakevcs_get_item_branches($repository, $item) {
+function versioncontrol_fakevcs_get_all_item_branches($repository, $item) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol/versioncontrol.module':
   return array(
@@ -966,7 +966,7 @@ function versioncontrol_fakevcs_get_item_branches($repository, $item) {
  *   NULL is returned if the given item is not inside the repository at the
  *   time of 'revision'.
  */
-function versioncontrol_fakevcs_get_item_tags($repository, $item) {
+function versioncontrol_fakevcs_get_all_item_tags($repository, $item) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol':
   return array(
