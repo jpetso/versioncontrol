@@ -1218,9 +1218,12 @@ function versioncontrol_get_branch($branch_id) {
  *   The branch id of the requested branch, or NULL if there is no branch
  *   for this name and repository.
  */
-function versioncontrol_get_branch_id($branch_name, $repo_id) {
+function versioncontrol_get_branch_id($branch_name, $repo_id, $clear_cache = FALSE) {
   static $branch_cache = array();
 
+  if ($clear_cache == TRUE) {
+    $branch_cache = array();
+  }
   if (isset($branch_cache[$repo_id][$branch_name])) {
     if ($branch_cache[$repo_id][$branch_name] === FALSE) {
       return NULL; // there's no branch for this name and repository
@@ -1249,7 +1252,7 @@ function versioncontrol_get_branch_id($branch_name, $repo_id) {
  *   The branch id of the requested branch.
  */
 function versioncontrol_ensure_branch($branch_name, $repo_id) {
-  $branch_id = versioncontrol_get_branch_id($branch_name, $repo_id);
+  $branch_id = versioncontrol_get_branch_id($branch_name, $repo_id, TRUE);
   if (!isset($branch_id)) {
     $branch_id = db_next_id('{versioncontrol_branches}_branch_id');
     db_query("INSERT INTO {versioncontrol_branches} (branch_id, repo_id, branch_name)
