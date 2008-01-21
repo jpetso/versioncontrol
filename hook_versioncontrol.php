@@ -29,8 +29,11 @@
  *   A commit array containing basic information about a commit.
  *   It consists of the following elements:
  *
- *   - 'commit_id': The Drupal-specific commit identifier (a simple integer)
- *        which is unique among all commits in all repositories.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_COMMIT for commits.
  *   - 'repository': The repository where this commit occurred.
  *        This is a structured array, like a single element of
  *        what is returned by versioncontrol_get_repositories().
@@ -111,8 +114,11 @@ function hook_versioncontrol_commit($op, $commit, $commit_actions) {
  * @param $branch
  *   A structured array that consists of the following elements:
  *
- *   - 'branch_op_id': The unique identifier (a simple integer)
- *        of this branch operation.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_BRANCH for branches.
  *   - 'branch_name': The name of the target branch
  *        (a string like 'DRUPAL-6--1').
  *   - 'action': Specifies what happened to the branch. This is
@@ -179,8 +185,11 @@ function hook_versioncontrol_branch_operation($op, $branch, $branched_items) {
  * @param $tag
  *   A structured array that consists of the following elements:
  *
- *   - 'tag_op_id': The unique identifier (a simple integer)
- *        of this tag operation.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_TAG for tags.
  *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
  *   - 'action': Specifies what happened to the tag. This is
  *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
@@ -243,10 +252,12 @@ function hook_versioncontrol_tag_operation($op, $tag, $tagged_items) {
  *   A commit array of the commit that is about to happen. As it's not
  *   committed yet, it's not yet in the database as well, which means that
  *   any commit info retrieval functions won't work on this commit array.
- *   It also means there's no 'commit_id', 'revision' and 'date' elements like
+ *   It also means there's no 'vc_op_id', 'revision' and 'date' elements like
  *   in regular commit arrays. The 'message' element might or might not be set.
  *   Summed up, here's what this array contains for sure:
  *
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_COMMIT for commits.
  *   - 'repository': The repository where this commit occurred.
  *        This is a structured array, like a single element of
  *        what is returned by versioncontrol_get_repositories().
@@ -311,6 +322,8 @@ function hook_versioncontrol_commit_access($commit, $commit_actions, $branch = N
  * @param $branch
  *   A structured array that consists of the following elements:
  *
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_BRANCH for branches.
  *   - 'branch_name': The name of the target branch
  *        (a string like 'DRUPAL-6--1').
  *   - 'action': Specifies what is going to happen with the branch. This is
@@ -374,6 +387,8 @@ function hook_versioncontrol_branch_access($branch, $branched_items) {
  * @param $tag
  *   A structured array that consists of the following elements:
  *
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_TAG for tags.
  *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
  *   - 'action': Specifies what is going to happen with the tag. This is
  *        VERSIONCONTROL_ACTION_ADDED if the tag is being created,

@@ -294,13 +294,13 @@ function _commitlog_get_commit_constraints() {
 
   // Transform query string into query string. We use $_REQUEST because we 
   // need to support both GET and POST requests.
-  if (isset($_REQUEST['commits'])) {
-    $constraints['commit_ids'] = explode(',', $_REQUEST['commits']);
-    $attributes['commits'] = $_REQUEST['commits'];
+  if (isset($_REQUEST['ids'])) {
+    $constraints['vc_op_ids'] = explode(',', $_REQUEST['ids']);
+    $attributes['ids'] = $_REQUEST['ids'];
   }
   if (isset($_REQUEST['commit'])) { // cvs.module backwards compatibility
-    $constraints['commit_ids'] = array($_REQUEST['commit']);
-    $attributes['commits'] = $_REQUEST['commit'];
+    $constraints['vc_op_ids'] = array($_REQUEST['commit']);
+    $attributes['ids'] = $_REQUEST['commit'];
   }
   if (isset($_REQUEST['usernames'])) {
     $constraints['usernames'] = explode(',', $_REQUEST['usernames']);
@@ -459,11 +459,11 @@ function theme_commitlog_rss($commits) {
     );
 
     $title = t('!location by @username', array('!location' => $location, '@username' => $username));
-    $link = url('commitlog', 'commits='. $commit['commit_id'], NULL, TRUE);
+    $link = url('commitlog', 'ids='. $commit['vc_op_id'], NULL, TRUE);
     $extra = array(
       array('key' => 'pubDate', 'value' => gmdate('r', $commit['date'])),
       array('key' => 'guid',
-        'value' => 'Commit '. $commit['commit_id'] .' at '. $base_url,
+        'value' => 'Version control operation '. $commit['vc_op_id'] .' at '. $base_url,
         'attributes' => array('isPermaLink' => 'false'),
       ),
     );
@@ -610,23 +610,23 @@ function theme_commitlog_commit_location($commit, $directory_item = NULL, $forma
 }
 
 function theme_commitlog_commit_identifier($commit, $format = 'html') {
-  $id = empty($commit['revision']) ? $commit['commit_id'] : $commit['revision'];
+  $id = empty($commit['revision']) ? $commit['vc_op_id'] : $commit['revision'];
 
   if ($format == 'html') {
     $commit_url = versioncontrol_get_url_commit_view($commit);
     $id = empty($commit_url)
-          ? theme('commitlog_commit_id', $commit['commit_id'], $id, $format)
+          ? theme('commitlog_vc_op_id', $commit['vc_op_id'], $id, $format)
           : '<a href="'. $commit_url .'">'. $id .'</a>';
   }
   return $id;
 }
 
-function theme_commitlog_commit_id($commit_id, $text = NULL, $format = 'html') {
+function theme_commitlog_vc_op_id($vc_op_id, $text = NULL, $format = 'html') {
   if (!isset($text)) {
-    $text = $commit_id;
+    $text = $vc_op_id;
   }
   if ($format == 'html') {
-    return l($text, 'commitlog', NULL, 'commits='. $commit_id);
+    return l($text, 'commitlog', NULL, 'ids='. $vc_op_id);
   }
   return $text;
 }
@@ -936,21 +936,17 @@ function _commitlog_get_branch_tag_constraints() {
 
   // Transform query string into query string. We use $_REQUEST because we 
   // need to support both GET and POST requests.
+  if (isset($_REQUEST['ids'])) {
+    $constraints['vc_op_ids'] = explode(',', $_REQUEST['ids']);
+    $attributes['ids'] = $_REQUEST['ids'];
+  }
   if (isset($_REQUEST['branches'])) {
     $constraints['branch_names'] = explode(',', $_REQUEST['branches']);
     $attributes['branches'] = $_REQUEST['branches'];
   }
-  if (isset($_REQUEST['branch_op_ids'])) {
-    $constraints['branch_op_ids'] = explode(',', $_REQUEST['branch_op_ids']);
-    $attributes['branch_op_ids'] = $_REQUEST['branch_op_ids'];
-  }
   if (isset($_REQUEST['tags'])) {
     $constraints['tag_names'] = explode(',', $_REQUEST['tags']);
     $attributes['tags'] = $_REQUEST['tags'];
-  }
-  if (isset($_REQUEST['tag_op_ids'])) {
-    $constraints['tag_op_ids'] = explode(',', $_REQUEST['tag_op_ids']);
-    $attributes['tag_op_ids'] = $_REQUEST['tag_op_ids'];
   }
   if (isset($_REQUEST['usernames'])) {
     $constraints['usernames'] = explode(',', $_REQUEST['usernames']);

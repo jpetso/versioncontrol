@@ -239,7 +239,7 @@ function _commit_restrictions_load($repo_id) {
  *   A commit array of the commit that is about to happen. As it's not
  *   committed yet, it's not yet in the database as well, which means that
  *   any commit info retrieval functions won't work on this commit array.
- *   It also means there's no 'commit_id', 'revision' and 'date' elements like
+ *   It also means there's no 'vc_op_id', 'revision' and 'date' elements like
  *   in regular commit arrays. The 'message' element might or might not be set.
  * @param $commit_actions
  *   The commit actions of the above commit that is about to happen.

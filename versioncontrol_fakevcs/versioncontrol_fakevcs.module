@@ -234,9 +234,13 @@ versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_constraints = 
 function versioncontrol_fakevcs_get_commit_actions($commit) {
   // Assuming $commit is a single commit array that looks like this:
   $commit = array(
-    // The commit id, a simple running number. Doesn't have any specific
+    // The operation id, a simple running number. Doesn't have any specific
     // meaning, but is necessary for indexing and joining tables.
-    'commit_id' => 2345,
+    'vc_op_id' => 2345,
+    // Commits, tag operations and branch operations share the same basic
+    // structure and can occur side by side in operation arrays. For commits,
+    // 'type' is always VERSIONCONTROL_OPERATION_COMMIT.
+    'type' => VERSIONCONTROL_OPERATION_COMMIT,
     // The repository that was affected by this commit.
     'repository' => $affected_repository,
     // The time when the commit was executed, in Unix timestamp format.
@@ -424,31 +428,21 @@ function versioncontrol_fakevcs_get_commit_actions($commit) {
 function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions = NULL) {
   // Assuming $commit is a single commit array that looks like this:
   $commit = array(
-    // The commit id, a simple running number. Doesn't have any specific
-    // meaning, but is necessary for indexing and joining tables.
-    'commit_id' => 2345,
-    // The repository that was affected by this commit.
+    'vc_op_id' => 2345,
+    'type' => VERSIONCONTROL_OPERATION_COMMIT,
     'repository' => $affected_repository,
-    // The time when the commit was executed, in Unix timestamp format.
     'date' => time(),
-    // User id of the committer's Drupal user account.
-    // 0 if no corresponding account exists.
     'uid' => $user->uid,
-    // The committer's username known to the repository itself. In most cases
-    // this will probably be the name of the committer's Unix user account.
     'username' => 'jpetso',
-    // The deepest-level directory in the repository that is common to
-    // all the changed items in this commit.
     'directory' => '/',
-    // The commit message, which is expected to span one or more lines.
     'message' => 'All kinds of demonstrative changes.',
-    // The revision identifier of the commit, in the VCS's proprietary format -
-    // running number, SHA-1 hash, or whatever. If there is no single revision
-    // identifier for the whole commit (which should only be the case for CVS)
-    // then the value for this key is set to NULL.
     'revision' => '404', // for this commit, let's assume this is an SVN repository
   );
 
+  // Retrieve the commit actions array if the caller didn't provide it.
+  if ($commit_actions == NULL) {
+    $commit_actions = versioncontrol_fakevcs_get_commit_actions($commit);
+  }
   return array(
     'lines_added' => 30, // 15 + 5 + 7 + 3
     'lines_removed' => 20, // 3 + 17
@@ -493,12 +487,12 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
 /**
  * Implementation of [versioncontrol_backend]_get_directory_item():
  * Retrieve the item of the deepest-level directory in the repository that is
- * common to all the changed/branched/tagged items in a commit, branch or
- * tag operation. In other words, this function gets you the item
- * for $operation['directory'].
+ * common to all the changed/branched/tagged items in a commit,
+ * branch operation or tag operation. In other words, this function
+ * gets you the item for $operation['directory'].
  *
  * @param $operation
- *   The commit, branch or tag operation whose deepest-level
+ *   The commit, branch operation or tag operation whose deepest-level
  *   changed/branched/tagged directory should be retrieved.
  *
  * @return
@@ -519,7 +513,8 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
 function versioncontrol_cvs_get_directory_item($operation) {
   // Assuming $operation is a single commit array that looks like this:
   $operation = array(
-    'commit_id' => 2345,
+    'vc_op_id' => 2345,
+    'type' => VERSIONCONTROL_OPERATION_COMMIT,
     'repository' => $drupal_cvs,
     'date' => time(),
     'uid' => $user->uid,
@@ -583,7 +578,8 @@ function versioncontrol_fakevcs_get_commit_branches($commit) {
 function versioncontrol_fakevcs_get_branched_items($branch) {
   // How CVS could do it, assuming $branch looks like this:
   $branch = array(
-    'branch_op_id' => 17,
+    'vc_op_id' => 17,
+    'type' => VERSIONCONTROL_OPERATION_BRANCH,
     'branch_name' => 'DRUPAL-5--1',
     'action' => VERSIONCONTROL_ACTION_ADDED, // the branch was created
     'date' => time(),
@@ -613,7 +609,8 @@ function versioncontrol_fakevcs_get_branched_items($branch) {
 
   // How Subversion could do it, assuming $branch looks like this:
   $branch = array(
-    'branch_op_id' => 17,
+    'vc_op_id' => 17,
+    'type' => VERSIONCONTROL_OPERATION_BRANCH,
     'branch_name' => '5.x-1.x',
     'action' => VERSIONCONTROL_ACTION_ADDED, // the branch was created
     'date' => time(),
@@ -685,7 +682,8 @@ function versioncontrol_fakevcs_get_branched_items($branch) {
 function versioncontrol_fakevcs_get_tagged_items($tag) {
   // How CVS could do it, assuming $tag looks like this:
   $tag = array(
-    'tag_op_id' => 11,
+    'vc_op_id' => 11,
+    'type' => VERSIONCONTROL_OPERATION_TAG,
     'tag_name' => 'DRUPAL-5--1-0',
     'action' => VERSIONCONTROL_ACTION_ADDED, // the tag was created
     'date' => time(),
@@ -713,7 +711,8 @@ function versioncontrol_fakevcs_get_tagged_items($tag) {
 
   // How Subversion could do it, assuming $tag looks like this:
   $tag = array(
-    'tag_op_id' => 11,
+    'vc_op_id' => 11,
+    'type' => VERSIONCONTROL_OPERATION_TAG,
     'tag_name' => '5.x-1.0',
     'action' => VERSIONCONTROL_ACTION_ADDED, // the tag was created
     'date' => time(),
@@ -795,9 +794,12 @@ function versioncontrol_fakevcs_get_current_item_branch($repository, $item) {
  *   is known or applicable.
  */
 function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
-  // How CVS would probably do it.
+  // How CVS would probably do it. (The information itself is either fetched
+  // from the database, or has been stored somewhere in the item, or is
+  // calculated on the fly.)
   $tag = array(
-    'tag_op_id' => 11,
+    'vc_op_id' => 11,
+    'type' => VERSIONCONTROL_OPERATION_TAG,
     'tag_name' => 'DRUPAL-5--1-1',
     'action' => VERSIONCONTROL_ACTION_ADDED, // the tag was created
     'date' => time(),
@@ -807,9 +809,12 @@ function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
     'repository' => $affected_repository,
     'cvs_specific' => array(),
   );
+  return $tag;
+
   // How Subversion could also do it.
   $tag = array(
-    'tag_op_id' => 11,
+    'vc_op_id' => 11,
+    'type' => VERSIONCONTROL_OPERATION_TAG,
     'tag_name' => '5.x-1.0',
     'action' => VERSIONCONTROL_ACTION_ADDED, // the tag was created
     'date' => time(),
@@ -819,6 +824,7 @@ function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
     'repository' => $affected_repository,
     'svn_specific' => array(),
   );
+  return $tag;
 }
 
 /**
@@ -1371,21 +1377,20 @@ function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
         else {
           $type = $action['source items'][0]['type'];
           $source_revision = $action['source items'][0]['revision'];
-          // of course, you need to store 'fakevcs_specific' items beforehand.
         }
 
         db_query(
           "INSERT INTO {versioncontrol_fakevcs_item_revisions}
-          (commit_id, type, path, revision, action, source_revision)
+          (vc_op_id, type, path, revision, action, source_revision)
           VALUES (%d, %d, '%s', '%s', %d, %d)",
-          $commit['commit_id'], $type, $path, $revision, $action['action'],
+          $commit['vc_op_id'], $type, $path, $revision, $action['action'],
           $source_revision
         );
         break;
 
     case 'delete':
       db_query('DELETE FROM {versioncontrol_fakevcs_item_revisions}
-                WHERE commit_id = %d', $commit['commit_id']);
+                WHERE vc_op_id = %d', $commit['vc_op_id']);
       break;
   }
 }

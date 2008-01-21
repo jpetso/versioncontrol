@@ -9,6 +9,11 @@
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
+// VCS operations, a.k.a. stuff that is recorded for display purposes.
+define('VERSIONCONTROL_OPERATION_COMMIT', 1);
+define('VERSIONCONTROL_OPERATION_BRANCH', 2);
+define('VERSIONCONTROL_OPERATION_TAG',    3);
+
 // Optional capabilities that backend modules can provide.
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          0);
 define('VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS',     1);
@@ -29,7 +34,7 @@ define('VERSIONCONTROL_FILE_BINARY',          1);
 // or for branches and tags.
 define('VERSIONCONTROL_ACTION_ADDED',         0);
 define('VERSIONCONTROL_ACTION_MODIFIED',      1);
-define('VERSIONCONTROL_ACTION_MOVED',         2);
+define('VERSIONCONTROL_ACTION_MOVED',         2); // == renamed
 define('VERSIONCONTROL_ACTION_COPIED',        3);
 define('VERSIONCONTROL_ACTION_MERGED',        4);
 define('VERSIONCONTROL_ACTION_DELETED',       5);
@@ -405,15 +410,15 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
 
 /**
  * Call a function from the desired VCS backend, return its result value,
- * and make sure that the objects parameter (which is a reference)
+ * and make sure that the @p $operations parameter (which is a reference)
  * can be altered by the backend.
  *
  * @param $vcs
  *   The unique string identifier of the version control system.
  * @param $function
  *   The function name without module prefix.
- * @param $objects
- *   A modifyable object array that will be passed to the backend function.
+ * @param $operations
+ *   A modifiable operation array that will be passed to the backend function.
  * @param $constraints
  *   An array of VCS specific filter constraints.
  *
@@ -423,9 +428,9 @@ function _versioncontrol_call_backend($vcs, $function, $args) {
  *   are supposed to be checked with versioncontrol_backend_implements()
  *   before those functions are called.
  */
-function _versioncontrol_call_backend_alter($vcs, $function, &$objects, $constraints = array()) {
+function _versioncontrol_call_backend_alter($vcs, $function, &$operations, $constraints = array()) {
   $function = 'versioncontrol_'. $vcs .'_'. $function;
-  return $function($objects, $constraints);
+  return $function($operations, $constraints);
 }
 
 /**
@@ -730,16 +735,8 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *          ).
  *        If given, only commits that affected this item (or its children,
  *        in case the item is a directory) will be returned.
- *   - 'commit_ids': An array of commit ids. If given, only commits matching
+ *   - 'vc_op_ids': An array of operation ids. If given, only commits matching
  *        those ids will be returned.
- *   - 'commit_id_lower': A commit id. If given, the result set will not
- *        contain commits earlier than this lower bound. Mind that commit ids
- *        only correspond to chronological order within the bounds
- *        of each repository.
- *   - 'commit_id_upper': A commit id. If given, the result set will not
- *        contain commits later than this upper bound. Mind that commit ids
- *        only correspond to chronological order within the bounds
- *        of each repository.
  *   - 'date_lower': A Unix timestamp. If given, the result set will not
  *        contain commits that were committed earlier than this lower bound.
  *   - 'date_upper': A Unix timestamp. If given, the result set will not
@@ -771,8 +768,11 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *   An array of commits, reversely sorted by the time of the commit.
  *   Each element contains a structured array with the following keys:
  *
- *   - 'commit_id': The Drupal-specific commit identifier (a simple integer)
- *        which is unique among all commits in all repositories.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_COMMIT for commits.
  *   - 'repository': The repository where this commit occurred.
  *        This is a structured array, like a single element of
  *        what is returned by versioncontrol_get_repositories().
@@ -805,17 +805,19 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
-  $result = db_query('SELECT c.commit_id, c.date, c.uid, c.username,
-                             c.directory, c.message, c.revision,
+  $result = db_query('SELECT op.vc_op_id, op.date, op.uid, op.username,
+                             op.directory, c.message, c.revision,
                              r.repo_id, r.vcs
                       FROM {versioncontrol_commits} c
+                       INNER JOIN {versioncontrol_operations} op
+                        ON c.vc_op_id = op.vc_op_id
                        INNER JOIN {versioncontrol_repositories} r
-                        ON c.repo_id = r.repo_id
+                        ON op.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY c.date DESC', $params);
+                      ORDER BY op.date DESC', $params);
 
   $commits = array();
-  $commit_ids_by_backend = array();
+  $op_ids_by_backend = array();
   $repo_ids = array();
   $selected_backends = array();
 
@@ -824,17 +826,18 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
       $selected_backends[$row->vcs] = $backends[$row->vcs];
     }
 
-    if (!isset($commit_ids_by_backend[$row->vcs])) {
-      $commit_ids_by_backend[$row->vcs] = array();
+    if (!isset($op_ids_by_backend[$row->vcs])) {
+      $op_ids_by_backend[$row->vcs] = array();
     }
-    $commit_ids_by_backend[$row->vcs][] = $row->commit_id;
+    $op_ids_by_backend[$row->vcs][] = $row->vc_op_id;
 
     if (!in_array($row->repo_id, $repo_ids)) {
       $repo_ids[] = $row->repo_id;
     }
 
     $commits[] = array(
-      'commit_id'  => $row->commit_id,
+      'vc_op_id'   => $row->vc_op_id,
+      'type'       => VERSIONCONTROL_OPERATION_COMMIT,
       'repo_id'    => $row->repo_id,
       // 'repo_id' is replaced by 'repository' further down
       'date'       => $row->date,
@@ -856,16 +859,16 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
   foreach ($selected_backends as $vcs => $backend) {
     $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_COMMITS, $backend['flags']);
 
-    _versioncontrol_amend_objects($commits, $commit_ids_by_backend,
-                                  $repositories, $vcs, $constraints,
-                                  'commits', 'commit_id', $is_autoadd);
+    _versioncontrol_amend_operations($commits, $op_ids_by_backend,
+                                     $repositories, $vcs, $constraints,
+                                     'commits', $is_autoadd);
   }
 
   _versioncontrol_filter_commits($commits, $constraints);
   $result_count = count($commits);
 
   if (isset($page)) {
-    return _versioncontrol_page_objects($commits, $page, $limit);
+    return _versioncontrol_page_operations($commits, $page, $limit);
   }
   return $commits;
 }
@@ -879,7 +882,7 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
   // Filter by a set of common constraints whose code is shared with the
   // branch and tag retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, $backends, 'commit_id', 'c', 'r');
+    _versioncontrol_construct_common_constraints($constraints, $backends);
 
   // Filter by item paths.
   if (isset($constraints['paths'])) {
@@ -890,7 +893,7 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
       $or_constraints = array();
       foreach ($constraints['paths'] as $path) {
         list($path_or_constraints, $path_params) =
-          _versioncontrol_construct_path_constraint('c.directory', $path);
+          _versioncontrol_construct_path_constraint('op.directory', $path);
         $or_constraints = array_merge($or_constraints, $path_or_constraints);
         $params = array_merge($params, $path_params);
       }
@@ -907,7 +910,7 @@ function _versioncontrol_construct_commit_constraints($constraints, $backends) {
  * Assemble a list of SQL "AND" constraints that both the commit and
  * the branch/tag retrieval functions make use of.
  */
-function _versioncontrol_construct_common_constraints($constraints, $backends, $primary_key_name, $table_alias, $repository_table_alias = 'r') {
+function _versioncontrol_construct_common_constraints($constraints, $backends, $operations_table_alias = 'op', $repository_table_alias = 'r') {
   $and_constraints = array();
   $params = array();
 
@@ -919,47 +922,43 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
     $vcses = array_intersect($vcses, $constraints['vcs']);
   }
   if (empty($vcses)) {
-    $and_constraints[] = 'FALSE'; // no backends are enabled of those that have been requested
+    // No backends are enabled of those that have been requested.
+    $and_constraints = array('FALSE');
+    return array($and_constraints, $params);
   }
   else {
     foreach ($vcses as $vcs) {
       $placeholders[] = "'%s'";
       $params[] = $vcs;
     }
-    $and_constraints[] = $repository_table_alias .'.vcs IN ('. implode(',', $placeholders) .')';
+    $and_constraints[] = $repository_table_alias .'.vcs
+                         IN ('. implode(',', $placeholders) .')';
   }
 
   // Filter by commit, branch or tag ids.
-  if (isset($constraints[$primary_key_name .'s'])) {
-    if (empty($constraints[$primary_key_name .'s'])) {
-      $and_constraints[] = 'FALSE';
+  if (isset($constraints['vc_op_ids'])) {
+    if (empty($constraints['vc_op_ids'])) {
+      $and_constraints = array('FALSE');
+      return array($and_constraints, $params);
     }
     else {
       $placeholders = array();
-      foreach ($constraints[$primary_key_name .'s'] as $primary_key) {
+      foreach ($constraints['vc_op_ids'] as $op_id) {
         $placeholders[] = '%d';
-        $params[] = $primary_key;
+        $params[] = $op_id;
       }
       if (!empty($placeholders)) {
-        $and_constraints[] = $table_alias .'.'. $primary_key_name .' IN ('. implode(',', $placeholders) .')';
+        $and_constraints[] = $operations_table_alias .'.vc_op_id
+                             IN ('. implode(',', $placeholders) .')';
       }
     }
-  }
-
-  // Filter by lower and/or upper commit id bounds.
-  if (isset($constraints[$primary_key_name .'_lower'])) {
-    $and_constraints[] = '('. $table_alias .'.'. $primary_key_name .' >= %d)';
-    $params[] = $constraints[$primary_key_name .'_lower'];
-  }
-  if (isset($constraints[$primary_key_name .'_upper'])) {
-    $and_constraints[] = '('. $table_alias .'.'. $primary_key_name .' <= %d)';
-    $params[] = $constraints[$primary_key_name .'_upper'];
   }
 
   // Filter by repository ids.
   if (isset($constraints['repo_ids'])) {
     if (empty($constraints['repo_ids'])) {
-      $and_constraints[] = 'FALSE';
+      $and_constraints = array('FALSE');
+      return array($and_constraints, $params);
     }
     else {
       $placeholders = array();
@@ -968,25 +967,27 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
         $params[] = $repo_id;
       }
       if (!empty($placeholders)) {
-        $and_constraints[] = $repository_table_alias .'.repo_id IN ('. implode(',', $placeholders) .')';
+        $and_constraints[] = $repository_table_alias .'.repo_id
+                             IN ('. implode(',', $placeholders) .')';
       }
     }
   }
 
   // Filter by lower and/or upper date bounds.
   if (isset($constraints['date_lower'])) {
-    $and_constraints[] = '('. $table_alias .'.date >= %d)';
+    $and_constraints[] = '('. $operations_table_alias .'.date >= %d)';
     $params[] = $constraints['date_lower'];
   }
   if (isset($constraints['date_upper'])) {
-    $and_constraints[] = '('. $table_alias .'.date <= %d)';
+    $and_constraints[] = '('. $operations_table_alias .'.date <= %d)';
     $params[] = $constraints['date_upper'];
   }
 
   // Filter by Drupal user ids.
   if (isset($constraints['uids'])) {
     if (empty($constraints['uids'])) {
-      $and_constraints[] = 'FALSE';
+      $and_constraints = array('FALSE');
+      return array($and_constraints, $params);
     }
     else {
       $placeholders = array();
@@ -995,7 +996,8 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
         $params[] = $uid;
       }
       if (!empty($placeholders)) {
-        $and_constraints[] = $table_alias .'.uid IN ('. implode(',', $placeholders) .')';
+        $and_constraints[] = $operations_table_alias .'.uid
+                             IN ('. implode(',', $placeholders) .')';
       }
     }
   }
@@ -1003,7 +1005,8 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
   // Filter by VCS specific user names.
   if (isset($constraints['usernames'])) {
     if (empty($constraints['usernames'])) {
-      $and_constraints[] = 'FALSE';
+      $and_constraints = array('FALSE');
+      return array($and_constraints, $params);
     }
     else {
       $placeholders = array();
@@ -1012,7 +1015,8 @@ function _versioncontrol_construct_common_constraints($constraints, $backends, $
         $params[] = $username;
       }
       if (!empty($placeholders)) {
-        $and_constraints[] = $table_alias .'.username IN ('. implode(',', $placeholders) .')';
+        $and_constraints[] = $operations_table_alias .'.username
+                             IN ('. implode(',', $placeholders) .')';
       }
     }
   }
@@ -1051,32 +1055,31 @@ function _versioncontrol_construct_path_constraint($column, $path) {
 
 /**
  * Code that is shared between the commit and branch/tag retrieval functions:
- * Fetch VCS specific object data additions, either by ourselves
+ * Fetch VCS specific operation data additions, either by ourselves
  * (if $is_autoadd == TRUE) and/or by calling [vcs_backend]_alter_$type().
  */
-function _versioncontrol_amend_objects(&$objects, $primary_keys_by_backend,
-                                       $repositories, $vcs, $constraints,
-                                       $type, $primary_key_name, $is_autoadd) {
-  foreach ($objects as $key => $object) {
-    $objects[$key]['repository'] = $repositories[$object['repo_id']];
-    unset($objects[$key]['repo_id']);
+function _versioncontrol_amend_operations(&$operations, $op_ids_by_backend,
+                                          $repositories, $vcs, $constraints,
+                                          $type, $is_autoadd) {
+  foreach ($operations as $key => $operation) {
+    $operations[$key]['repository'] = $repositories[$operation['repo_id']];
+    unset($operations[$key]['repo_id']);
   }
 
   if ($is_autoadd) {
     $additions = _versioncontrol_db_get_additions(
       // e.g. 'versioncontrol_fakevcs_commits' or 'versioncontrol_cvs_tag_operations'
-      'versioncontrol_'. $vcs .'_'. $type,
-      $primary_key_name, $primary_keys_by_backend[$vcs]
+      'versioncontrol_'. $vcs .'_'. $type, 'vc_op_id', $op_ids_by_backend[$vcs]
     );
 
-    $additions_by_primary_key = array();
-    foreach ($additions as $primary_key => $additions) {
-      $additions_by_primary_key[$primary_key] = $additions;
+    $additions_by_op_id = array();
+    foreach ($additions as $op_id => $additions) {
+      $additions_by_op_id[$op_id] = $additions;
     }
 
     // Apply the additions to their respective commit/tag/branch operations.
-    foreach ($objects as $key => $object) {
-      $objects[$key][$vcs .'_specific'] = $additions_by_primary_key[$object[$primary_key_name]];
+    foreach ($operations as $key => $operation) {
+      $operations[$key][$vcs .'_specific'] = $additions_by_op_id[$operation['vc_op_id']];
     }
   }
 
@@ -1089,7 +1092,7 @@ function _versioncontrol_amend_objects(&$objects, $primary_keys_by_backend,
   // or [xxx]_alter_tag_operations().
   if (versioncontrol_backend_implements($vcs, 'alter_'. $type)) {
     _versioncontrol_call_backend_alter(
-      $vcs, 'alter_'. $type, $objects, $vcs_specific_constraints
+      $vcs, 'alter_'. $type, $operations, $vcs_specific_constraints
     );
   }
 }
@@ -1167,30 +1170,34 @@ function _versioncontrol_filter_commits(&$commits, $constraints) {
 }
 
 /**
- * Return a subset of the given objects according to the $page and $limit values.
+ * Return a subset of the given operations according to the
+ * $page and $limit values.
  */
-function _versioncontrol_page_objects($objects, $page, $limit) {
+function _versioncontrol_page_operations($operations, $page, $limit) {
   $i = 0;
-  $paged_objects = array();
-  foreach ($objects as $object) {
+  $paged_operations = array();
+  foreach ($operations as $operation) {
     if ($i >= ($page * $limit) && $i < (($page+1) * $limit)) {
-      $paged_objects[] = $object;
+      $paged_operations[] = $operation;
     }
     ++$i;
   }
-  return $paged_objects;
+  return $paged_operations;
 }
 
 
 /**
  * Convenience function for retrieving one single branch operation
- * by branch op id.
+ * by operation id.
  *
  * @return
  *   A single branch operation array that consists of the following elements:
  *
- *   - 'branch_op_id': The unique identifier (a simple integer)
- *        of this branch operation.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories. The same one that was given as parameter.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_BRANCH for branches.
  *   - 'branch_name': The name of the target branch
  *        (a string like 'DRUPAL-6--1').
  *   - 'action': Specifies what happened to the branch. This is
@@ -1212,28 +1219,31 @@ function _versioncontrol_page_objects($objects, $page, $limit) {
  *        backend module (versioncontrol_[xxx]). The 'branch_id' element will
  *        already be included in this array for the convenience of VCS backends.
  *
- *   If no branch operation corresponds to the given branch op id,
+ *   If no branch operation corresponds to the given operation id,
  *   NULL is returned.
  */
-function versioncontrol_get_branch_operation($branch_op_id) {
-  $branches = versioncontrol_get_branch_operations(
-    array('branch_op_ids' => array($branch_op_id))
+function versioncontrol_get_branch_operation($vc_op_id) {
+  $branch_ops = versioncontrol_get_branch_operations(
+    array('vc_op_ids' => array($vc_op_id))
   );
 
-  foreach ($branches as $branch_op_id => $branch) {
-    return $branch;
+  foreach ($branch_ops as $vc_op_id => $branch_op) {
+    return $branch_op;
   }
   return NULL; // in case of empty($branch_ops)
 }
 
 /**
- * Convenience function for retrieving one single tag operation by tag op id.
+ * Convenience function for retrieving one single tag operation by operation id.
  *
  * @return
  *   A single tag operation array that consists of the following elements:
  *
- *   - 'tag_op_id': The unique identifier (a simple integer)
- *        of this tag operation.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories. The same one that was given as parameter.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_TAG for tags.
  *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
  *   - 'action': Specifies what happened to the tag. This is
  *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
@@ -1255,15 +1265,16 @@ function versioncontrol_get_branch_operation($branch_op_id) {
  *        How this array looks like is defined by the corresponding
  *        backend module (versioncontrol_[xxx]).
  *
- *   If no tag operation corresponds to the given tag op id, NULL is returned.
+ *   If no tag operation corresponds to the given operation id,
+ *   NULL is returned.
  */
-function versioncontrol_get_tag_operation($tag_op_id) {
-  $tags = versioncontrol_get_tag_operations(
-    array('tag_op_ids' => array($tag_op_id))
+function versioncontrol_get_tag_operation($vc_op_id) {
+  $tag_ops = versioncontrol_get_tag_operations(
+    array('vc_op_ids' => array($vc_op_id))
   );
 
-  foreach ($tags as $tag_op_id => $tag) {
-    return $tag;
+  foreach ($tag_ops as $vc_op_id => $tag_op) {
+    return $tag_op;
   }
   return NULL; // in case of empty($tag_ops)
 }
@@ -1283,16 +1294,8 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *        If given, only branches for these backends will be returned.
  *   - 'branch_names': An array of branch names. If given, only
  *        branch operations with these names will be returned.
- *   - 'branch_op_ids': An array of branch operation ids. If given, only
+ *   - 'vc_op_ids': An array of operation ids. If given, only
  *        branch operations matching those ids will be returned.
- *   - 'branch_op_id_lower': A branch operation id. If given, the result set
- *        will not contain branch operations earlier than this lower bound.
- *        Mind that branch operation ids only correspond to chronological order
- *        within the bounds of each repository.
- *   - 'branch_op_id_upper': A branch operation id. If given, the result set
- *        will not contain branch operations later than this upper bound.
- *        Mind that branch operation ids only correspond to chronological order
- *        within the bounds of each repository.
  *   - 'date_lower': A Unix timestamp. If given, the result set will not
  *        contain branch operations earlier than this lower bound.
  *   - 'date_upper': A Unix timestamp. If given, the result set will not
@@ -1325,8 +1328,11 @@ function versioncontrol_get_tag_operation($tag_op_id) {
  *   An array of branch operations, reversely sorted by the time of the branching.
  *   Each element contains a structured array with the following keys:
  *
- *   - 'branch_op_id': The unique identifier (a simple integer)
- *        of this branch operation.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_BRANCH for branches.
  *   - 'branch_name': The name of the target branch
  *        (a string like 'DRUPAL-6--1').
  *   - 'action': Specifies what happened to the branch. This is
@@ -1357,7 +1363,7 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
   // Filter by a set of common constraints whose code is shared with the
   // commit and tag retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, $backends, 'branch_op_id', 'bo', 'r');
+    _versioncontrol_construct_common_constraints($constraints, $backends);
 
   // Filter by branch names.
   if (isset($constraints['branch_names'])) {
@@ -1367,7 +1373,7 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
     else {
       $or_constraints = array();
       foreach ($constraints['branch_names'] as $branch_name) {
-        $or_constraints[] = "b.name = '%s'";
+        $or_constraints[] = "b.branch_name = '%s'";
         $params[] = $branch_name;
       }
       if (!empty($or_constraints)) {
@@ -1378,19 +1384,21 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
-  $result = db_query('SELECT bo.branch_op_id, bo.branch_id, b.branch_name,
-                             bo.action, bo.date, bo.uid, bo.username,
-                             bo.directory, r.repo_id, r.vcs
+  $result = db_query('SELECT op.vc_op_id, op.date, op.uid, op.username,
+                             op.directory, b.branch_name, b.branch_id,
+                             bo.action, r.repo_id, r.vcs
                       FROM {versioncontrol_branch_operations} bo
+                       INNER JOIN {versioncontrol_operations} op
+                        ON bo.vc_op_id = op.vc_op_id
                        INNER JOIN {versioncontrol_branches} b
                         ON bo.branch_id = b.branch_id
                        INNER JOIN {versioncontrol_repositories} r
-                        ON b.repo_id = r.repo_id
+                        ON op.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY bo.date DESC', $params);
+                      ORDER BY op.date DESC', $params);
 
   $branches = array();
-  $branch_op_ids_by_backend = array();
+  $op_ids_by_backend = array();
   $repo_ids = array();
   $selected_backends = array();
 
@@ -1399,17 +1407,18 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
       $selected_backends[$row->vcs] = $backends[$row->vcs];
     }
 
-    if (!isset($branch_op_ids_by_backend[$row->vcs])) {
-      $branch_op_ids_by_backend[$row->vcs] = array();
+    if (!isset($op_ids_by_backend[$row->vcs])) {
+      $op_ids_by_backend[$row->vcs] = array();
     }
-    $branch_op_ids_by_backend[$row->vcs][] = $row->branch_op_id;
+    $op_ids_by_backend[$row->vcs][] = $row->vc_op_id;
 
     if (!in_array($row->repo_id, $repo_ids)) {
       $repo_ids[] = $row->repo_id;
     }
 
     $branches[] = array(
-      'branch_op_id' => $row->branch_op_id,
+      'vc_op_id'     => $row->vc_op_id,
+      'type'         => VERSIONCONTROL_OPERATION_BRANCH,
       'repo_id'      => $row->repo_id,
       // 'repo_id' is replaced by 'repository' further down
       'branch_name'  => $row->branch_name,
@@ -1434,14 +1443,14 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
     $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS,
                            $backend['flags']);
 
-    _versioncontrol_amend_objects($branches, $branch_op_ids_by_backend,
-                                  $repositories, $vcs, $constraints,
-                                  'branch_operations', 'branch_op_id', $is_autoadd);
+    _versioncontrol_amend_operations($branches, $op_ids_by_backend,
+                                     $repositories, $vcs, $constraints,
+                                     'branch_operations', $is_autoadd);
   }
   $result_count = count($branches);
 
   if (isset($page)) {
-    return _versioncontrol_page_objects($branches, $page, $limit);
+    return _versioncontrol_page_operations($branches, $page, $limit);
   }
   return $branches;
 }
@@ -1460,16 +1469,8 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
  *        If given, only tags for these backends will be returned.
  *   - 'tag_names': An array of tag names. If given, only tag operations
  *        with these names will be returned.
- *   - 'tag_op_ids': An array of tag operation ids. If given,
+ *   - 'vc_op_ids': An array of operation ids. If given,
  *        only tag operations matching those ids will be returned.
- *   - 'tag_op_id_lower': A tag operation id. If given, the result set will not
- *        contain tag operations earlier than this lower bound.
- *        Mind that tag operation ids only correspond to chronological order
- *        within the bounds of each repository.
- *   - 'tag_op_id_upper': A tag operation id. If given, the result set will not
- *        contain tag operations later than this upper bound.
- *        Mind that tag operation ids only correspond to chronological order
- *        within the bounds of each repository.
  *   - 'date_lower': A Unix timestamp. If given, the result set will not
  *        contain tag operations earlier than this lower bound.
  *   - 'date_upper': A Unix timestamp. If given, the result set will not
@@ -1501,8 +1502,11 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
  *   An array of tag operations, reversely sorted by the time of the tagging.
  *   Each element contains a structured array with the following keys:
  *
- *   - 'tag_op_id': The unique identifier (a simple integer)
- *        of this tag operation.
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation, which is
+ *        VERSIONCONTROL_OPERATION_TAG for tags.
  *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
  *   - 'action': Specifies what happened to the tag. This is
  *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
@@ -1533,7 +1537,7 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
   // Filter by a set of common constraints whose code is shared with the
   // commit and branch retrieval functions.
   list($and_constraints, $params) =
-    _versioncontrol_construct_common_constraints($constraints, $backends, 'tag_op_id', 't', 'r');
+    _versioncontrol_construct_common_constraints($constraints, $backends);
 
   // Filter by tag names.
   if (isset($constraints['tag_names'])) {
@@ -1554,17 +1558,19 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
-  $result = db_query('SELECT t.tag_op_id, t.tag_name, t.action, t.date,
-                             t.uid, t.username, t.directory, t.message,
+  $result = db_query('SELECT op.vc_op_id, op.date, op.uid, op.username,
+                             op.directory, t.tag_name, t.action, t.message,
                              r.repo_id, r.vcs
                       FROM {versioncontrol_tag_operations} t
+                       INNER JOIN {versioncontrol_operations} op
+                        ON t.vc_op_id = op.vc_op_id
                        INNER JOIN {versioncontrol_repositories} r
-                        ON t.repo_id = r.repo_id
+                        ON op.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY t.date DESC', $params);
+                      ORDER BY op.date DESC', $params);
 
   $tags = array();
-  $tag_op_ids_by_backend = array();
+  $op_ids_by_backend = array();
   $repo_ids = array();
   $selected_backends = array();
 
@@ -1573,17 +1579,18 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
       $selected_backends[$row->vcs] = $backends[$row->vcs];
     }
 
-    if (!isset($tag_op_ids_by_backend[$row->vcs])) {
-      $tag_op_ids_by_backend[$row->vcs] = array();
+    if (!isset($op_ids_by_backend[$row->vcs])) {
+      $op_ids_by_backend[$row->vcs] = array();
     }
-    $tag_op_ids_by_backend[$row->vcs][] = $row->tag_op_id;
+    $op_ids_by_backend[$row->vcs][] = $row->vc_op_id;
 
     if (!in_array($row->repo_id, $repo_ids)) {
       $repo_ids[] = $row->repo_id;
     }
 
     $tags[] = array(
-      'tag_op_id'  => $row->tag_op_id,
+      'vc_op_id'   => $row->vc_op_id,
+      'type'       => VERSIONCONTROL_OPERATION_TAG,
       'repo_id'    => $row->repo_id,
       // 'repo_id' is replaced by 'repository' further down
       'tag_name'   => $row->tag_name,
@@ -1607,14 +1614,14 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
     $is_autoadd = in_array(VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS,
                            $backend['flags']);
 
-    _versioncontrol_amend_objects($tags, $tag_op_ids_by_backend,
-                                  $repositories, $vcs, $constraints,
-                                  'tag_operations', 'tag_op_id', $is_autoadd);
+    _versioncontrol_amend_operations($tags, $op_ids_by_backend,
+                                     $repositories, $vcs, $constraints,
+                                     'tag_operations', $is_autoadd);
   }
   $result_count = count($tags);
 
   if (isset($page)) {
-    return _versioncontrol_page_objects($tags, $page, $limit);
+    return _versioncontrol_page_operations($tags, $page, $limit);
   }
   return $tags;
 }
@@ -2640,11 +2647,11 @@ function theme_versioncontrol_user_statistics($constraints, $order_by = 'last_co
     );
 
     if (module_exists('commitlog')) {
-      $last_commit = theme('commitlog_commit_id',
-        $user_stats['last_commit']['commit_id'], $last_commit
+      $last_commit = theme('commitlog_vc_op_id',
+        $user_stats['last_commit']['vc_op_id'], $last_commit
       );
-      $first_commit = theme('commitlog_commit_id',
-        $user_stats['first_commit']['commit_id'], $first_commit
+      $first_commit = theme('commitlog_vc_op_id',
+        $user_stats['first_commit']['vc_op_id'], $first_commit
       );
       $number_commits = l($number_commits, 'user/'. $uid .'/track/code');
     }
@@ -2800,12 +2807,15 @@ function versioncontrol_block($op = 'list', $delta = 0) {
       $interval = 7 * 24 * 60 * 60;
       $length = 15;
 
-      $result = db_query_range('SELECT COUNT(c.commit_id) AS count, c.uid, u.name
-                                FROM {versioncontrol_commits} c
-                                 INNER JOIN {users} u ON c.uid = u.uid
-                                  AND c.uid != 0 AND c.date > %d
-                                GROUP BY c.uid ORDER BY count DESC',
-                                time() - $interval, 0, $length);
+      $result = db_query_range(
+        'SELECT COUNT(op.vc_op_id) AS count, op.uid, u.name
+         FROM {versioncontrol_operations} op
+         INNER JOIN {users} u ON op.uid = u.uid AND op.uid != 0 AND op.date > %d
+         WHERE op.type = %d
+         GROUP BY op.uid ORDER BY count DESC',
+         array(time() - $interval, VERSIONCONTROL_OPERATION_COMMIT), // placeholders
+         0, $length // query range arguments: 'from' and 'count'
+      );
 
       $usernames = array();
       while ($user = db_fetch_object($result)) {
