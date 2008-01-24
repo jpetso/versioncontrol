@@ -36,7 +36,7 @@ function versioncontrol_install() {
         vc_op_id int unsigned NOT NULL default 0,
         message text,
         revision varchar(255) NOT NULL default '',
-        PRIMARY KEY (vc_op_id),
+        PRIMARY KEY (vc_op_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_branches} (
