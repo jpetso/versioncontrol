@@ -38,7 +38,7 @@ include_once(drupal_get_path('module', 'versioncontrol_fakevcs') .'/versioncontr
  *        values. If no array additions should be automatically managed,
  *        this array will be empty.
  */
-versioncontrol_fakevcs_versioncontrol_backends() {
+function versioncontrol_fakevcs_versioncontrol_backends() {
   // Our example VCS is called FakeVCS, and supports all possible capabilities.
 
   return array(
@@ -112,7 +112,7 @@ versioncontrol_fakevcs_versioncontrol_backends() {
  *   the CVS ones, the array would maybe contain a 'modules' constraint
  *   for filtering by module.
  */
-versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_specific_constraints = array()) {
+function versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_specific_constraints = array()) {
   foreach ($repositories as $repo_id => $repository) {
     // Retrieve our own custom stuff.
     $additions = array(
@@ -161,7 +161,7 @@ versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_specific_cons
  *   the CVS ones, the array would maybe contain a 'modules' constraint
  *   for filtering by module.
  */
-versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_constraints = array()) {
+function versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_constraints = array()) {
   foreach ($commits as $key => $commit) {
     // Disregard commits from other backends.
     if ($commit['repository']['vcs'] != 'fakevcs') {
