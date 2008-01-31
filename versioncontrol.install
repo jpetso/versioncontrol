@@ -208,6 +208,7 @@ function versioncontrol_uninstall() {
     variable_del($variable);
   }
 
+  db_query('DROP TABLE {versioncontrol_operations}');
   db_query('DROP TABLE {versioncontrol_commits}');
   db_query('DROP TABLE {versioncontrol_branches}');
   db_query('DROP TABLE {versioncontrol_branch_operations}');
