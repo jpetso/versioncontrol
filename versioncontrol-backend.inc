@@ -1257,6 +1257,10 @@ function _versioncontrol_db_update_additions($table_name, $primary_key_name, $el
   }
   $params[] = $elements[$primary_key_name];
 
+  if (empty($set_statements)) {
+    return; // no use updating the database if no values are assigned.
+  }
+
   db_query(
     'UPDATE {'. $table_name .'}
      SET '. implode(', ', $set_statements) .'
