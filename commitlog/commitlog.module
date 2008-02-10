@@ -725,7 +725,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $format = 'htm
     if (isset($action['source items'])) {
       $olditems = array();
       foreach ($action['source items'] as $source_item) {
-        $item_path = substr($source_item['path'], strlen($directory_item['path']) + 1);
+        $item_path = substr($source_item['path'], strlen($directory_item['path']) + $offset);
         $olditems[] = theme('commitlog_item', $commit['repository'], $source_item, $item_path, $format);
       }
       $olditems_string = implode(', ', $olditems);
