@@ -780,7 +780,7 @@ function versioncontrol_fakevcs_get_current_item_branch($repository, $item) {
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_current_item_tag_operation():
+ * Implementation of [versioncontrol_backend]_get_current_item_tag():
  * Retrieve the current tag of this item.
  *
  * @param $repository
