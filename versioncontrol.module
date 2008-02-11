@@ -692,9 +692,9 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
         'versioncontrol_'. $vcs .'_repositories', 'repo_id', $repo_ids
       );
 
-      foreach ($additions as $repo_id => $additions) {
+      foreach ($additions as $repo_id => $addition) {
         if (isset($vcs_repositories[$repo_id])) {
-          $vcs_repositories[$repo_id][$vcs .'_specific'] = $additions;
+          $vcs_repositories[$repo_id][$vcs .'_specific'] = $addition;
         }
       }
     }
@@ -766,7 +766,8 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  *
  * @return
  *   An array of commits, reversely sorted by the time of the commit.
- *   Each element contains a structured array with the following keys:
+ *   Each element contains a structured array with the 'vc_op_id' identifier
+ *   as key (which doesn't influence the sorting) and the following keys:
  *
  *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
  *        which is unique among all operations (commits, branch ops, tag ops)
@@ -835,7 +836,7 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
       $repo_ids[] = $row->repo_id;
     }
 
-    $commits[] = array(
+    $commits[$row->vc_op_id] = array(
       'vc_op_id'   => $row->vc_op_id,
       'type'       => VERSIONCONTROL_OPERATION_COMMIT,
       'repo_id'    => $row->repo_id,
@@ -1057,13 +1058,14 @@ function _versioncontrol_construct_path_constraint($column, $path) {
  * Code that is shared between the commit and branch/tag retrieval functions:
  * Fetch VCS specific operation data additions, either by ourselves
  * (if $is_autoadd == TRUE) and/or by calling [vcs_backend]_alter_$type().
+ * This is called once for each VCS backend.
  */
 function _versioncontrol_amend_operations(&$operations, $op_ids_by_backend,
                                           $repositories, $vcs, $constraints,
                                           $type, $is_autoadd) {
-  foreach ($operations as $key => $operation) {
-    $operations[$key]['repository'] = $repositories[$operation['repo_id']];
-    unset($operations[$key]['repo_id']);
+  foreach ($op_ids_by_backend[$vcs] as $op_id) {
+    $operations[$op_id]['repository'] = $repositories[$operations[$op_id]['repo_id']];
+    unset($operations[$op_id]['repo_id']);
   }
 
   if ($is_autoadd) {
@@ -1071,15 +1073,9 @@ function _versioncontrol_amend_operations(&$operations, $op_ids_by_backend,
       // e.g. 'versioncontrol_fakevcs_commits' or 'versioncontrol_cvs_tag_operations'
       'versioncontrol_'. $vcs .'_'. $type, 'vc_op_id', $op_ids_by_backend[$vcs]
     );
-
-    $additions_by_op_id = array();
-    foreach ($additions as $op_id => $additions) {
-      $additions_by_op_id[$op_id] = $additions;
-    }
-
     // Apply the additions to their respective commit/tag/branch operations.
-    foreach ($operations as $key => $operation) {
-      $operations[$key][$vcs .'_specific'] = $additions_by_op_id[$operation['vc_op_id']];
+    foreach ($additions as $op_id => $addition) {
+      $operations[$op_id][$vcs .'_specific'] = $addition;
     }
   }
 
@@ -1326,7 +1322,8 @@ function versioncontrol_get_tag_operation($vc_op_id) {
  *
  * @return
  *   An array of branch operations, reversely sorted by the time of the branching.
- *   Each element contains a structured array with the following keys:
+ *   Each element contains a structured array with the 'vc_op_id' identifier
+ *   as key (which doesn't influence the sorting) and the following keys:
  *
  *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
  *        which is unique among all operations (commits, branch ops, tag ops)
@@ -1416,7 +1413,7 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
       $repo_ids[] = $row->repo_id;
     }
 
-    $branches[] = array(
+    $branches[$row->vc_op_id] = array(
       'vc_op_id'     => $row->vc_op_id,
       'type'         => VERSIONCONTROL_OPERATION_BRANCH,
       'repo_id'      => $row->repo_id,
@@ -1500,7 +1497,8 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
  *
  * @return
  *   An array of tag operations, reversely sorted by the time of the tagging.
- *   Each element contains a structured array with the following keys:
+ *   Each element contains a structured array with the 'vc_op_id' identifier
+ *   as key (which doesn't influence the sorting) and the following keys:
  *
  *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
  *        which is unique among all operations (commits, branch ops, tag ops)
@@ -1588,7 +1586,7 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
       $repo_ids[] = $row->repo_id;
     }
 
-    $tags[] = array(
+    $tags[$row->vc_op_id] = array(
       'vc_op_id'   => $row->vc_op_id,
       'type'       => VERSIONCONTROL_OPERATION_TAG,
       'repo_id'    => $row->repo_id,
