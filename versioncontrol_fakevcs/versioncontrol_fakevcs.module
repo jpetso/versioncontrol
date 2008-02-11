@@ -1018,6 +1018,10 @@ function versioncontrol_fakevcs_get_all_item_tags($repository, $item) {
  * from there or goes back there in a more recent revision. In short, you'll
  * not get "1.7" and "1.2.2.4" items side by side if it doesn't make sense.
  *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_item_history')
+ * if the particular backend actually implements it.
+ *
  * @param $repository
  *   The repository that the item is located in.
  * @param $item
@@ -1506,6 +1510,9 @@ function versioncontrol_fakevcs_repository($op, $repository) {
  * No accounts are deleted, new accounts are inserted, and existing accounts
  * are updated with imported ones.
  *
+ * This function is optional for backend modules to implement. If it's not
+ * implemented, the user will simply not be offered import functionality.
+ *
  * @param $repository
  *   The repository where the accounts will be imported.
  * @param $data
@@ -1544,6 +1551,9 @@ function versioncontrol_fakevcs_import_accounts($repository, $data) {
  * Implementation of [vcs_backend]_export_accounts():
  * Export accounts of a repository to text data that is suitable for
  * copying to the version control system's accounts file.
+ *
+ * This function is optional for backend modules to implement. If it's not
+ * implemented, the user will simply not be offered export functionality.
  *
  * @param $repository
  *   The repository whose accounts will be exported.
