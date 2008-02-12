@@ -624,7 +624,9 @@ function _versioncontrol_get_commit_action_paths($commit_actions) {
     if (isset($action['current item'])) {
       $paths[] = $action['current item']['path'];
     }
-    // Don't get items twice that were only modified have the same path.
+    // Modified items normally don't have a different path in the source item.
+    // Even if they do (may happen with Subversion), we don't want to take that
+    // into account here as the "real" source file is at the new place already.
     if ($action['action'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
       foreach ($action['source items'] as $item) {
         $paths[] = $item['path'];
