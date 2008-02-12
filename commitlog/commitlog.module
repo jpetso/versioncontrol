@@ -720,9 +720,7 @@ function theme_commitlog_commit_actions($commit, $commit_actions, $format = 'htm
       $oldrev_string = theme('commitlog_item_revision',
         $commit['repository'], $action['source items'][0], $format
       );
-    }
 
-    if (isset($action['source items'])) {
       $olditems = array();
       foreach ($action['source items'] as $source_item) {
         $item_path = substr($source_item['path'], strlen($directory_item['path']) + $offset);
