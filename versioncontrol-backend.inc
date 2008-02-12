@@ -73,7 +73,7 @@ function _versioncontrol_set_repository_error($type) {
  *   - 'message': The commit message. Passing this is optional, just leave the
  *       'message' element unset if the VCS can't retrieve the commit message
  *       at the time of the pre-commit hook.
- *   '[xxx]_specific': An array of VCS specific additional commit information.
+ *   - '[xxx]_specific': An array of VCS specific additional commit information.
  *       How this array looks like is defined by the corresponding
  *       backend module (versioncontrol_[xxx]).
  *

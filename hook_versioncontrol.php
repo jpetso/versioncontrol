@@ -71,9 +71,6 @@
  *   - 'current item': The updated state of the modified item.
  *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
  *   - 'source items': An array with the previous state(s) of the modified item.
- *        Path and branch will always be the same as in the current item
- *        except for the VERSIONCONTROL_ACTION_MOVED,
- *        VERSIONCONTROL_ACTION_COPIED and VERSIONCONTROL_ACTION_MERGED actions.
  *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
  *
  *   Item values are structured arrays and consist of elements
