@@ -272,7 +272,7 @@ function commitlog_commits_rss() {
   list($constraints, $attributes) = _commitlog_get_commit_constraints();
   $commits = commitlog_get_paged_commits($constraints);
 
-  drupal_set_header('Content-Type: text/xml; charset=utf-8');
+  drupal_set_header('Content-Type: application/rss+xml; charset=utf-8');
   print theme('commitlog_rss', $commits);
   exit();
 }
@@ -446,37 +446,47 @@ function theme_commitlog_commits_page($commits, $attributes) {
 }
 
 function theme_commitlog_rss($commits) {
-  global $languages, $base_url;
-  $language = empty($languages) ? 'en' : reset(array_keys($languages));
+  global $base_url, $locale;
   $items = '';
+  $namespaces = array('xmlns:dc="http://purl.org/dc/elements/1.1/"');
 
   foreach ($commits as $commit) {
     $commit_actions = versioncontrol_get_commit_actions($commit);
 
     $location = theme('commitlog_commit_location', $commit);
-    $username = commitlog_account_username(
+    $html_username = commitlog_account_username(
       $commit['uid'], $commit['username'], $commit['repository']
     );
+    $plain_username = commitlog_account_username(
+      $commit['uid'], $commit['username'], $commit['repository'], TRUE, 'plaintext'
+    );
 
-    $title = t('!location by @username', array('!location' => $location, '@username' => $username));
+    $title = t('!location by @username', array('!location' => $location, '@username' => $html_username));
     $link = url('commitlog', 'ids='. $commit['vc_op_id'], NULL, TRUE);
     $extra = array(
-      array('key' => 'pubDate', 'value' => gmdate('r', $commit['date'])),
+      array('key' => 'pubDate', 'value' =>  format_date($commit['date'], 'custom', 'r')),
+      array('key' => 'dc:creator', 'value' => $plain_username),
       array('key' => 'guid',
         'value' => 'Version control operation '. $commit['vc_op_id'] .' at '. $base_url,
         'attributes' => array('isPermaLink' => 'false'),
       ),
     );
-    $text = commitlog_commit($commit, $commit_actions, $username, 'html');
+    $text = commitlog_commit($commit, $commit_actions, $html_username, 'html');
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
-  $title = t('Commit messages for @site', array('@site' => variable_get('site_name', 'Drupal')));
-  $link = url('commitlog', NULL, NULL, TRUE);
+  $site_name = variable_get('site_name', 'Drupal');
 
+  $channel = array(
+    'version'     => '2.0',
+    'title'       => t('@site commits', array('@site' => $site_name)),
+    'link'        => url('commitlog', NULL, NULL, TRUE),
+    'description' => t('Commit messages for @site', array('@site' => $site_name)),
+    'language'    => $locale,
+  );
   $output = "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n";
-  $output .= "<rss version=\"0.92\" xml:base=\"". $base_url ."\">\n";
-  $output .= format_rss_channel($title, $link, $title, $items, $language);
+  $output .= "<rss version=\"". $channel['version'] ."\" xml:base=\"". $base_url ."\" ". implode(' ', $namespaces) .">\n";
+  $output .= format_rss_channel($channel['title'], $channel['link'], $channel['description'], $items, $channel['language']);
   $output .= "</rss>\n";
 
   return $output;
