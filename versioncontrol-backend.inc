@@ -619,15 +619,22 @@ function versioncontrol_delete_operation($operation) {
 function _versioncontrol_get_commit_action_paths($commit_actions) {
   $paths = array();
 
-  // gather the paths of all current and source items
+  // Gather the paths of all current and source items.
   foreach ($commit_actions as $path => $action) {
     if (isset($action['current item'])) {
       $paths[] = $action['current item']['path'];
     }
-    // Modified items normally don't have a different path in the source item.
-    // Even if they do (may happen with Subversion), we don't want to take that
-    // into account here as the "real" source file is at the new place already.
-    if ($action['action'] != VERSIONCONTROL_ACTION_MODIFIED && isset($action['source items'])) {
+    // Modified and deleted items normally have similar paths in the source
+    // and current items. Even if they don't (may happen with Subversion), we
+    // we don't want to take that into account here as the "real" source file
+    // is at the new place already.
+    if ($action['action'] == VERSIONCONTROL_ACTION_MODIFIED
+        || $action['action'] == VERSIONCONTROL_ACTION_DELETED) {
+      continue;
+    }
+    // If we haven't dropped out until now, we also want the source items
+    // to be included in the affected paths.
+    if (isset($action['source items'])) {
       foreach ($action['source items'] as $item) {
         $paths[] = $item['path'];
       }
