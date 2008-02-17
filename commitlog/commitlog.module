@@ -650,14 +650,12 @@ function theme_commitlog_commit_message($commit, $format = 'html') {
   // Link to issues whose numbers are given in the commit message.
   $message = htmlspecialchars($commit['message']);
   $matches = array();
-  if (preg_match('/(?:(?:fix|add|patch)(?:ed)?\s+#?|#)(\d+)/i', $message, $matches)) {
-    foreach ($matches as $match) {
-      $link = strtr('<a href="!url">!text</a>', array(
-        '!text' => $match[0],
-        '!url' => versioncontrol_get_url_tracker($commit['repository'], $match[1]),
-      ));
-      $message = strtr($message, array($match[0] => $link));
-    }
+  if (preg_match('/(?:(?:fix|add|patch)(?:ed)?\s+#?|#)(\d+)\b/i', $message, $matches)) {
+    $link = strtr('<a href="!url">!text</a>', array(
+      '!text' => $matches[0],
+      '!url' => versioncontrol_get_url_tracker($commit['repository'], $matches[1]),
+    ));
+    $message = strtr($message, array($matches[0] => $link));
   }
   return $message;
 }
