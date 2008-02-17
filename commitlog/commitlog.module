@@ -270,7 +270,8 @@ function commitlog_commits_rss() {
   }
 
   list($constraints, $attributes) = _commitlog_get_commit_constraints();
-  $commits = commitlog_get_paged_commits($constraints);
+  $limit = variable_get('feed_default_items', 10);
+  $commits = commitlog_get_paged_commits($constraints, $limit);
 
   drupal_set_header('Content-Type: application/rss+xml; charset=utf-8');
   print theme('commitlog_rss', $commits);
@@ -352,14 +353,15 @@ function _commitlog_get_commit_constraints() {
  * Return an array of commits, resulting from a versioncontrol_get_commits()
  * call. Paging is also used by emulating pager_query().
  */
-function commitlog_get_paged_commits($constraints, $element = 0) {
+function commitlog_get_paged_commits($constraints, $limit = NULL, $element = 0) {
   global $pager_page_array, $pager_total, $pager_total_items;
   $page = isset($_GET['page']) ? $_GET['page'] : '';
   $pager_page_array = explode(',', $page);
   $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
 
-  $limit = variable_get('commitlog_pager', 10);
-
+  if (!isset($limit)) {
+    $limit = variable_get('commitlog_pager', 10);
+  }
   $commits = versioncontrol_get_commits($constraints, $result_count, $page, $limit);
 
   // Emulate pager_query() in order to get a proper theme('pager').
