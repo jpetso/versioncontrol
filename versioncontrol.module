@@ -8,6 +8,8 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+// TODO: have a 'current item' for deleted items.
+// TODO: when doing so, remove get_affected_item().
 
 // VCS operations, a.k.a. stuff that is recorded for display purposes.
 define('VERSIONCONTROL_OPERATION_COMMIT', 1);
@@ -146,22 +148,6 @@ function versioncontrol_menu($may_cache) {
       'title' => t('List'),
       'type' => MENU_DEFAULT_LOCAL_TASK,
     );
-
-    $backends = versioncontrol_get_backends();
-    $i = 2;
-    foreach ($backends as $vcs => $backend) {
-      $items[] = array(
-        'path' => 'admin/project/versioncontrol-repositories/add-'. $vcs,
-        'title' => t('Add @vcs repository', array('@vcs' => $backend['name'])),
-        'callback' => 'drupal_get_form',
-        'callback arguments' => array('versioncontrol_admin_repository_edit', 0, $vcs),
-        'access' => $admin_access,
-        'type' => MENU_LOCAL_TASK,
-        'weight' => $i,
-      );
-      ++$i;
-    }
-
     $items[] = array(
       'path' => 'admin/project/versioncontrol-accounts',
       'title' => t('VCS accounts'),
@@ -176,35 +162,6 @@ function versioncontrol_menu($may_cache) {
       'type' => MENU_DEFAULT_LOCAL_TASK,
       'weight' => 0,
     );
-    foreach ($backends as $vcs => $backend) {
-      if (versioncontrol_backend_implements($vcs, 'import_accounts')) {
-        $items[] = array(
-          'path' => 'admin/project/versioncontrol-accounts/import',
-          'title' => t('Import'),
-          'description' => t('Import an existing set of VCS user accounts.'),
-          'callback' => 'drupal_get_form',
-          'callback arguments' => array('versioncontrol_admin_account_import_form'),
-          'access' => $admin_access,
-          'type' => MENU_LOCAL_TASK,
-          'weight' => 2,
-        );
-        break;
-      }
-    }
-    foreach ($backends as $vcs => $backend) {
-      if (versioncontrol_backend_implements($vcs, 'export_accounts')) {
-        $items[] = array(
-          'path' => 'admin/project/versioncontrol-accounts/export',
-          'title' => t('Export'),
-          'description' => t('Export VCS user accounts of a specific repository.'),
-          'callback' => 'versioncontrol_admin_account_export_page',
-          'access' => $admin_access,
-          'type' => MENU_LOCAL_TASK,
-          'weight' => 3,
-        );
-        break;
-      }
-    }
 
     $items[] = array(
       'path' => 'versioncontrol/register', // [."/$uid" [."/$repo_id"]]
@@ -213,7 +170,6 @@ function versioncontrol_menu($may_cache) {
       'access' => TRUE, // access checking is done in the callback
       'type' => MENU_SUGGESTED_ITEM,
     );
-
     // autocomplete callback for Drupal usernames that have access to
     // the repository given in arg(3).
     $items[] = array(
@@ -225,6 +181,46 @@ function versioncontrol_menu($may_cache) {
     );
   }
   else {
+    // Backend specific stuff is done in !$may_cache, as it once screwed up
+    // after activating a new backend in admin/build/modules.
+    $backends = versioncontrol_get_backends();
+    $i = 2; // weight of the local task, 'List' is 1.
+    foreach ($backends as $vcs => $backend) {
+      $items[] = array(
+        'path' => 'admin/project/versioncontrol-repositories/add-'. $vcs,
+        'title' => t('Add @vcs repository', array('@vcs' => $backend['name'])),
+        'callback' => 'drupal_get_form',
+        'callback arguments' => array('versioncontrol_admin_repository_edit', 0, $vcs),
+        'access' => $admin_access,
+        'type' => MENU_LOCAL_TASK,
+        'weight' => $i,
+      );
+      ++$i;
+
+      if (versioncontrol_backend_implements($vcs, 'import_accounts')) {
+        $items[] = array(
+          'path' => 'admin/project/versioncontrol-accounts/import',
+          'title' => t('Import'),
+          'description' => t('Import an existing set of VCS user accounts.'),
+          'callback' => 'drupal_get_form',
+          'callback arguments' => array('versioncontrol_admin_account_import_form'),
+          'access' => $admin_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 2,
+        );
+      }
+      if (versioncontrol_backend_implements($vcs, 'export_accounts')) {
+        $items[] = array(
+          'path' => 'admin/project/versioncontrol-accounts/export',
+          'title' => t('Export'),
+          'description' => t('Export VCS user accounts of a specific repository.'),
+          'callback' => 'versioncontrol_admin_account_export_page',
+          'access' => $admin_access,
+          'type' => MENU_LOCAL_TASK,
+          'weight' => 3,
+        );
+      }
+    }
     if (is_numeric(arg(4))) {
       $items[] = array(
         'path' => 'admin/project/versioncontrol-repositories/edit/'. arg(4),
@@ -2097,6 +2093,35 @@ function versioncontrol_get_commit_actions($commit) {
 }
 
 /**
+ * Get the user-visible version of a commit identifier a.k.a. 'revision',
+ * as plaintext. By default, this function returns $commit['revision'] if
+ * that property exists, or $commit['vc_op_id'] as fallback.
+ *
+ * Version control backends can, however, choose to implement their own version
+ * of this function, which for example makes it possible to cut the SHA-1 hash
+ * in distributed version control systems down to a readable length.
+ *
+ * @param $commit
+ *   The commit whose commit identifier should be themed.
+ * @param $format
+ *   Either 'full' for the original version, or 'short' for a more compact form.
+ *   If the commit identifier doesn't need to be shortened, the results can
+ *   be the same for both versions.
+ */
+function versioncontrol_format_commit_identifier($commit, $format = 'short') {
+  if (empty($commit['revision'])) {
+    return $commit['vc_op_id'];
+  }
+  $vcs = $commit['repository']['vcs'];
+  if ($format == 'short' && versioncontrol_backend_implements($vcs, 'format_short_revision_identifier')) {
+    return _versioncontrol_call_backend(
+      $vcs, 'format_short_revision_identifier', array($commit['revision'])
+    );
+  }
+  return $commit['revision'];
+}
+
+/**
  * Retrieve general statistics about what happened in a single commit. For more granular
  * details about what happened in a single commit, use versioncontrol_get_commit_actions.
  *
@@ -2428,6 +2453,32 @@ function versioncontrol_get_all_item_tags($repository, $item) {
   return _versioncontrol_call_backend(
     $repository['vcs'], 'get_all_item_tags', array($repository, $item)
   );
+}
+
+/**
+ * Get the user-visible version of an item's revision identifier, as plaintext.
+ * By default, this function simply returns $item['revision'].
+ *
+ * Version control backends can, however, choose to implement their own version
+ * of this function, which for example makes it possible to cut the SHA-1 hash
+ * in distributed version control systems down to a readable length.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose revision identifier should be themed.
+ * @param $format
+ *   Either 'full' for the original version, or 'short' for a more compact form.
+ *   If the revision identifier doesn't need to be shortened, the results can
+ *   be the same for both versions.
+ */
+function versioncontrol_format_item_revision($repository, $item, $format = 'short') {
+  if ($format == 'short' && versioncontrol_backend_implements($repository['vcs'], 'format_short_revision_identifier')) {
+    return _versioncontrol_call_backend(
+      $repository['vcs'], 'format_short_revision_identifier', array($item['revision'])
+    );
+  }
+  return $item['revision'];
 }
 
 /**
