@@ -811,7 +811,7 @@ function versioncontrol_get_commits($constraints = array(), &$result_count = NUL
                        INNER JOIN {versioncontrol_repositories} r
                         ON op.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY op.date DESC', $params);
+                      ORDER BY op.date DESC, op.vc_op_id DESC', $params);
 
   $commits = array();
   $op_ids_by_backend = array();
@@ -1388,7 +1388,7 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
                        INNER JOIN {versioncontrol_repositories} r
                         ON op.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY op.date DESC', $params);
+                      ORDER BY op.date DESC, op.vc_op_id DESC', $params);
 
   $branches = array();
   $op_ids_by_backend = array();
@@ -1561,7 +1561,7 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
                        INNER JOIN {versioncontrol_repositories} r
                         ON op.repo_id = r.repo_id
                       '. $where .'
-                      ORDER BY op.date DESC', $params);
+                      ORDER BY op.date DESC, op.vc_op_id DESC', $params);
 
   $tags = array();
   $op_ids_by_backend = array();
@@ -2361,9 +2361,21 @@ function versioncontrol_get_current_item_tag($repository, $item) {
  *   NULL is returned.
  */
 function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_parent_item', array($repository, $item, $parent_path)
-  );
+  if (versioncontrol_backend_implements($repository['vcs'], 'get_parent_item')) {
+    return _versioncontrol_call_backend(
+      $repository['vcs'], 'get_parent_item', array($repository, $item, $parent_path)
+    );
+  }
+  // Backend doesn't provide that function, use the default implementation.
+  if (!isset($parent_path)) {
+    $item['path'] = dirname($item['path']);
+    return $item;
+  }
+  else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
+    $item['path'] = $parent_path;
+    return $item;
+  }
+  return NULL;
 }
 
 /**

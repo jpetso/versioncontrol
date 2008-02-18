@@ -861,7 +861,9 @@ function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
  * Implementation of [vcs_backend]_get_parent_item():
  * Retrieve the parent (directory) item of a given item.
  *
- * This function is mandatory for backends to implement.
+ * This function is optional for VCS backends to implement. If it doesn't exist,
+ * the API module will use the default implementation that just returns the
+ * original item with a changed path.
  *
  * @param $repository
  *   The repository that the item is located in.
