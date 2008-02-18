@@ -648,16 +648,11 @@ function theme_commitlog_commit_message($commit, $format = 'html') {
     return $commit['message'];
   }
   // Link to issues whose numbers are given in the commit message.
-  $message = htmlspecialchars($commit['message']);
-  $matches = array();
-  if (preg_match('/(?:(?:fix|add|patch)(?:ed)?\s+#?|#)(\d+)\b/i', $message, $matches)) {
-    $link = strtr('<a href="!url">!text</a>', array(
-      '!text' => $matches[0],
-      '!url' => versioncontrol_get_url_tracker($commit['repository'], $matches[1]),
-    ));
-    $message = strtr($message, array($matches[0] => $link));
-  }
-  return $message;
+  return preg_replace('/#(\d+)\b/ie',
+    "strtr('<a href=\"!url\">#\\1</a>',
+      array('!url' => versioncontrol_get_url_tracker(\$commit['repository'], \\1)))",
+    htmlspecialchars($commit['message'])
+  );
 }
 
 function theme_commitlog_commit_branches($commit, $format = 'html') {
