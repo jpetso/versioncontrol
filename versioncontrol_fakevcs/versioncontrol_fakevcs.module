@@ -528,7 +528,7 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
  *        item info. ("[xxx]" is the unique string identifier
  *        of the respective version control system.)
  */
-function versioncontrol_cvs_get_directory_item($operation) {
+function versioncontrol_fakevcs_get_directory_item($operation) {
   // Assuming $operation is a single commit array that looks like this:
   $operation = array(
     'vc_op_id' => 2345,
