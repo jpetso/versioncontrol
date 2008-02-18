@@ -18,6 +18,8 @@ include_once(drupal_get_path('module', 'versioncontrol_fakevcs') .'/versioncontr
 /**
  * Implementation of hook_versioncontrol_backends().
  *
+ * This function is mandatory for backends to implement.
+ *
  * @return
  *   A structured array containing information about this backend, wrapped
  *   in a structured array. Array key is the unique string identifier of
@@ -193,6 +195,8 @@ function versioncontrol_fakevcs_alter_commits(&$commits, $fakevcs_specific_const
 /**
  * Implementation of [versioncontrol_backend]_get_commit_actions():
  * Retrieve detailed information about what happened in a single commit.
+ *
+ * This function is mandatory for backends to implement.
  *
  * @param $commit
  *   The commit whose actions should be retrieved.
@@ -509,6 +513,8 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
  * branch operation or tag operation. In other words, this function
  * gets you the item for $operation['directory'].
  *
+ * This function is mandatory for backends to implement.
+ *
  * @param $operation
  *   The commit, branch operation or tag operation whose deepest-level
  *   changed/branched/tagged directory should be retrieved.
@@ -555,6 +561,8 @@ function versioncontrol_fakevcs_get_directory_item($operation) {
  * Implementation of [versioncontrol_backend]_get_commit_branches():
  * Retrieve the branches that have been affected by the given commit.
  *
+ * This function is mandatory for backends to implement.
+ *
  * @return
  *   An array of strings that identify a branch in the respective repository,
  *   or an empty array if no branches were affected at all.
@@ -569,6 +577,8 @@ function versioncontrol_fakevcs_get_commit_branches($commit) {
 /**
  * Implementation of [versioncontrol_backend]_get_branched_items():
  * Retrieve the set of items that were affected by a branch operation.
+ *
+ * This function is mandatory for backends to implement.
  *
  * @param $branch
  *   The branch operation whose items should be retrieved. This is an array
@@ -674,6 +684,8 @@ function versioncontrol_fakevcs_get_branched_items($branch) {
  * Implementation of [versioncontrol_backend]_get_tagged_items():
  * Retrieve the set of items that were affected by a tag operation.
  *
+ * This function is mandatory for backends to implement.
+ *
  * @param $tag
  *   The tag operation whose items should be retrieved. This is an array
  *   like the one returned by versioncontrol_get_tag_operation().
@@ -775,11 +787,17 @@ function versioncontrol_fakevcs_get_tagged_items($tag) {
 
 /**
  * Implementation of [versioncontrol_backend]_get_current_item_branch():
- * Retrieve the current branch that this item is in. If this item was part of
- * the result of versioncontrol_get_commit_actions(), this will probably be
- * the branch that this item was committed to. The main branch ('HEAD',
- * 'trunk', 'master' or however it is called in the respective VCS) is also
- * a valid branch and should be expected as return value.
+ * Retrieve the current branch that this item is in.
+ *
+ * If this item was part of the result of versioncontrol_get_commit_actions(),
+ * this will probably be the branch that this item was committed to.
+ * The main branch ('HEAD', 'trunk', 'master' or however it is called
+ * in the respective VCS) is also a valid branch and should be expected
+ * as return value. The current item branch is also expected to propagate
+ * through calls of versioncontrol_get_parent_item() and
+ * versioncontrol_get_directory_contents(), if applicable.
+ *
+ * This function is mandatory for backends to implement.
  *
  * @param $repository
  *   The repository that the item is located in.
@@ -787,8 +805,8 @@ function versioncontrol_fakevcs_get_tagged_items($tag) {
  *   The item whose current branch should be retrieved.
  *
  * @return
- *   A string containing the current item branch, or NULL if no branch
- *   is known or applicable.
+ *   A string containing the name of the current item branch,
+ *   or NULL if no branch is known or applicable.
  */
 function versioncontrol_fakevcs_get_current_item_branch($repository, $item) {
   // How CVS would probably do it
@@ -799,55 +817,51 @@ function versioncontrol_fakevcs_get_current_item_branch($repository, $item) {
 
 /**
  * Implementation of [versioncontrol_backend]_get_current_item_tag():
- * Retrieve the current tag of this item.
+ * Retrieve the current tag that has been applied to this item.
+ *
+ * If this item was retrieved by calling versioncontrol_get_tagged_items() or
+ * versioncontrol_get_all_item_tags() then this function will return the name
+ * of that respective tag, e.g. 'DRUPAL-5--1-1'. The current item tag is
+ * also expected to propagate through calls of versioncontrol_get_parent_item()
+ * and versioncontrol_get_directory_contents(), if applicable.
+ *
+ * This function is mandatory for backends to implement.
  *
  * @param $repository
  *   The repository that the item is located in.
  * @param $item
- *   The item whose current branch should be retrieved.
+ *   The item whose current tag should be retrieved.
  *
  * @return
- *   A tag operation array like the return value
- *   of versioncontrol_get_tag_operation(), or NULL if no tag
- *   is known or applicable.
+ *   A string containing the name of the current item tag,
+ *   or NULL if no tag is known or applicable.
  */
 function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
   // How CVS would probably do it. (The information itself is either fetched
   // from the database, or has been stored somewhere in the item, or is
-  // calculated on the fly.)
-  $tag = array(
-    'vc_op_id' => 11,
-    'type' => VERSIONCONTROL_OPERATION_TAG,
-    'tag_name' => 'DRUPAL-5--1-1',
-    'action' => VERSIONCONTROL_ACTION_ADDED, // the tag was created
-    'date' => time(),
-    'uid' => $user->uid,
-    'username' => 'jpetso',
-    'directory' => '/contributions/modules/versioncontrol_cvs',
-    'repository' => $affected_repository,
-    'cvs_specific' => array(),
+  // calculated on the fly.) Let's say $item looks like this, then:
+  $item = array(
+    'path' => '/contributions/modules/versioncontrol_cvs',
+    'type' => VERSIONCONTROL_ITEM_DIRECTORY,
+    'revision' => '',
+    'selected_tag' => 'DRUPAL-5--1-1', // might have been added by get_tagged_items()
   );
-  return $tag;
+  return isset($item['selected_tag']) ? $item['selected_tag'] : NULL;
 
   // How Subversion could also do it.
-  $tag = array(
-    'vc_op_id' => 11,
-    'type' => VERSIONCONTROL_OPERATION_TAG,
-    'tag_name' => '5.x-1.0',
-    'action' => VERSIONCONTROL_ACTION_ADDED, // the tag was created
-    'date' => time(),
-    'uid' => $user->uid,
-    'username' => 'jpetso',
-    'directory' => '/tags/5.x-1.x/5.x-1.0/contributions/modules',
-    'repository' => $affected_repository,
-    'svn_specific' => array(),
+  $item = array(
+    'path' => '/tags/5.x-1.x/5.x-1.0/contributions/modules/versioncontrol_svn/versioncontrol_svn.module',
+    'type' => VERSIONCONTROL_ITEM_FILE,
+    'revision' => '12345',
   );
-  return $tag;
+  return '5.x-1.0'; // extracted from the item path
 }
 
 /**
  * Implementation of [vcs_backend]_get_parent_item():
  * Retrieve the parent (directory) item of a given item.
+ *
+ * This function is mandatory for backends to implement.
  *
  * @param $repository
  *   The repository that the item is located in.
