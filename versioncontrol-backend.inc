@@ -552,6 +552,7 @@ function _versioncontrol_insert_operation($operation, $operation_details) {
   // or hook_versioncontrol_tag_operation().
   module_invoke_all('versioncontrol_'. $type,
                     'insert', $operation, $operation_details);
+  return $operation;
 }
 
 /**
