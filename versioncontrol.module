@@ -8,8 +8,6 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: have a 'current item' for deleted items.
-// TODO: when doing so, remove get_affected_item().
 
 // VCS operations, a.k.a. stuff that is recorded for display purposes.
 define('VERSIONCONTROL_OPERATION_COMMIT', 1);
