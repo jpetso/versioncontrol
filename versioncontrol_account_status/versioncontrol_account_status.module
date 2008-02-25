@@ -509,13 +509,13 @@ function versioncontrol_account_status_form_alter_repository_settings($form_id, 
   );
   $form['account_registration']['versioncontrol_account_status_email']['versioncontrol_account_status_declined_email'] = array(
     '#type' => 'textarea',
-    '#title' => t('CVS account declined e-mail message'),
+    '#title' => t('@vcs account declined e-mail message', array('@vcs' => $vcs_name)),
     '#description' => t('The message to send to users whose accounts have been declined.'),
     '#default_value' => $strings['declined_email'],
   );
   $form['account_registration']['versioncontrol_account_status_email']['versioncontrol_account_status_disabled_email'] = array(
     '#type' => 'textarea',
-    '#title' => t('CVS account disabled e-mail message'),
+    '#title' => t('@vcs account disabled e-mail message', array('@vcs' => $vcs_name)),
     '#description' => t('The message to send to users whose accounts have been disabled.'),
     '#default_value' => $strings['disabled_email'],
   );
@@ -1058,8 +1058,13 @@ function _versioncontrol_account_status_send_status_update_mails($status_data, $
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
   $strings = _versioncontrol_account_status_get_strings($status_data['repo_id']);
 
+  $backends = versioncontrol_get_backends();
+  $repository = versioncontrol_get_repository($status_data['repo_id']);
+  $vcs_name = $backends[$repository['vcs']]['name'];
+
   if ($admin_message) {
-    $admin_message = t('Message from the CVS maintainer:') ."\n". $admin_message ."\n";
+    $admin_message = t('Message from the @vcs maintainer:', array('@vcs' => $vcs_name))
+      ."\n". $admin_message ."\n";
   }
 
   switch ($status_data['status']) {
@@ -1074,10 +1079,6 @@ function _versioncontrol_account_status_send_status_update_mails($status_data, $
     default:
       break;
   }
-
-  $backends = versioncontrol_get_backends();
-  $repository = versioncontrol_get_repository($status_data['repo_id']);
-  $vcs_name = $backends[$repository['vcs']]['name'];
 
   $message_variables = array(
     '%account-name' => $updated_user->name,
