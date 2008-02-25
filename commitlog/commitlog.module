@@ -592,7 +592,7 @@ function commitlog_account_username($uid, $username, $repository, $replace_with_
   }
 
   if ($format == 'html') {
-    return l(check_plain($username), 'commitlog', NULL,
+    return l($username, 'commitlog', NULL,
              'usernames='. drupal_urlencode($username) .'&repos='. $repository['repo_id']);
   }
   return $username;
@@ -600,7 +600,7 @@ function commitlog_account_username($uid, $username, $repository, $replace_with_
 
 function theme_commitlog_repository($repository, $format = 'html') {
   if ($format == 'html') {
-    return l(check_plain($repository['name']), 'commitlog', NULL, 'repos='. $repository['repo_id']);
+    return l($repository['name'], 'commitlog', NULL, 'repos='. $repository['repo_id']);
   }
   return check_plain($repository['name']);
 }
@@ -879,7 +879,7 @@ function theme_commitlog_project($repository, $project, $format = 'html') {
   $project_node = node_load($project['nid']);
   if ($project_node) {
     if ($format == 'html') {
-      return l(check_plain($project_node->title), 'node/'. $project_node->nid);
+      return l($project_node->title, 'node/'. $project_node->nid);
     }
     return check_plain($project_node->title);
   }
