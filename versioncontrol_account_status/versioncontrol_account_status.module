@@ -1065,11 +1065,11 @@ function _versioncontrol_account_status_send_status_update_mails($status_data, $
   switch ($status_data['status']) {
     case VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
     case VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
-      $admin_message = $admin_message ? t('Question:'). "\n". $admin_message ."\n\n" : '';
+      $admin_message = $admin_message ? t('Question:') ."\n". $admin_message ."\n\n" : '';
       break;
     case VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
     case VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
-      $admin_message = $admin_message ? t('Reason:'). "\n". $admin_message ."\n\n" : '';
+      $admin_message = $admin_message ? t('Reason:') ."\n". $admin_message ."\n\n" : '';
       break;
     default:
       break;
