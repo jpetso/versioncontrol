@@ -40,6 +40,8 @@ define('VERSIONCONTROL_ACTION_MOVED',         2); // == renamed
 define('VERSIONCONTROL_ACTION_COPIED',        3);
 define('VERSIONCONTROL_ACTION_MERGED',        4);
 define('VERSIONCONTROL_ACTION_DELETED',       5);
+define('VERSIONCONTROL_ACTION_REPLACED',      6);
+define('VERSIONCONTROL_ACTION_OTHER',         7); // for example, SVN revprop-only changes
 
 // Flags that backends can set to specify if Version Control API
 // should do work for them.

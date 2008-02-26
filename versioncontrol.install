@@ -24,45 +24,55 @@ function versioncontrol_install() {
         date bigint NOT NULL default 0,
         uid int unsigned NOT NULL default 0,
         username varchar(64) NOT NULL default '',
-        directory varchar(255) NOT NULL default '',
+        revision varchar(255) NOT NULL default '',
+        message text,
         PRIMARY KEY (vc_op_id),
         KEY type (type),
         KEY repo_id (repo_id),
+        KEY date (date),
         KEY uid (uid),
-        KEY date (date)
-      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-
-      db_query("CREATE TABLE {versioncontrol_commits} (
-        vc_op_id int unsigned NOT NULL default 0,
-        message text,
-        revision varchar(255) NOT NULL default '',
-        PRIMARY KEY (vc_op_id),
+        KEY username (username),
         KEY revision (revision)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
-      db_query("CREATE TABLE {versioncontrol_branches} (
-        branch_id int unsigned NOT NULL default 0,
+      db_query("CREATE TABLE {versioncontrol_operation_labels} (
+        vc_op_id int unsigned NOT NULL default 0,
+        label_id int unsigned NOT NULL default 0,
+        action tinyint unsigned NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, label_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_labels} (
+        label_id int unsigned NOT NULL default 0,
         repo_id int unsigned NOT NULL default 0,
-        branch_name varchar(255) NOT NULL default '',
-        PRIMARY KEY (branch_id),
-        UNIQUE KEY (repo_id, branch_name)
+        name varchar(255) NOT NULL default '',
+        type tinyint unsigned NOT NULL default 0,
+        PRIMARY KEY (label_id),
+        UNIQUE KEY (repo_id, name, type)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
-      db_query("CREATE TABLE {versioncontrol_branch_operations} (
+      db_query("CREATE TABLE {versioncontrol_operation_items} (
         vc_op_id int unsigned NOT NULL default 0,
-        branch_id int unsigned NOT NULL default 0,
-        action tinyint unsigned NOT NULL default 0,
-        PRIMARY KEY (vc_op_id),
-        KEY (branch_id)
+        item_revision_id int unsigned NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, item_revision_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
-      db_query("CREATE TABLE {versioncontrol_tag_operations} (
-        vc_op_id int unsigned NOT NULL default 0,
-        tag_name varchar(255) NOT NULL default '',
+      db_query("CREATE TABLE {versioncontrol_source_items} (
+        item_revision_id int unsigned NOT NULL default 0,
+        source_item_revision_id int unsigned NOT NULL default 0,
         action tinyint unsigned NOT NULL default 0,
-        message text,
-        PRIMARY KEY (vc_op_id),
-        KEY (tag_name)
+        PRIMARY KEY (item_revision_id, source_item_revision_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      db_query("CREATE TABLE {versioncontrol_item_revisions} (
+        item_revision_id int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
+        path varchar(255) NOT NULL default '',
+        revision varchar(255) NOT NULL default '',
+        type tinyint unsigned NOT NULL default 0,
+        PRIMARY KEY (item_revision_id),
+        UNIQUE KEY (repo_id, path),
+        KEY revision (revision)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
@@ -111,49 +121,56 @@ function versioncontrol_install() {
         date bigint NOT NULL default 0,
         uid int NOT NULL default 0,
         username varchar(64) NOT NULL default '',
-        directory varchar(255) NOT NULL default '',
+        revision varchar(255) NOT NULL default '',
+        message text,
         PRIMARY KEY (vc_op_id)
       )");
       db_query("CREATE INDEX {versioncontrol_operations}_type_idx ON {versioncontrol_operations} (type)");
       db_query("CREATE INDEX {versioncontrol_operations}_repo_id_idx ON {versioncontrol_operations} (repo_id)");
-      db_query("CREATE INDEX {versioncontrol_operations}_uid_idx ON {versioncontrol_operations} (uid)");
       db_query("CREATE INDEX {versioncontrol_operations}_date_idx ON {versioncontrol_operations} (date)");
+      db_query("CREATE INDEX {versioncontrol_operations}_uid_idx ON {versioncontrol_operations} (uid)");
+      db_query("CREATE INDEX {versioncontrol_operations}_username_idx ON {versioncontrol_operations} (username)");
+      db_query("CREATE INDEX {versioncontrol_operations}_revision_idx ON {versioncontrol_operations} (revision)");
 
-      db_query("CREATE TABLE {versioncontrol_commits} (
+      db_query("CREATE TABLE {versioncontrol_operation_labels} (
         vc_op_id int NOT NULL default 0,
-        message text,
-        revision varchar(255) NOT NULL default '',
-        PRIMARY KEY (vc_op_id)
+        label_id int NOT NULL default 0,
+        action smallint NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, label_id)
       )");
-      db_query("CREATE INDEX {versioncontrol_commits}_revision_idx
-                ON {versioncontrol_commits} (revision)");
 
-      db_query("CREATE TABLE {versioncontrol_branches} (
-        branch_id int NOT NULL default 0,
+      db_query("CREATE TABLE {versioncontrol_labels} (
+        label_id int NOT NULL default 0,
         repo_id int NOT NULL default 0,
-        branch_name varchar(255) NOT NULL default '',
-        PRIMARY KEY (branch_id),
-        UNIQUE (repo_id, branch_name)
+        name varchar(255) NOT NULL default '',
+        type smallint NOT NULL default 0,
+        PRIMARY KEY (label_id),
+        UNIQUE (repo_id, name, type)
       )");
 
-      db_query("CREATE TABLE {versioncontrol_branch_operations} (
+      db_query("CREATE TABLE {versioncontrol_operation_items} (
         vc_op_id int NOT NULL default 0,
-        branch_id int NOT NULL default 0,
-        action smallint NOT NULL default 0,
-        PRIMARY KEY (vc_op_id)
+        item_revision_id int NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, item_revision_id)
       )");
-      db_query("CREATE INDEX {versioncontrol_branch_operations}_branch_id_idx
-                ON {versioncontrol_branch_operations} (branch_id)");
 
-      db_query("CREATE TABLE {versioncontrol_tag_operations} (
-        vc_op_id int NOT NULL default 0,
-        tag_name varchar(255) NOT NULL default '',
+      db_query("CREATE TABLE {versioncontrol_source_items} (
+        item_revision_id int NOT NULL default 0,
+        source_item_revision_id int NOT NULL default 0,
         action smallint NOT NULL default 0,
-        message text,
-        PRIMARY KEY (vc_op_id)
+        PRIMARY KEY (item_revision_id, source_item_revision_id)
       )");
-      db_query("CREATE INDEX {versioncontrol_tag_operations}_tag_name_idx
-                ON {versioncontrol_tag_operations} (tag_name)");
+
+      db_query("CREATE TABLE {versioncontrol_item_revisions} (
+        item_revision_id int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
+        path varchar(255) NOT NULL default '',
+        revision varchar(255) NOT NULL default '',
+        type smallint NOT NULL default 0,
+        PRIMARY KEY (item_revision_id),
+        UNIQUE (repo_id, path)
+      )");
+      db_query("CREATE INDEX {versioncontrol_item_revisions}_revision_idx ON {versioncontrol_item_revisions} (revision)");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
         repo_id int NOT NULL default 0,
@@ -212,10 +229,11 @@ function versioncontrol_uninstall() {
   }
 
   db_query('DROP TABLE {versioncontrol_operations}');
-  db_query('DROP TABLE {versioncontrol_commits}');
-  db_query('DROP TABLE {versioncontrol_branches}');
-  db_query('DROP TABLE {versioncontrol_branch_operations}');
-  db_query('DROP TABLE {versioncontrol_tag_operations}');
+  db_query('DROP TABLE {versioncontrol_labels}');
+  db_query('DROP TABLE {versioncontrol_operation_labels}');
+  db_query('DROP TABLE {versioncontrol_operation_items}');
+  db_query('DROP TABLE {versioncontrol_source_items}');
+  db_query('DROP TABLE {versioncontrol_item_revisions}');
   db_query('DROP TABLE {versioncontrol_repositories}');
   db_query('DROP TABLE {versioncontrol_repository_urls}');
   db_query('DROP TABLE {versioncontrol_repository_metadata}');
@@ -228,8 +246,6 @@ function versioncontrol_uninstall() {
 function versioncontrol_update_1() {
   $ret = array();
 
-  // Remove the unique key (repo_id, directory) because there can be multiple
-  // "empty" projects with keys (0, ''). Instead, have a non-unique index.
   switch ($GLOBALS['db_type']) {
     case 'mysqli':
     case 'mysql':
@@ -450,6 +466,7 @@ function versioncontrol_update_2() {
 
 /**
  * Update 3: Add an index to {versioncontrol_commits} (revision).
+ *   (This was the last change for 5.x-1.x.)
  */
 function versioncontrol_update_3() {
   $ret = array();
@@ -465,5 +482,208 @@ function versioncontrol_update_3() {
                            ON {versioncontrol_commits} (revision)");
       break;
   }
+  return $ret;
+}
+
+/**
+ * Update 4: Include items and commit branches in the database scheme,
+ *   and while doing so, have a major refactoring of all the operation tables.
+ */
+function versioncontrol_update_4() {
+  $ret = array();
+
+  // Directory is dropped for three reasons:
+  // 1. It's hard to update if there's any reason to change it,
+  // 2. With the exceptions for modified and deleted items, its workings are
+  //    a bit difficult to understand and don't not generally applicable, plus
+  // 3. With the new schema, it's not needed anymore as performance improvement.
+  $ret[] = update_sql("ALTER TABLE {versioncontrol_operations} DROP COLUMN directory");
+
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      // Move 'revision' and 'message' to {versioncontrol_operations}, index
+      // 'revision', and also index 'username' which had been forgotten before.
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_operations} ADD revision varchar(255) NOT NULL default ''");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_operations} ADD message text");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_operations} ADD KEY (username)");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_operations} ADD KEY (revision)");
+
+      // Move 'revision' and 'message' data from commits to operations,
+      // and eliminate the commits table as there's no data left there.
+      $ret[] = update_sql("UPDATE {versioncontrol_operations} op, {versioncontrol_commits} c
+                           SET op.revision = c.revision, op.message = c.message
+                           WHERE op.vc_op_id = c.vc_op_id");
+      $ret[] = update_sql("DROP TABLE {versioncontrol_commits}");
+
+      // Move 'message' from tag_operations to operations, but leave the table
+      // as we still need to move more data later.
+      $ret[] = update_sql("UPDATE {versioncontrol_operations} op, {versioncontrol_tag_operations} t
+                           SET op.message = t.message
+                           WHERE op.vc_op_id = t.vc_op_id");
+
+      // Rename branches to labels, and add 'type' as additional unique key.
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} DROP KEY repo_id");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} CHANGE COLUMN branch_id label_id int unsigned NOT NULL default 0");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} CHANGE COLUMN branch_name name varchar(255) NOT NULL default ''");
+      $ret[] = update_sql("RENAME TABLE {versioncontrol_branches} TO {versioncontrol_labels}");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_labels} ADD type tinyint unsigned NOT NULL default 0");
+      $ret[] = update_sql("UPDATE {versioncontrol_labels} SET type = 2"); // == VERSIONCONTROL_OPERATION_BRANCH
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_labels} ADD UNIQUE KEY (repo_id, name, type)");
+
+      // Rename branch_operations to operation_labels.
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branch_operations} DROP KEY branch_id");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branch_operations} CHANGE COLUMN branch_id label_id int unsigned NOT NULL default 0");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branch_operations} DROP PRIMARY KEY");
+      $ret[] = update_sql("RENAME TABLE {versioncontrol_branch_operations} TO {versioncontrol_operation_labels}");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_operation_labels} ADD PRIMARY KEY (vc_op_id, label_id)");
+      break;
+
+    case 'pgsql':
+      // Move 'revision' and 'message' to {versioncontrol_operations}, index
+      // 'revision', and also index 'username' which had been forgotten before.
+      db_add_column($ret, 'versioncontrol_operations', 'revision', 'varchar(255)', array('not null' => TRUE, 'default' => "''"));
+      db_add_column($ret, 'versioncontrol_operations', 'message', 'text');
+      $ret[] = update_sql("CREATE INDEX {versioncontrol_operations}_username_idx
+                           ON {versioncontrol_operations} (username)");
+      $ret[] = update_sql("CREATE INDEX {versioncontrol_operations}_revision_idx
+                           ON {versioncontrol_operations} (revision)");
+
+      // Move 'revision' and 'message' data from commits to operations,
+      // and eliminate the commits table as there's no data left there.
+      $ret[] = update_sql("UPDATE {versioncontrol_operations}
+                           SET revision = c.revision, message = c.message
+                           FROM {versioncontrol_commits} c
+                           WHERE vc_op_id = c.vc_op_id");
+      $ret[] = update_sql("DROP TABLE {versioncontrol_commits}");
+
+      // Move 'message' from tag_operations to operations, but leave the table
+      // as we still need to move more data later.
+      $ret[] = update_sql("UPDATE {versioncontrol_operations}
+                           SET message = t.message
+                           FROM {versioncontrol_tag_operations} t
+                           WHERE vc_op_id = t.vc_op_id");
+
+      // Rename branches to labels, and add 'type' as additional unique key.
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} DROP CONSTRAINT {versioncontrol_branches}_repo_id_key");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} DROP CONSTRAINT {versioncontrol_branches}_pkey");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} RENAME branch_id TO label_id");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} RENAME branch_name TO name");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branches} RENAME TO {versioncontrol_labels}");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_labels} ADD PRIMARY KEY (label_id)");
+      db_add_column($ret, 'versioncontrol_labels', 'type', 'smallint', array('not null' => TRUE, 'default' => "0"));
+      $ret[] = update_sql("UPDATE {versioncontrol_labels} SET type = 2"); // == VERSIONCONTROL_OPERATION_BRANCH
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_labels} ADD UNIQUE (repo_id, name, type)");
+
+      // Rename branch_operations to operation_labels.
+      $ret[] = update_sql("DROP INDEX {versioncontrol_branch_operations}_branch_id_idx");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branch_operations} RENAME branch_id TO label_id");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branch_operations} DROP CONSTRAINT {versioncontrol_branch_operations}_pkey");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_branch_operations} RENAME TO {versioncontrol_operation_labels}");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_operation_labels} ADD PRIMARY KEY (vc_op_id, label_id)");
+      break;
+  }
+
+  // Increase the sequence counter for {versioncontrol_labels}
+  // until it's as high as the maximum label_id value. This means that
+  // previously existing branches will have lower label_ids than tags,
+  // but whatever, it's not like that would matter in any way.
+  $max_label_id = db_result(db_query("SELECT MAX(label_id) FROM {versioncontrol_labels}"));
+  if ($max_label_id) {
+    while ($max_label_id >= db_next_id('{versioncontrol_labels}_label_id')) {
+      // continue;
+    }
+  }
+
+  // Last modification task (for the API module, at least):
+  // Move tag operations to the new label structure.
+  $result = db_query("SELECT t.vc_op_id, t.tag_name, t.action, op.repo_id
+                      FROM {versioncontrol_tag_operations} t
+                       INNER JOIN {versioncontrol_operations} op
+                        ON t.vc_op_id = op.vc_op_id"
+  );
+  while ($tag = db_fetch_array($result)) {
+    $label_id = db_result(db_query(
+      "SELECT label_id FROM {versioncontrol_labels} l
+       WHERE l.repo_id = $tag[repo_id] AND l.name = '$tag[tag_name]'
+         AND l.type = 3" // == VERSIONCONTROL_OPERATION_TAG
+    ));
+    if (!$label_id) {
+      $label_id = db_next_id('{versioncontrol_labels}_label_id');
+      $ret[] = update_sql(
+        "INSERT INTO {versioncontrol_labels} (label_id, repo_id, name, type)
+         VALUES ($label_id, $tag[repo_id], '$tag[tag_name]', 3)");
+    }
+    $ret[] = update_sql(
+      "INSERT INTO {versioncontrol_operation_labels} (vc_op_id, label_id, action)
+       VALUES ($tag[vc_op_id], $label_id, $tag[action])");
+  }
+  db_query('DROP TABLE {versioncontrol_tag_operations}');
+
+  // Create the new tables. If this looks like a copy of the install function
+  // to you... bingo, you got it.
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql("CREATE TABLE {versioncontrol_operation_items} (
+        vc_op_id int unsigned NOT NULL default 0,
+        item_revision_id int unsigned NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, item_revision_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      $ret[] = update_sql("CREATE TABLE {versioncontrol_source_items} (
+        item_revision_id int unsigned NOT NULL default 0,
+        source_item_revision_id int unsigned NOT NULL default 0,
+        action tinyint unsigned NOT NULL default 0,
+        PRIMARY KEY (item_revision_id, source_item_revision_id)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+
+      $ret[] = update_sql("CREATE TABLE {versioncontrol_item_revisions} (
+        item_revision_id int unsigned NOT NULL default 0,
+        repo_id int unsigned NOT NULL default 0,
+        path varchar(255) NOT NULL default '',
+        revision varchar(255) NOT NULL default '',
+        type tinyint unsigned NOT NULL default 0,
+        PRIMARY KEY (item_revision_id),
+        UNIQUE KEY (repo_id, path),
+        KEY revision (revision)
+      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
+      break;
+
+    case 'pgsql':
+      $ret[] = update_sql("CREATE TABLE {versioncontrol_operation_items} (
+        vc_op_id int NOT NULL default 0,
+        item_revision_id int NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, item_revision_id)
+      )");
+
+      $ret[] = update_sql("CREATE TABLE {versioncontrol_source_items} (
+        item_revision_id int NOT NULL default 0,
+        source_item_revision_id int NOT NULL default 0,
+        action smallint NOT NULL default 0,
+        PRIMARY KEY (item_revision_id, source_item_revision_id)
+      )");
+
+      $ret[] = update_sql("CREATE TABLE {versioncontrol_item_revisions} (
+        item_revision_id int NOT NULL default 0,
+        repo_id int NOT NULL default 0,
+        path varchar(255) NOT NULL default '',
+        revision varchar(255) NOT NULL default '',
+        type smallint NOT NULL default 0,
+        PRIMARY KEY (item_revision_id),
+        UNIQUE (repo_id, path)
+      )");
+      db_query("CREATE INDEX {versioncontrol_item_revisions}_revision_idx ON {versioncontrol_item_revisions} (revision)");
+      break;
+  }
+
+  // Clean up after ourselves. A few ones were left from earlier updates, too.
+  if (db_table_exists('sequences')) {
+    $ret[] = update_sql("DELETE FROM {sequences} WHERE name = '{versioncontrol_branches}_branch_id'");
+    $ret[] = update_sql("DELETE FROM {sequences} WHERE name = '{versioncontrol_commits}_commit_id'");
+    $ret[] = update_sql("DELETE FROM {sequences} WHERE name = '{versioncontrol_tag_operations}_tag_op_id'");
+    $ret[] = update_sql("DELETE FROM {sequences} WHERE name = '{versioncontrol_branch_operations}_branch_op_id'");
+  }
+
   return $ret;
 }
