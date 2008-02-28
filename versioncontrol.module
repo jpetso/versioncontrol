@@ -8,8 +8,6 @@
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
-// TODO: have a 'current item' for deleted items.
-// TODO: when doing so, remove get_affected_item().
 
 // VCS operations, a.k.a. stuff that is recorded for display purposes.
 define('VERSIONCONTROL_OPERATION_COMMIT', 1);
@@ -49,6 +47,16 @@ define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      0);
 define('VERSIONCONTROL_FLAG_AUTOADD_COMMITS',           1);
 define('VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS',    2);
 define('VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS', 3);
+
+// The flag for operation item database entries, specifying whether an item
+// is actually a direct "member" item of that operation or just a cached
+// source item that speeds up operation queries. (Background: we want some
+// source items to be considered when the caller passes a 'path' constraint,
+// but joining those is unnecessarily inefficient. Therefore, searched source
+// items get directly included in the {versioncontrol_operation_items} table.)
+// This is an implementation detail, the API user won't get to see this. Ever.
+define('VERSIONCONTROL_OPERATION_MEMBER_ITEM',          1);
+define('VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM', 2);
 
 // The admin pages.
 include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol.admin.inc');
@@ -2163,18 +2171,6 @@ function versioncontrol_get_commit_statistics($commit, $commit_actions = NULL) {
   return _versioncontrol_call_backend(
     $commit['repository']['vcs'], 'get_commit_statistics', array($commit, $commit_actions)
   );
-}
-
-/**
- * Return the 'current item' of a commit action if there is one,
- * or the first (only) one of the 'source items' if the file has been deleted.
- * As this function is also being used within access checks, it also works
- * when the corresponding commit has not yet been inserted into the database.
- */
-function versioncontrol_get_affected_item($commit_action) {
-  return isset($commit_action['current item'])
-         ? $commit_action['current item']     // new revision of the file, or
-         : $commit_action['source items'][0]; // the deleted item
 }
 
 /**

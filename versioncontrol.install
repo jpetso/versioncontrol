@@ -54,7 +54,9 @@ function versioncontrol_install() {
       db_query("CREATE TABLE {versioncontrol_operation_items} (
         vc_op_id int unsigned NOT NULL default 0,
         item_revision_id int unsigned NOT NULL default 0,
-        PRIMARY KEY (vc_op_id, item_revision_id)
+        type tinyint unsigned NOT NULL default 0, /* real member or cached item */
+        PRIMARY KEY (vc_op_id, item_revision_id),
+        KEY (type)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       db_query("CREATE TABLE {versioncontrol_source_items} (
@@ -151,8 +153,10 @@ function versioncontrol_install() {
       db_query("CREATE TABLE {versioncontrol_operation_items} (
         vc_op_id int NOT NULL default 0,
         item_revision_id int NOT NULL default 0,
+        type smallint NOT NULL default 0, /* real member or cached item */
         PRIMARY KEY (vc_op_id, item_revision_id)
       )");
+      db_query("CREATE INDEX {versioncontrol_operation_items}_type_idx ON {versioncontrol_operation_items} (type)");
 
       db_query("CREATE TABLE {versioncontrol_source_items} (
         item_revision_id int NOT NULL default 0,
@@ -628,7 +632,9 @@ function versioncontrol_update_4() {
       $ret[] = update_sql("CREATE TABLE {versioncontrol_operation_items} (
         vc_op_id int unsigned NOT NULL default 0,
         item_revision_id int unsigned NOT NULL default 0,
-        PRIMARY KEY (vc_op_id, item_revision_id)
+        type tinyint unsigned NOT NULL default 0,
+        PRIMARY KEY (vc_op_id, item_revision_id),
+        KEY (type)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       $ret[] = update_sql("CREATE TABLE {versioncontrol_source_items} (
@@ -654,8 +660,10 @@ function versioncontrol_update_4() {
       $ret[] = update_sql("CREATE TABLE {versioncontrol_operation_items} (
         vc_op_id int NOT NULL default 0,
         item_revision_id int NOT NULL default 0,
+        type smallint NOT NULL default 0,
         PRIMARY KEY (vc_op_id, item_revision_id)
       )");
+      db_query("CREATE INDEX {versioncontrol_operation_items}_type_idx ON {versioncontrol_operation_items} (type)");
 
       $ret[] = update_sql("CREATE TABLE {versioncontrol_source_items} (
         item_revision_id int NOT NULL default 0,
