@@ -12,18 +12,90 @@
  */
 
 /**
- * Check if the user who is attempting to execute a commit/tag/branch operation
- * has commit access at all, and set an error if that is not the case.
+ * Determine if a commit, branch or tag operation may be executed or not.
+ * Call this function inside a pre-commit hook.
  *
  * @param $operation
- *   The commit, branch operation or tag operation array containing
- *   repository and uid of the account that is to be checked.
+ *   A single operation array like the ones returned by
+ *   versioncontrol_get_operations(), but leaving out on a few details that
+ *   will instead be determined by this function. This array describes
+ *   the operation that is about to happen. Here's the allowed elements:
+ *
+ *   - 'type': The type of the operation - one of the
+ *        VERSIONCONTROL_OPERATION_{COMMIT,BRANCH,TAG} constants.
+ *   - 'repository': The repository where this operation occurs,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *        You can either pass this or 'repo_id'.
+ *   - 'repo_id': The repository where this operation occurs, given as a simple
+ *        integer id. You can either pass this or 'repository'.
+ *   - 'uid': The Drupal user id of the committer. Passing this is optional -
+ *        if it isn't set, this function will determine the uid.
+ *   - 'username': The system specific VCS username of the committer.
+ *   - 'message': The log message for the commit, tag or branch operation.
+ *        If a version control system doesn't support messages for the current
+ *        operation type, this element must not be set. Operations with
+ *        log messages that are set but empty will be denied access.
+ *
+ *   - 'labels': An array of branches or tags that will be affected by this
+ *        operation. Branch and tag operations are known to only affect one
+ *        branch or tag, so for these there will be only one element (with 0
+ *        as key) in 'labels'. Commits might affect any number of branches,
+ *        including none. Commits that emulate branches and/or tags (like
+ *        in Subversion, where they're not a native concept) can also include
+ *        add/delete/move operations for labels, as detailed below.
+ *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
+ *        or 'master' - is also considered a branch. Each element in 'labels'
+ *        is a structured array with the following keys:
+ *
+ *        - 'name': The branch or tag name (a string).
+ *        - 'action': Specifies what happened to this label in this operation.
+ *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
+ *             For branch or tag operations (or commits that emulate those),
+ *             it can be one of VERSIONCONTROL_ACTION_ADDED,
+ *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
+ *
+ * @param $operation_items
+ *   A structured array containing the exact details of what is about to happen
+ *   to each item in this commit. The structure of this array is the same as
+ *   the return value of versioncontrol_get_operation_items() - that is,
+ *   elements for 'type', 'path' and 'revision' - but doesn't include
+ *   the 'item_revision_id' element as there's no relation to the database yet.
+ *
+ *   The 'action', 'source_items', 'replaced_item' and 'revision' elements
+ *   of each item are optional and may be left unset.
  *
  * @return
- *   TRUE if the user may create a commit/branch/tag in this repository,
- *   or FALSE otherwise.
+ *   TRUE if the operation may happen, or FALSE if not.
+ *   If FALSE is returned, you can retrieve the concerning error messages
+ *   by calling versioncontrol_get_access_errors().
  */
-function _versioncontrol_has_account_access($operation) {
+function versioncontrol_has_write_access($operation, $operation_items) {
+  $operation = _versioncontrol_fill_operation($operation);
+
+  // If we can't determine this operation's repository,
+  // we can't really allow the operation in the first place.
+  if (!isset($operation['repository'])) {
+    switch ($operation['type']) {
+      case VERSIONCONTROL_OPERATION_COMMIT:
+        $type = t('commit');
+        break;
+      case VERSIONCONTROL_OPERATION_BRANCH:
+        $type = t('branch');
+        break;
+      case VERSIONCONTROL_OPERATION_TAG:
+        $type = t('tag');
+        break;
+    }
+    _versioncontrol_access_errors(array(t(
+'** ERROR: Version Control API cannot determine a repository
+** for the !commit-branch-or-tag information given by the VCS backend.',
+      array('!commit-branch-or-tag' => $type)
+    )));
+    return FALSE;
+  }
+
+  // If the user doesn't have commit access at all, we can't allow this as well.
   if (!variable_get('versioncontrol_allow_unauthorized_access', 0)) {
     if (!versioncontrol_is_account_authorized($operation['uid'], $operation['repository'])) {
       _versioncontrol_access_errors(array(t(
@@ -33,252 +105,33 @@ function _versioncontrol_has_account_access($operation) {
       return FALSE;
     }
   }
-  return TRUE;
-}
 
-/**
- * Set an error if the repository for a commit or branch/tag operation
- * can't be retrieved.
- *
- * @param $type
- *   The translated string for 'commit', 'branch' or 'tag'.
- */
-function _versioncontrol_set_repository_error($type) {
-  _versioncontrol_access_errors(array(t(
-'** ERROR: Version Control API cannot determine a repository
-** for the !commit-branch-or-tag information given by the VCS backend.',
-    array('!commit-branch-or-tag' => $type)
-  )));
-}
-
-/**
- * Determine if a commit may be executed or not.
- * Call this inside a pre-commit hook.
- *
- * @param $commit
- *   A single commit array like the ones returned by
- *   versioncontrol_get_commits(), but leaving out on a few details that
- *   will instead be determined by this function. This array describes
- *   the commit that is about to happen. Here's the allowed elements:
- *
- *   - 'repository': The repository where this commit occurs, given as a
- *        structured array, like a single element of what is returned
- *        by versioncontrol_get_repositories().
- *        You can either pass this or 'repo_id'.
- *   - 'repo_id': The repository where this commit occurs, given as a simple
- *        integer id. You can either pass this or 'repository'.
- *   - 'uid': The Drupal user id of the committer. Passing this is optional -
- *        if it isn't set, this function will determine the uid.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'message': The commit message. Passing this is optional, just leave the
- *       'message' element unset if the VCS can't retrieve the commit message
- *       at the time of the pre-commit hook.
- *   - '[xxx]_specific': An array of VCS specific additional commit information.
- *       How this array looks like is defined by the corresponding
- *       backend module (versioncontrol_[xxx]).
- *
- * @param $commit_actions
- *   A structured array containing the exact details of what is about to happen
- *   to each item in this commit. The structure of this array is the same as
- *   the return value of versioncontrol_get_commit_actions().
- *   The 'source items' element of each action and the 'revision' element of
- *   each item in these actions are optional and may be left unset.
- * @param $branch
- *   The target branch where the commit will happen (a string like 'DRUPAL-5').
- *   If the VCS can't retrieve the branch when calling this function
- *   or doesn't support branches at all, this may be NULL instead.
- *
- * @return
- *   TRUE if the commit may happen, or FALSE if not.
- *   If FALSE is returned, you can retrieve the concerning error messages
- *   by calling versioncontrol_get_access_errors().
- */
-function versioncontrol_has_commit_access($commit, $commit_actions, $branch = NULL) {
-  $commit['type'] = VERSIONCONTROL_OPERATION_COMMIT;
-  $paths = _versioncontrol_get_commit_action_paths($commit_actions);
-  $commit = _versioncontrol_fill_operation($commit, $paths);
-  if (!isset($commit['repository'])) {
-    _versioncontrol_set_repository_error(t('commit'));
-    return FALSE;
-  }
-  if (!_versioncontrol_has_account_access($commit, t('commit'))) {
-    return FALSE;
-  }
-
-  $error_messages = array();
-
-  foreach (module_implements('versioncontrol_commit_access') as $module) {
-    $function = $module .'_versioncontrol_commit_access';
-
-    // If at least one hook_versioncontrol_commit_access returns TRUE,
-    // the commit goes through. (This is for admin or sandbox exceptions.)
-    $outcome = $function($commit, $commit_actions, $branch);
-    if ($outcome === TRUE) {
-      return TRUE;
-    }
-    else { // If !TRUE, $outcome is required to be an array with error messages
-      $error_messages = array_merge($error_messages, $outcome);
-    }
-  }
-
-  // Let the commit fail if there's more than zero error messages.
-  if (!empty($error_messages)) {
-    _versioncontrol_access_errors($error_messages);
-    return FALSE;
-  }
-  return TRUE;
-}
-
-/**
- * Determine if a branch may be assigned to a set of items.
- * Call this inside a pre-commit/pre-branch hook.
- *
- * @param $branch
- *   A structured array that consists of the following elements:
- *
- *   - 'branch_name': The name of the target branch
- *        (a string like 'DRUPAL-6--1').
- *   - 'action': Specifies what is going to happen with the branch. This is
- *        VERSIONCONTROL_ACTION_ADDED if the branch is being created,
- *        VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   - 'uid': The Drupal user id of the committer. Passing this is optional -
- *        if it isn't set, this function will determine the uid.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the branching occurs, given as a
- *        structured array, like a single element of what is returned
- *        by versioncontrol_get_repositories().
- *        You can either pass this or 'repo_id'.
- *   - 'repo_id': The repository where the branching occurs, given as a simple
- *        integer id. You can either pass this or 'repository'.
- *   - '[xxx]_specific': An array of VCS specific additional branch operation
- *        info. How this array looks like is defined by the
- *        corresponding backend module (versioncontrol_[xxx]).
- *
- * @param $branched_items
- *   An array of all items that are affected by the branching operation.
- *   Compared to standard item arrays, the ones in here may not have the
- *   'revision' element set and can optionally contain a 'source branch'
- *   element that specifies the original branch of this item.
- *   (For $op == 'delete', 'source branch' is never set.)
- *   An empty $branched_items array means that the whole repository has been
- *   branched.
- *
- * @return
- *   TRUE if the branch may be assigned, or FALSE if not.
- *   If FALSE is returned, you can retrieve the concerning error messages
- *   by calling versioncontrol_get_access_errors().
- */
-function versioncontrol_has_branch_access($branch, $branched_items) {
-  $branch['type'] = VERSIONCONTROL_OPERATION_BRANCH;
-  $paths = _versioncontrol_get_item_paths($branched_items);
-  $branch = _versioncontrol_fill_operation($branch, $paths);
-
-  if (!isset($branch['repository'])) {
-    _versioncontrol_set_repository_error(t('branch'));
-    return FALSE;
-  }
-  if (!_versioncontrol_has_account_access($branch, t('branch'))) {
-    return FALSE;
-  }
-
-  return _versioncontrol_has_branch_or_tag_access(
-    'versioncontrol_branch_access', $branch, $branched_items
-  );
-}
-
-/**
- * Determine if a tag may be assigned to a set of items.
- * Call this inside a pre-commit/pre-tag hook.
- *
- * @param $tag
- *   A structured array that consists of the following elements:
- *
- *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   - 'action': Specifies what is going to happen with the tag. This is
- *        VERSIONCONTROL_ACTION_ADDED if the tag is being created,
- *        VERSIONCONTROL_ACTION_MODIFIED if it's being renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   - 'uid': The Drupal user id of the committer. Passing this is optional -
- *        if it isn't set, this function will determine the uid.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the tagging occurs, given as a
- *        structured array, like a single element of what is returned
- *        by versioncontrol_get_repositories().
- *        You can either pass this or 'repo_id'.
- *   - 'repo_id': The repository where the tagging occurs, given as a simple
- *        integer id. You can either pass this or 'repository'.
- *   - 'message': The tag message that the user has given. If the version
- *        control system doesn't support tag messages, leave 'message' unset.
- *   - '[xxx]_specific': An array of VCS specific additional tag operation
- *        info. How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]).
- *
- * @param $tagged_items
- *   An array of all items that are affected by the tagging operation.
- *   Compared to standard item arrays, the ones in here may not have the
- *   'revision' element set and can optionally contain a 'source branch'
- *   element that specifies the original branch of this item.
- *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
- *   An empty $tagged_items array means that the whole repository has been
- *   tagged.
- *
- * @return
- *   TRUE if the tag may be assigned, or FALSE if not.
- *   If FALSE is returned, you can retrieve the concerning error messages
- *   by calling versioncontrol_get_access_errors().
- */
-function versioncontrol_has_tag_access($tag, $tagged_items) {
-  $tag['type'] = VERSIONCONTROL_OPERATION_TAG;
-  $paths = _versioncontrol_get_item_paths($tagged_items);
-  $tag = _versioncontrol_fill_operation($tag, $paths);
-
-  if (!isset($tag['repository'])) {
-    _versioncontrol_set_repository_error(t('tag'));
-    return FALSE;
-  }
-  if (!_versioncontrol_has_account_access($tag, t('tag'))) {
-    return FALSE;
-  }
-
-  else if (empty($tag['message'])) {
-    // If we let empty messages through, we can't tell if the backend doesn't
-    // support tag messages, or if the user provided one. So, disallow empty
-    // tag messages by the user, as that's bad practice anyways.
+  // Don't let people do empty log messages, that's as evil as it gets.
+  if (isset($operation['message']) && empty($operation['message'])) {
     _versioncontrol_access_errors(array(
-      t('** ERROR: You have to provide a tag message.'),
+      t('** ERROR: You have to provide a log message.'),
     ));
     return FALSE;
-    // So, that's that. Now if empty($tag['message']), it can always be assumed
-    // that the VCS doesn't support tag messages.
   }
 
-  return _versioncontrol_has_branch_or_tag_access(
-    'versioncontrol_tag_access', $tag, $tagged_items
-  );
-}
-
-/**
- * The branch_access() and tag_access() functions work totally similar
- * internally, so let's share the code in a common function.
- */
-function _versioncontrol_has_branch_or_tag_access($hook, $branch_or_tag, $items) {
+  // Also see if other modules have any objections.
   $error_messages = array();
 
-  foreach (module_implements($hook) as $module) {
-    $function = $module .'_'. $hook;
+  foreach (module_implements('versioncontrol_write_access') as $module) {
+    $function = $module .'_versioncontrol_write_access';
 
-    // If at least one access hook returns TRUE, the branch/tag goes through.
-    $outcome = $function($branch_or_tag, $items);
+    // If at least one hook_versioncontrol_write_access returns TRUE,
+    // the commit goes through. (This is for admin or sandbox exceptions.)
+    $outcome = $function($operation, $operation_items);
     if ($outcome === TRUE) {
       return TRUE;
     }
-    else { // If !TRUE, $outcome is required to be an array with error messages
+    else { // if !TRUE, $outcome is required to be an array with error messages
       $error_messages = array_merge($error_messages, $outcome);
     }
   }
 
-  // Let the branch/tag assignment fail if there's more than zero error messages.
+  // Let the operation fail if there's more than zero error messages.
   if (!empty($error_messages)) {
     _versioncontrol_access_errors($error_messages);
     return FALSE;
@@ -310,179 +163,79 @@ function _versioncontrol_access_errors($new_messages = NULL) {
 }
 
 /**
- * Insert a commit into the database, and call the necessary module hooks.
- * Only call this function after the commit has been successfully executed.
+
+/**
+ * Insert a commit, branch or tag operation into the database, and call the
+ * necessary module hooks. Only call this function after the operation has been
+ * successfully executed.
  *
- * @param $commit
- *   A single commit array like the ones returned by
- *   versioncontrol_get_commits(), but leaving out on a few details that
+ * @param $operation
+ *   A single operation array like the ones returned by
+ *   versioncontrol_get_operations(), but leaving out on a few details that
  *   will instead be determined by this function. Here's the allowed elements:
  *
- *   - 'repository': The repository where this commit occurred, given as a
- *        structured array, like a single element of what is returned
- *        by versioncontrol_get_repositories().
+ *   - 'type': The type of the operation - one of the
+ *        VERSIONCONTROL_OPERATION_{COMMIT,BRANCH,TAG} constants.
+ *   - 'repository': The repository where this operation occurs,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
  *        You can either pass this or 'repo_id'.
- *   - 'repo_id': The repository where this commit occurred, given as a simple
+ *   - 'repo_id': The repository where this operation occurs, given as a simple
  *        integer id. You can either pass this or 'repository'.
- *   - 'date': The time when the revision was committed, given as Unix timestamp.
+ *   - 'date': The time when the operation was performed, given as
+ *        Unix timestamp. (For commits, this is the time when the revision
+ *        was committed, whereas for branch/tag operations it is the time
+ *        when the files were branched or tagged.)
  *   - 'uid': The Drupal user id of the committer. Passing this is optional -
  *        if it isn't set, this function will determine the uid.
  *   - 'username': The system specific VCS username of the committer.
- *   - 'message': The commit message.
+ *   - 'message': The log message for the commit, tag or branch operation.
+ *        If a version control system doesn't support messages for the current
+ *        operation type, this element should be empty.
  *   - 'revision': The VCS specific repository-wide revision identifier,
  *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
  *        distributed version control systems. If there is no such revision
  *        (which may be the case for version control systems that don't support
  *        atomic commits) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': An array of VCS specific additional commit information.
- *        How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]). If the backend has registered
- *        itself with the VERSIONCONTROL_FLAG_AUTOADD_COMMITS option, all items
- *        of this array will automatically be inserted into the
- *        {versioncontrol_[xxx]_commits} table.
+ *        For branch and tag operations, this element indicates the
+ *        (repository-wide) revision of the files that were branched or tagged.
  *
- * @param $commit_actions
- *   A structured array containing the exact details of what happened to
- *   each item in this commit. The structure of this array is the same as
- *   the return value of versioncontrol_get_commit_actions().
+ *   - 'labels': An array of branches or tags that were affected by this
+ *        operation. Branch and tag operations are known to only affect one
+ *        branch or tag, so for these there will be only one element (with 0
+ *        as key) in 'labels'. Commits might affect any number of branches,
+ *        including none. Commits that emulate branches and/or tags (like
+ *        in Subversion, where they're not a native concept) can also include
+ *        add/delete/move operations for labels, as detailed below.
+ *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
+ *        or 'master' - is also considered a branch. Each element in 'labels'
+ *        is a structured array with the following keys:
  *
- * @return
- *   The finalized commit array, with all of the 'vc_op_id', 'type',
- *   'repository', 'uid' and 'directory' properties filled in,
- *   and 'repo_id' removed if it existed before.
- *   In case of an error, NULL is returned instead of the commit array.
- */
-function versioncontrol_insert_commit($commit, $commit_actions) {
-  $commit['type'] = VERSIONCONTROL_OPERATION_COMMIT;
-  return _versioncontrol_insert_operation($commit, $commit_actions);
-}
-
-/**
- * Insert a branch operation into the database, and call the necessary hooks.
+ *        - 'name': The branch or tag name (a string).
+ *        - 'action': Specifies what happened to this label in this operation.
+ *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
+ *             For branch or tag operations (or commits that emulate those),
+ *             it can be one of VERSIONCONTROL_ACTION_ADDED,
+ *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
  *
- * @param $branch
- *   A structured array that consists of the following elements:
+ * @param $operation_items
+ *   A structured array containing the exact details of what is about to happen
+ *   to each item in this commit. The structure of this array is the same as
+ *   the return value of versioncontrol_get_operation_items() - that is,
+ *   elements for 'type', 'path' and 'revision' - but doesn't include the
+ *   'item_revision_id' element, that one will be filled in by this function.
  *
- *   - 'branch_name': The name of the target branch
- *        (a string like 'DRUPAL-6--1').
- *   - 'action': Specifies what happened to the branch. This is
- *        VERSIONCONTROL_ACTION_ADDED if the branch was created,
- *        VERSIONCONTROL_ACTION_MODIFIED if was renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   - 'date': The time when the branching was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer. Passing this is optional -
- *        if it isn't set, this function will determine the uid.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the branching occurred,
- *        given as a structured array, like the return value
- *        of versioncontrol_get_repository().
- *        You can either pass this or 'repo_id'.
- *   - 'repo_id': The repository where the branching occurs, given as a simple
- *        integer id. You can either pass this or 'repository'.
- *   - '[xxx]_specific': An array of VCS specific additional branch operation
- *        info. How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]). If the backend has registered
- *        itself with the VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS option,
- *        all items of this array will automatically be inserted into the
- *        {versioncontrol_[xxx]_branch_operations} table.
- *
- * @param $branched_items
- *   An array of all items that are affected by the branching operation.
- *   Compared to standard item arrays, the ones in here can optionally contain
- *   a 'source branch' element that specifies the original branch name
- *   of this item. (For $op == 'delete', 'source branch' is never set.)
- *   Note that the 'revision' element - which is optional for
- *   versioncontrol_has_branch_access() - is compulsory for items in here.
- *   An empty $branched_items array means that the whole repository has been
- *   branched.
+ *   For commit operations, you also have to fill in the 'action' and
+ *   'source_items' elements (and optionally 'replaced_item') that are also
+ *   described in the versioncontrol_get_operation_items() API documentation.
  *
  * @return
- *   The finalized branch operation array, with all of the 'vc_op_id', 'type',
- *   'repository', 'uid' and 'directory' properties filled in, and 'repo_id'
- *   removed if it existed before. In case of an error, NULL is returned
- *   instead of the branch operation array.
+ *   The finalized operation array, with all of the 'vc_op_id', 'repository'
+ *   and 'uid' properties filled in, and 'repo_id' removed if it existed before.
+ *   In case of an error, NULL is returned instead of the operation array.
  */
-function versioncontrol_insert_branch_operation($branch, $branched_items) {
-  $branch['type'] = VERSIONCONTROL_OPERATION_BRANCH;
-  return _versioncontrol_insert_operation($branch, $branched_items);
-}
-
-/**
- * Insert a tag operation into the database, and call the necessary hooks.
- *
- * @param $tag
- *   A structured array that consists of the following elements:
- *
- *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   - 'action': Specifies what happened to the tag. This is
- *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
- *        VERSIONCONTROL_ACTION_MOVED if was renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   - 'date': The time when the tagging was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer. Passing this is optional -
- *        if it isn't set, this function will determine the uid.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the tagging occurred,
- *        given as a structured array, like the return value
- *        of versioncontrol_get_repository().
- *        You can either pass this or 'repo_id'.
- *   - 'repo_id': The repository where the tagging occurs, given as a simple
- *        integer id. You can either pass this or 'repository'.
- *   - 'message': The tag message that the user has given. If the version
- *        control system doesn't support tag messages, leave 'message' unset.
- *   - '[xxx]_specific': An array of VCS specific additional tag operation
- *        info. How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]). If the backend has registered
- *        itself with the VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS option,
- *        all items of this array will automatically be inserted into the
- *        {versioncontrol_[xxx]_tag_operations} table.
- *
- * @param $tagged_items
- *   An array of all items that are affected by the tagging operation.
- *   Compared to standard item arrays, the ones in here can optionally contain
- *   a 'source branch' element that specifies the original branch name
- *   of this item. (For $op == 'move' or $op == 'delete', 'source branch' is
- *   never set.) Note that the 'revision' element - which is optional for
- *   versioncontrol_has_tag_access() - is compulsory for items in here.
- *   An empty $tagged_items array means that the whole repository has been
- *   tagged.
- *
- * @return
- *   The finalized tag operation array, with all of the 'vc_op_id', 'type',
- *   'repository', 'uid' and 'directory' properties filled in, and 'repo_id'
- *   removed if it existed before. In case of an error, NULL is returned
- *   instead of the tag operation array.
- */
-function versioncontrol_insert_tag_operation($tag, $tagged_items) {
-  $tag['type'] = VERSIONCONTROL_OPERATION_TAG;
-  return _versioncontrol_insert_operation($tag, $tagged_items);
-}
-
-/**
- * Commits, branch operations and tag operations only differ in minor details,
- * so this function implements inserting any of those. In fact, the only real
- * purpose of having specialized wrapper functions is better readability and
- * clear API documentation.
- */
-function _versioncontrol_insert_operation($operation, $operation_details) {
-  switch ($operation['type']) {
-    case VERSIONCONTROL_OPERATION_COMMIT:
-      $paths = _versioncontrol_get_commit_action_paths($operation_details);
-      $autoadd_flag = VERSIONCONTROL_FLAG_AUTOADD_COMMITS;
-      $type = 'commit';
-      break;
-    case VERSIONCONTROL_OPERATION_BRANCH:
-      $paths = _versioncontrol_get_item_paths($operation_details);
-      $autoadd_flag = VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS;
-      $type = 'branch_operation';
-      break;
-    case VERSIONCONTROL_OPERATION_TAG:
-      $paths = _versioncontrol_get_item_paths($operation_details);
-      $autoadd_flag = VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS;
-      $type = 'tag_operation';
-      break;
-  }
-  $operation = _versioncontrol_fill_operation($operation, $paths, TRUE);
+function versioncontrol_insert_operation($opertion, $operation_items) {
+  $operation = _versioncontrol_fill_operation($operation, TRUE);
 
   if (!isset($operation['repository'])) {
     return NULL;
@@ -493,65 +246,25 @@ function _versioncontrol_insert_operation($operation, $operation_details) {
 
   db_query(
     "INSERT INTO {versioncontrol_operations}
-     (vc_op_id, type, repo_id, date, uid, username, directory)
-     VALUES (%d, %d, %d, %d, %d, '%s', '%s')",
+     (vc_op_id, type, repo_id, date, uid, username, revision, message)
+     VALUES (%d, %d, %d, %d, %d, '%s', '%s', '%s')",
     $operation['vc_op_id'], $operation['type'],
-    $operation['repository']['repo_id'], $operation['date'],
-    $operation['uid'], $operation['username'], $operation['directory']
+    $operation['repository']['repo_id'], $operation['date'], $operation['uid'],
+    $operation['username'], $operation['revision'], $operation['message']
   );
 
-  switch ($operation['type']) {
-    case VERSIONCONTROL_OPERATION_COMMIT:
-      db_query(
-        "INSERT INTO {versioncontrol_commits}
-        (vc_op_id, message, revision) VALUES (%d, '%s', '%s')",
-        $operation['vc_op_id'], $operation['message'], $operation['revision']
-      );
-      break;
-    case VERSIONCONTROL_OPERATION_BRANCH:
-      $branch_id = versioncontrol_ensure_branch(
-        $operation['branch_name'], $operation['repository']['repo_id']
-      );
-      db_query(
-        "INSERT INTO {versioncontrol_branch_operations}
-        (vc_op_id, branch_id, action) VALUES (%d, %d, %d)",
-        $operation['vc_op_id'], $branch_id, $operation['action']
-      );
-      break;
-    case VERSIONCONTROL_OPERATION_TAG:
-      db_query(
-        "INSERT INTO {versioncontrol_tag_operations}
-        (vc_op_id, tag_name, action, message) VALUES (%d, '%s', %d, '%s')",
-        $operation['vc_op_id'], $operation['tag_name'], $operation['action'],
-        $operation['message']
-      );
-      break;
-  }
+  ///TODO: implement inserting items and labels
 
   $vcs = $operation['repository']['vcs'];
-  $backends = versioncontrol_get_backends();
 
-  // Auto-add additional info from $operation['[xxx]_specific']
-  // into the database.
-  if (in_array($autoadd_flag, $backends[$vcs]['flags'])) {
-    $table_name = 'versioncontrol_'. $vcs .'_'. $type .'s';
-    $elements = $operation[$vcs .'_specific'];
-    $elements['vc_op_id'] = $operation['vc_op_id'];
-    _versioncontrol_db_insert_additions($table_name, $elements);
+  // Notify the backend first.
+  if (versioncontrol_backend_implements($vcs, 'operation')) {
+    _versioncontrol_call_backend($vcs, 'operation',
+                                 array('insert', $operation, $operation_items));
   }
-
-  // Provide an opportunity for the backend to add its own stuff.
-  // Calls [xxx]_commit(), [xxx]_branch_operation() or [xxx]_tag_operation().
-  if (versioncontrol_backend_implements($vcs, $type)) {
-    _versioncontrol_call_backend($vcs, $type,
-                                 array('insert', $operation, $operation_details));
-  }
-
   // Everything's done, let the world know about it!
-  // Calls hook_versioncontrol_branch_operation()
-  // or hook_versioncontrol_tag_operation().
-  module_invoke_all('versioncontrol_'. $type,
-                    'insert', $operation, $operation_details);
+  module_invoke_all('versioncontrol_operation',
+                    'insert', $operation, $operation_items);
   return $operation;
 }
 
@@ -564,59 +277,31 @@ function _versioncontrol_insert_operation($operation, $operation_details) {
  *   the operation that should be deleted.
  */
 function versioncontrol_delete_operation($operation) {
-  switch ($operation['type']) {
-    case VERSIONCONTROL_OPERATION_COMMIT:
-      $operation_details = versioncontrol_get_commit_actions($operation);
-      $autoadd_flag = VERSIONCONTROL_FLAG_AUTOADD_COMMITS;
-      $type = 'commit';
-      break;
-    case VERSIONCONTROL_OPERATION_BRANCH:
-      $operation_details = versioncontrol_get_branched_items($operation);
-      $autoadd_flag = VERSIONCONTROL_FLAG_AUTOADD_BRANCH_OPERATIONS;
-      $type = 'branch_operation';
-      break;
-    case VERSIONCONTROL_OPERATION_TAG:
-      $operation_details = versioncontrol_get_tagged_items($operation);
-      $autoadd_flag = VERSIONCONTROL_FLAG_AUTOADD_TAG_OPERATIONS;
-      $type = 'tag_operation';
-      break;
-  }
+  $operation_details = versioncontrol_get_operation_items($operation);
 
   // Announce deletion of the operation before anything has happened.
   // Calls hook_versioncontrol_commit(), hook_versioncontrol_branch_operation()
   // or hook_versioncontrol_tag_operation().
-  module_invoke_all('versioncontrol_'. $type,
-                    'delete', $operation, $operation_details);
+  module_invoke_all('versioncontrol_operation',
+                    'delete', $operation, $operation_items);
 
   $vcs = $operation['repository']['vcs'];
 
   // Provide an opportunity for the backend to delete its own stuff.
-  // Calls [xxx]_commit(), [xxx]_branch_operation() or [xxx]_tag_operation().
-  if (versioncontrol_backend_implements($vcs, $type)) {
-    _versioncontrol_call_backend($vcs, $type,
-                                 array('delete', $operation, $operation_details));
+  if (versioncontrol_backend_implements($vcs, 'operation')) {
+    _versioncontrol_call_backend($vcs, 'operation',
+                                 array('delete', $operation, $operation_items));
   }
 
-  // Auto-delete additional info from
-  // $operation['repository']['[xxx]_specific'] from the database.
-  $backends = versioncontrol_get_backends();
-  if (isset($backends[$vcs])) { // not the case when called from uninstall
-    $is_autoadd = in_array($autoadd_flag, $backends[$vcs]['flags']);
-  }
-  if ($is_autoadd) {
-    // e.g. {versioncontrol_cvs_commits}, {versioncontrol_svn_tag_operations}
-    $table_name = 'versioncontrol_'. $vcs .'_'. $type .'s';
-    _versioncontrol_db_delete_additions(
-      $table_name, 'vc_op_id', $operation['vc_op_id']
-    );
-  }
-
-  db_query('DELETE FROM {versioncontrol_'. $type .'s}
+  db_query('DELETE FROM {versioncontrol_operation_labels}
+            WHERE vc_op_id = %d', $operation['vc_op_id']);
+  db_query('DELETE FROM {versioncontrol_operation_items}
             WHERE vc_op_id = %d', $operation['vc_op_id']);
   db_query('DELETE FROM {versioncontrol_operations}
             WHERE vc_op_id = %d', $operation['vc_op_id']);
 }
 
+///TODO: remove, but cherrypick the useful stuff first
 function _versioncontrol_get_commit_action_paths($commit_actions) {
   $paths = array();
 
@@ -644,23 +329,12 @@ function _versioncontrol_get_commit_action_paths($commit_actions) {
   return $paths;
 }
 
-function _versioncontrol_get_item_paths($items) {
-  $paths = array();
-  foreach ($items as $item) {
-    $paths[] = $item['path'];
-  }
-  return $paths;
-}
-
 /**
  * Fill in various operation properties into the given operation array
  * (commit, branch op or tag op), in case those values are not given.
  *
  * @param $operation
  *   The plain operation array that might lack have some properties yet.
- * @param $paths
- *   The list of item paths that are affected by this operation.
- *   Used for calculating the 'directory' property.
  * @param $include_unauthorized
  *   If FALSE, the 'uid' property will receive a value of 0 for known
  *   but unauthorized users. If TRUE, all known users are mapped to their uid.
@@ -669,7 +343,7 @@ function _versioncontrol_get_item_paths($items) {
  *   The completed commit, branch operation or tag operation array.
  *   Check on isset($operation['repository']) before proceeding.
  */
-function _versioncontrol_fill_operation(&$operation, $paths, $include_unauthorized = FALSE) {
+function _versioncontrol_fill_operation(&$operation, $include_unauthorized = FALSE) {
   // If not already there, retrieve the full repository object.
   if (!isset($operation['repository']) && isset($operation['repo_id'])) {
     $operation['repository'] = versioncontrol_get_repository($operation['repo_id']);
@@ -685,53 +359,14 @@ function _versioncontrol_fill_operation(&$operation, $paths, $include_unauthoriz
     $operation['uid'] = isset($uid) ? $uid : 0;
   }
 
-  // Calculate the common directory of all paths where stuff happened.
-  $operation['directory'] = _versioncontrol_get_common_directory($paths);
-
-  // If backends don't insert tag messages then we define them as empty.
-  if ($operation['type'] == VERSIONCONTROL_OPERATION_TAG && !isset($operation['message'])) {
+  // For insertions (which have 'date' set, as opposed to write access checks),
+  // fill in the log message if it's unset. We don't want to do this for
+  // write access checks because empty messages are denied access,
+  // which requires distinguishing between unset and empty.
+  if (isset($operation['date'] && !isset($operation['message'])) {
     $operation['message'] = '';
   }
   return $operation;
-}
-
-/**
- * Retrieve the deepest-level directory in the repository that is common
- * to all the given paths, e.g. '/src' if the $paths argument contains
- * '/src/subdir/code.php' and '/src/README.txt', or '/' if it contains
- * '/src/README.txt' and '/doc'.
- *
- * @param $paths
- *   The paths of all items of which the common directory should be retrieved.
- *
- * @return
- *   The common directory path of all items in the $commit_actions array,
- *   as mentioned above.
- */
-function _versioncontrol_get_common_directory($paths) {
-  if (empty($paths)) {
-    return '/';
-  }
-
-  $dirparts = explode('/', dirname(array_pop($paths)));
-
-  foreach ($paths as $path) {
-    $new_dirparts = array();
-    $current_dirparts = explode('/', dirname($path));
-    $mincount = min(count($dirparts), count($current_dirparts));
-
-    for ($i = 0; $i < $mincount; $i++) {
-      if ($dirparts[$i] == $current_dirparts[$i]) {
-        $new_dirparts[] = $dirparts[$i];
-      }
-    }
-    $dirparts = $new_dirparts;
-  }
-
-  if (count($dirparts) == 1) {
-    return '/';
-  }
-  return implode('/', $dirparts);
 }
 
 
@@ -1060,24 +695,15 @@ function versioncontrol_update_repository($repository, $repository_urls) {
  *   versioncontrol_get_repository().
  */
 function versioncontrol_delete_repository($repository) {
-  // Delete tags.
-  $tags = versioncontrol_get_tag_operations(array('repo_ids' => array($repository['repo_id'])));
-  foreach ($tags as $tag) {
-    versioncontrol_delete_operation($tag);
+  // Delete operations.
+  $operations = versioncontrol_get_operations(array('repo_ids' => array($repository['repo_id'])));
+  foreach ($operations as $operation) {
+    versioncontrol_delete_operation($operation);
   }
-  // Delete branches.
-  $branches = versioncontrol_get_branch_operations(array('repo_ids' => array($repository['repo_id'])));
-  foreach ($branches as $branch) {
-    versioncontrol_delete_operation($branch);
-  }
-  db_query('DELETE FROM {versioncontrol_branches}
+  // Delete labels.
+  db_query('DELETE FROM {versioncontrol_labels}
             WHERE repo_id = %d', $repository['repo_id']);
-
-  // Delete commits.
-  $commits = versioncontrol_get_commits(array('repo_ids' => array($repository['repo_id'])));
-  foreach ($commits as $commit) {
-    versioncontrol_delete_operation($commit);
-  }
+  ///TODO: delete item revisions and source items.
 
   // Delete accounts.
   $accounts = versioncontrol_get_accounts(

@@ -15,346 +15,209 @@
 
 
 /**
- * Act on database changes when commits are inserted or deleted.
- * Note that this hook is not necessarily called at the time when the commit
- * actually happens - commits can also be inserted by a cron script when
- * the actual commit has been accomplished for quite a while already.
+ * Act on database changes when commit, tag or branch operations are inserted
+ * or deleted. Note that this hook is not necessarily called at the time
+ * when the operation actually happens - operations can also be inserted
+ * by a cron script when the actual commit/branch/tag has been accomplished
+ * for quite a while already.
  *
  * @param $op
- *   'insert' when the commit has just been recorded and inserted into the
+ *   'insert' when the operation has just been recorded and inserted into the
  *   database, or 'delete' if it will be deleted right after this hook
  *   has been called.
  *
- * @param $commit
- *   A commit array containing basic information about a commit.
- *   It consists of the following elements:
+ * @param $operation
+ *   An operation array containing basic information about the commit, branch
+ *   or tag operation. It consists of the following elements:
  *
  *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
  *        which is unique among all operations (commits, branch ops, tag ops)
  *        in all repositories.
- *   - 'type': The type of the operation, which is
- *        VERSIONCONTROL_OPERATION_COMMIT for commits.
- *   - 'repository': The repository where this commit occurred.
- *        This is a structured array, like a single element of
- *        what is returned by versioncontrol_get_repositories().
- *   - 'date': The time when the revision was committed,
- *        given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all the changed items, e.g. '/src' if the commit changed
- *        the files '/src/subdir/code.php' and '/src/README.txt'.
- *   - 'message': The commit message.
+ *   - 'type': The type of the operation - one of the
+ *        VERSIONCONTROL_OPERATION_{COMMIT,BRANCH,TAG} constants.
+ *        Note that if you pass branch or tag constraints, this function might
+ *        nevertheless return commit operations too - that happens for version
+ *        control systems without native branches or tags (like Subversion)
+ *        when a branch or tag is affected by the commit.
+ *   - 'repository': The repository where this operation occurred.
+ *        This is a structured "repository array", like is returned
+ *        by versioncontrol_get_repository().
+ *   - 'date': The time when the operation was performed, given as
+ *        Unix timestamp. (For commits, this is the time when the revision
+ *        was committed, whereas for branch/tag operations it is the time
+ *        when the files were branched or tagged.)
+ *   - 'uid': The Drupal user id of the operation author, or 0 if no
+ *        Drupal user could be associated to the author.
+ *   - 'username': The system specific VCS username of the author.
+ *   - 'message': The log message for the commit, tag or branch operation.
+ *        If a version control system doesn't support messages for any of them,
+ *        this element contains an empty string.
  *   - 'revision': The VCS specific repository-wide revision identifier,
  *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
  *        distributed version control systems. If there is no such revision
  *        (which may be the case for version control systems that don't support
  *        atomic commits) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': An array of VCS specific additional commit information.
- *        How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]).
+ *        For branch and tag operations, this element indicates the
+ *        (repository-wide) revision of the files that were branched or tagged.
  *
- * @param $commit_actions
- *   A structured array containing the exact details of what happened to
- *   each item in this commit. Array keys are the current/new paths, also for
- *   VERSIONCONTROL_ACTION_DELETED actions even if the file actually doesn't
- *   exist anymore. The corresponding array values are again structured arrays
- *   and consist of elements with the following keys:
+ *   - 'labels': An array of branches or tags that were affected by this
+ *        operation. Branch and tag operations are known to only affect one
+ *        branch or tag, so for these there will be only one element (with 0
+ *        as key) in 'labels'. Commits might affect any number of branches,
+ *        including none. Commits that emulate branches and/or tags (like
+ *        in Subversion, where they're not a native concept) can also include
+ *        add/delete/move operations for labels, as detailed below.
+ *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
+ *        or 'master' - is also considered a branch. Each element in 'labels'
+ *        is a structured array with the following keys:
  *
- *   - 'action': Specifies how the item was modified.
+ *        - 'id': The label identifier (a simple integer), used for unique
+ *             identification of branches and tags in the database.
+ *        - 'name': The branch or tag name (a string).
+ *        - 'action': Specifies what happened to this label in this operation.
+ *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
+ *             For branch or tag operations (or commits that emulate those),
+ *             it can be one of VERSIONCONTROL_ACTION_ADDED,
+ *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
+ *
+ * @param $operation_items
+ *   A structured array containing all items that were affected by the above
+ *   operation. Array keys are the current/new paths, even if the item doesn't
+ *   exist anymore (as is the case with delete actions in commits).
+ *   The associated array elements are structured item arrays and consist of
+ *   the following elements:
+ *
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for items
+ *        that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED respectively
+ *        VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items that have been
+ *        removed (by a commit's delete action).
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - 'item_revision_id': Identifier of this item revision in the database.
+ *        Note that you can only rely on this element to exist for
+ *        operation items - functions that interface directly with the VCS
+ *        (such as versioncontrol_get_directory_contents() or
+ *        versioncontrol_get_all_item_branches()) might not include
+ *        this identifier, for obvious reasons.
+ *
+ *   For commit operations, additional information about the origin of
+ *   the items is also available. The following elements will be set
+ *   for each item in addition to the ones listed above:
+ *
+ *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'modified': Boolean value, specifies if a file was modified in addition
- *        to the other action in the 'action' element of the array.
- *        Only exists for the VERSIONCONTROL_ACTION_MOVED
- *        and VERSIONCONTROL_ACTION_COPIED actions.
- *   - 'current item': The updated state of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
- *   - 'source items': An array with the previous state(s) of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
+ *   - 'source_items': An array with the previous state(s) of the affected item.
+ *        Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *   - 'replaced_item': The previous but technically unrelated item at the
+ *        same location as the current item. Only exists if this previous item
+ *        was deleted and replaced by a different one that was just moved
+ *        or copied to this location.
  *
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- * @ingroup Commits
+ * @ingroup Operations
  * @ingroup Commit notification
  * @ingroup Database change notification
  */
-function hook_versioncontrol_commit($op, $commit, $commit_actions) {
+function hook_versioncontrol_operation($op, $operation, $operation_items) {
   if ($op == 'insert' && module_exists('commitlog')) {
-    $to = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-    commitlog_send_commit_mail($to, $commit, $commit_actions);
-  }
-}
-
-/**
- * Act on database changes when branch operations are inserted or deleted.
- * Note that this hook is not necessarily called at the time when the branch
- * operation actually happens - they can also be inserted by a cron script when
- * the actual operation has been accomplished for quite a while already.
- *
- * @param $op
- *   'insert' when the branch operation has just been recorded and inserted
- *   into the database, or 'delete' if it will be deleted right after this hook
- *   has been called.
- *
- * @param $branch
- *   A structured array that consists of the following elements:
- *
- *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
- *        which is unique among all operations (commits, branch ops, tag ops)
- *        in all repositories.
- *   - 'type': The type of the operation, which is
- *        VERSIONCONTROL_OPERATION_BRANCH for branches.
- *   - 'branch_name': The name of the target branch
- *        (a string like 'DRUPAL-6--1').
- *   - 'action': Specifies what happened to the branch. This is
- *        VERSIONCONTROL_ACTION_ADDED if the branch was created,
- *        VERSIONCONTROL_ACTION_MODIFIED if was renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   - 'date': The time when the branching was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the branching occurred,
- *        given as a structured array, like the return value
- *        of versioncontrol_get_repository().
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all the branched items, e.g. '/src' if the files
- *        '/src/subdir/code.php' and '/src/README.txt' were branched.
- *   - '[xxx]_specific': An array of VCS specific additional branch operation
- *        info. How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]).
- *
- * @param $branched_items
- *   An array of all items that were affected by the branching operation.
- *   An empty result array means that the whole repository has been branched.
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - 'source branch': Optional, may be set by the backend if the
- *        source branch (the one that this one branched off) can be retrieved.
- *        If given, this is a string with the original branch name.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- * @ingroup Branches
- * @ingroup Commit notification
- * @ingroup Database change notification
- */
-function hook_versioncontrol_branch_operation($op, $branch, $branched_items) {
-  if ($op == 'insert') {
     if (variable_get('commitlog_send_notification_mails', 0)) {
-      $to = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-      commitlog_send_branch_mail('branch', $to, $branch, $branched_items);
-    }
-  }
-}
-
-/**
- * Act on database changes when tag operations are inserted or deleted.
- * Note that this hook is not necessarily called at the time when the tag
- * operation actually happens - they can also be inserted by a cron script when
- * the actual operation has been accomplished for quite a while already.
- *
- * @param $op
- *   'insert' when the tag operation has just been recorded and inserted
- *   into the database, or 'delete' if it will be deleted right after this hook
- *   has been called.
- *
- * @param $tag
- *   A structured array that consists of the following elements:
- *
- *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
- *        which is unique among all operations (commits, branch ops, tag ops)
- *        in all repositories.
- *   - 'type': The type of the operation, which is
- *        VERSIONCONTROL_OPERATION_TAG for tags.
- *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   - 'action': Specifies what happened to the tag. This is
- *        VERSIONCONTROL_ACTION_ADDED if the tag was created,
- *        VERSIONCONTROL_ACTION_MOVED if was renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if was deleted.
- *   - 'date': The time when the tagging was done, given as Unix timestamp.
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the tagging occurred,
- *        given as a structured array, like the return value
- *        of versioncontrol_get_repository().
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all the tagged items, e.g. '/src' if the files
- *        '/src/subdir/code.php' and '/src/README.txt' were tagged.
- *   - 'message': The tag message that the user has given. If the version
- *        control system doesn't support tag messages, this is an empty string.
- *   - '[xxx]_specific': An array of VCS specific additional tag operation info.
- *        How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]).
- *
- * @param $tagged_items
- *   An array of all items that were affected by the tagging operation.
- *   An empty result array means that the whole repository has been tagged.
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - 'source branch': Optional, may be set by the backend if the
- *        source branch (the one that this tag comes from) can be retrieved.
- *        If given, this is a string with the original branch name.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- * @ingroup Tags
- * @ingroup Commit notification
- * @ingroup Database change notification
- */
-function hook_versioncontrol_tag_operation($op, $tag, $tagged_items) {
-  if ($op == 'insert') {
-    if (variable_get('commitlog_send_notification_mails', 0)) {
-      $to = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-      commitlog_send_tag_mail('tag', $to, $tag, $tagged_items);
+      $mailto = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+      commitlog_send_notification_mail($mailto, $operation, $operation_items);
     }
   }
 }
 
 
 /**
- * Restrict, ignore or explicitly allow commits for repositories that are
- * connected to the Version Control API by VCS specific hook scripts.
+ * Restrict, ignore or explicitly allow a commit, branch or tag operation
+ * for a repository that is connected to the Version Control API
+ * by VCS specific hook scripts.
  *
- * @param $commit
- *   A commit array of the commit that is about to happen. As it's not
- *   committed yet, it's not yet in the database as well, which means that
- *   any commit info retrieval functions won't work on this commit array.
+ * @param $operation
+ *   A single operation array like the ones returned by
+ *   versioncontrol_get_operations(), but leaving out on a few details that
+ *   will instead be determined by this function. This array describes
+ *   the operation that is about to happen. As it's not committed yet,
+ *   it's also not in the database yet, which means that any information
+ *   retrieval functions won't work on this operation array.
  *   It also means there's no 'vc_op_id', 'revision' and 'date' elements like
- *   in regular commit arrays. The 'message' element might or might not be set.
+ *   in regular operation arrays. The 'message' element will not be set
+ *   if the VCS doesn't support log messages for the current operation
+ *   (e.g., most version control systems don't have branch messages).
+ *
  *   Summed up, here's what this array contains for sure:
  *
- *   - 'type': The type of the operation, which is
- *        VERSIONCONTROL_OPERATION_COMMIT for commits.
- *   - 'repository': The repository where this commit occurred.
- *        This is a structured array, like a single element of
- *        what is returned by versioncontrol_get_repositories().
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
+ *   - 'type': The type of the operation - one of the
+ *        VERSIONCONTROL_OPERATION_{COMMIT,BRANCH,TAG} constants.
+ *   - 'repository': The repository where this operation occurs,
+ *        given as a structured array, like the return value
+ *        of versioncontrol_get_repository().
+ *   - 'uid': The Drupal user id of the committer.
  *   - 'username': The system specific VCS username of the committer.
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all the changed items, e.g. '/src' if the commit changed
- *        the files '/src/subdir/code.php' and '/src/README.txt'.
- *   - '[xxx]_specific': An array of VCS specific additional commit information.
- *        How this array looks like is defined by the corresponding
- *        backend module (versioncontrol_[xxx]).
  *
- * @param $commit_actions
- *   The commit actions of the above commit that is about to happen.
- *   Further information retrieval functions won't work on this array as well.
- *   Also, the 'source items' element of each action and the 'revision' element
- *   of each item in these actions might not be set.
- * @param $branch
- *   The target branch where the commit will happen (a string like 'DRUPAL-5').
- *   If the respective backend doesn't support branches,
- *   this may be NULL instead.
+ *   - 'labels': An array of branches or tags that will be affected by this
+ *        operation. Branch and tag operations are known to only affect one
+ *        branch or tag, so for these there will be only one element (with 0
+ *        as key) in 'labels'. Commits might affect any number of branches,
+ *        including none. Commits that emulate branches and/or tags (like
+ *        in Subversion, where they're not a native concept) can also include
+ *        add/delete/move operations for labels, as detailed below.
+ *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
+ *        or 'master' - is also considered a branch. Each element in 'labels'
+ *        is a structured array with the following keys:
+ *
+ *        - 'name': The branch or tag name (a string).
+ *        - 'action': Specifies what happened to this label in this operation.
+ *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
+ *             For branch or tag operations (or commits that emulate those),
+ *             it can be one of VERSIONCONTROL_ACTION_ADDED,
+ *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
+ *
+ * @param $operation_items
+ *   A structured array containing the exact details of what is about to happen
+ *   to each item in this commit. The structure of this array is the same as
+ *   the return value of versioncontrol_get_operation_items() - that is,
+ *   elements for 'type', 'path' and 'revision' - but doesn't include
+ *   the 'item_revision_id' element as there's no relation to the database yet.
+ *
+ *   The 'action', 'source_items', 'replaced_item' and 'revision' elements
+ *   of each item are optional for the VCS backend and may be left unset.
  *
  * @return
- *   An array with error messages (without trailing newlines) if the commit
+ *   An array with error messages (without trailing newlines) if the operation
  *   should not be allowed, or an empty array if you're indifferent,
- *   or TRUE if the commit should be allowed no matter what other
- *   commit access callbacks say.
+ *   or TRUE if the operation should be allowed no matter what other
+ *   write access callbacks say.
  *
- * @ingroup Commits
+ * @ingroup Operations
  * @ingroup Commit access
  * @ingroup Target audience: Commit access modules
  */
-function hook_versioncontrol_commit_access($commit, $commit_actions, $branch = NULL) {
-  if (empty($commit_actions)) {
+function hook_versioncontrol_write_access($operation, $operation_items) {
+  if (empty($operation_items)) {
     return array(); // no idea if this is ever going to happen, but let's be prepared
   }
 
   // Only allow users with a registered Drupal user account to commit.
-  if ($commit['uid'] != 0) {
-    $user = user_load(array('uid' => $commit['uid']));
+  if ($operation['uid'] != 0) {
+    $user = user_load(array('uid' => $operation['uid']));
   }
   if (!$user) {
-    $backends = versioncontrol_get_backends();
-    $backend = $backends[$commit['repository']['vcs']];
+    $backend = versioncontrol_get_backend($operation['repository']);
 
     $error_message = t(
 "** ERROR: no Drupal user matches !vcs user '!user'.
 ** Please contact a !vcs administrator for help.",
-      array('!vcs' => $backend['name'], '!user' => $commit['username'])
+      array('!vcs' => $backend['name'], '!user' => $operation['username'])
     );
     return array($error_message); // disallow the commit with an explanation
   }
   return array(); // we're indifferent, allow if nobody else has objections
 }
 
-/**
- * Restrict, ignore or explicitly allow if branches may be created, renamed
- * or deleted in repositories that are connected to the Version Control API
- * by VCS specific hook scripts.
- *
- * @param $branch
- *   A structured array that consists of the following elements:
- *
- *   - 'type': The type of the operation, which is
- *        VERSIONCONTROL_OPERATION_BRANCH for branches.
- *   - 'branch_name': The name of the target branch
- *        (a string like 'DRUPAL-6--1').
- *   - 'action': Specifies what is going to happen with the branch. This is
- *        VERSIONCONTROL_ACTION_ADDED if the branch is being created,
- *        VERSIONCONTROL_ACTION_MOVED if it's being renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the branching occurs,
- *        given as a structured array, like the return value
- *        of versioncontrol_get_repository().
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all of the branched items.
- *
- * @param $branched_items
- *   An array of all items that are affected by the branching operation.
- *   Compared to standard item arrays, the ones in here may not have the
- *   'revision' element set and can optionally contain a 'source branch'
- *   element that specifies the original branch name of this item.
- *   (For $op == 'delete', 'source branch' is never set.)
- *   An empty $branched_items array means that the whole repository has been
- *   branched.
- *
- * @return
- *   An array with error messages (without trailing newlines) if the branch
- *   may not be assigned, or an empty array if you're indifferent,
- *   or TRUE if the branch may be assigned no matter what other
- *   branch access callbacks say.
- *
- * @ingroup Branches
- * @ingroup Commit access
- * @ingroup Target audience: Commit access modules
- */
+///TODO: port to hook_versioncontrol_write_access()
 function hook_versioncontrol_branch_access($branch, $branched_items) {
   if ($branch['action'] == VERSIONCONTROL_ACTION_DELETED) {
     return array(); // even invalid tags should be allowed to be deleted
@@ -376,51 +239,7 @@ function hook_versioncontrol_branch_access($branch, $branched_items) {
   return array($error_message); // disallow the commit with an explanation
 }
 
-/**
- * Restrict, ignore or explicitly allow if branches may be created, renamed
- * or deleted in repositories that are connected to the Version Control API
- * by VCS specific hook scripts.
- *
- * @param $tag
- *   A structured array that consists of the following elements:
- *
- *   - 'type': The type of the operation, which is
- *        VERSIONCONTROL_OPERATION_TAG for tags.
- *   - 'tag_name': The name of the tag (a string like 'DRUPAL-6--1-1').
- *   - 'action': Specifies what is going to happen with the tag. This is
- *        VERSIONCONTROL_ACTION_ADDED if the tag is being created,
- *        VERSIONCONTROL_ACTION_MOVED if it's being renamed,
- *        or VERSIONCONTROL_ACTION_DELETED if it is slated for deletion.
- *   - 'uid': The Drupal user id of the committer, or 0 if no Drupal user
- *        could be associated to the committer.
- *   - 'username': The system specific VCS username of the committer.
- *   - 'repository': The repository where the tagging occurs,
- *        given as a structured array, like the return value
- *        of versioncontrol_get_repository().
- *   - 'directory': The deepest-level directory in the repository that is
- *        common to all of the tagged items.
- *   - 'message': The tag message that the user has given. If the version
- *        control system doesn't support tag messages, this is an empty string.
- *
- * @param $tagged_items
- *   An array of all items that are affected by the tagging operation.
- *   Compared to standard item arrays, the ones in here may not have the
- *   'revision' element set and can optionally contain a 'source branch'
- *   element that specifies the original branch name of this item.
- *   (For $op == 'move' or $op == 'delete', 'source branch' is never set.)
- *   An empty $tagged_items array means that the whole repository has been
- *   tagged.
- *
- * @return
- *   An array with error messages (without trailing newlines) if the tag
- *   may not be assigned, or an empty array if you're indifferent,
- *   or TRUE if the tag may be assigned no matter what other
- *   tag access callbacks say.
- *
- * @ingroup Tags
- * @ingroup Commit access
- * @ingroup Target audience: Commit access modules
- */
+///TODO: port to hook_versioncontrol_write_access()
 function hook_versioncontrol_tag_access($tag, $tagged_items) {
   if ($tag['action'] == VERSIONCONTROL_ACTION_DELETED) {
     return array(); // even invalid tags should be allowed to be deleted
