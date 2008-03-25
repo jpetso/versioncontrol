@@ -1299,8 +1299,8 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  *
  *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'source_items': An array with the previous state(s) of the affected item.
- *        Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *   - 'source_items': An array with the previous revision(s) of the affected
+ *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
  *   - 'replaced_item': The previous but technically unrelated item at the
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
@@ -1345,8 +1345,8 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = TR
  *
  *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'source_items': An array with the previous state(s) of the affected item.
- *        Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *   - 'source_items': An array with the previous revision(s) of the affected
+ *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
  *   - 'replaced_item': The previous but technically unrelated item at the
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
@@ -1374,7 +1374,7 @@ function versioncontrol_add_source_items(&$items) {
   while ($item_revision = db_fetch_object($result)) {
     $key = $item_keys[$item_revision->item_revision_id];
 
-    if (!isset($items[$key]['source_items']) {
+    if (!isset($items[$key]['source_items'])) {
       $items[$key]['source_items'] = array();
     }
     $item = array(

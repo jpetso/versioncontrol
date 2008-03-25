@@ -253,7 +253,57 @@ function versioncontrol_insert_operation($opertion, $operation_items) {
     $operation['username'], $operation['revision'], $operation['message']
   );
 
-  ///TODO: implement inserting items and labels
+  // So much for the operation itself, now the more verbose part:
+  // Inserting item revisions and labels. First up, item revisions.
+  foreach ($operation_items as $path => $item) {
+    // TODO: check item correctness: no source items for "added" actions,
+    //       only one source item for actions != "merged" or "other",
+    //       VERSIONCONTROL_ITEM_*_DELETED for "deleted" actions.
+    $item = _versioncontrol_ensure_item_revision(
+      $operation['repository'], $item
+    );
+    _versioncontrol_insert_operation_item(
+      $operation, $item, VERSIONCONTROL_OPERATION_MEMBER_ITEM
+    );
+
+    // If we've got source items (which is the case for commit operations),
+    // add them to the item revisions and source revisions tables as well.
+    foreach ($item['source_items'] as $key => $source_item) {
+      $source_item = _versioncontrol_ensure_item_revision(
+        $operation['repository'], $source_item
+      );
+      _versioncontrol_insert_source_revision($item, $source_item, $item['action']);
+
+      // Cache other important items in the operations table for 'path' search
+      // queries, because joining the source revisions table is too expensive.
+      switch ($item['action']) {
+        case VERSIONCONTROL_ACTION_MOVED:
+        case VERSIONCONTROL_ACTION_COPIED:
+        case VERSIONCONTROL_ACTION_MERGED:
+          if ($item['path'] != $source_item['path']) {
+            _versioncontrol_insert_operation_item($operation,
+              $source_item, VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM);
+          }
+          break;
+        default: // No additional caching for added, modified or deleted items.
+          break;
+      }
+      $item['source_items'][$key] = $source_item;
+    }
+
+    // If we've got a replaced item (might happen for copy/move commits),
+    // add it to the item revisions and source revisions table as well.
+    if (isset($item['replaced_item'])) {
+      $item['replaced_item'] = _versioncontrol_ensure_item_revision(
+        $operation['repository'], $item['replaced_item']
+      );
+      _versioncontrol_insert_source_revision(
+        $item, $item['replaced_item'], VERSIONCONTROL_ACTION_REPLACED
+      );
+    }
+    $operation_items[$path] = $item;
+  }
+  // TODO: implement inserting labels
 
   $vcs = $operation['repository']['vcs'];
 
@@ -266,6 +316,84 @@ function versioncontrol_insert_operation($opertion, $operation_items) {
   module_invoke_all('versioncontrol_operation',
                     'insert', $operation, $operation_items);
   return $operation;
+}
+
+/**
+ * Insert an item entry into the {versioncontrol_item_revisions} table,
+ * or retrieve the same one that's already there.
+ *
+ * @return
+ *   The @p $item variable, enhanced with the newly added property
+ *   'item_revision_id' specifying the database identifier for that revision.
+ *   If the 'type' property of the passed item is different from the one in
+ *   the database, then the new value will be written to the database.
+ */
+function _versioncontrol_ensure_item_revision($repository, $item) {
+  $result = db_query(
+    "SELECT item_revision_id, type
+     FROM {versioncontrol_item_revisions}
+     WHERE repo_id = %d AND path = '%s' AND revision = '%s'",
+    $repository['repo_id'], $item['path'], $item['revision']
+  );
+  while ($item_revision = db_fetch_object($result)) {
+    // Replace / fill in properties that were not in the WHERE condition.
+    $item['item_revision_id'] = $item_revision->item_revision_id;
+
+    if ($item['type'] == $item_revision->type) {
+      return $item; // no changes needed - otherwise, replace the existing item.
+    }
+  }
+  // The item doesn't yet exist in the database, so create it.
+  return _versioncontrol_insert_item_revision($repository, $item);
+}
+
+function _versioncontrol_insert_item_revision($repository, $item) {
+  if (isset($item['item_revision_id'])) {
+    db_query("DELETE FROM {versioncontrol_item_revisions}
+              WHERE item_revision_id = %d", $item['item_revision_id']);
+  }
+  else {
+    $item['item_revision_id'] = db_next_id('{versioncontrol_item_revisions}_item_revision_id');
+  }
+  db_query(
+    "INSERT INTO {versioncontrol_item_revisions}
+      (item_revision_id, repo_id, path, revision, type)
+      VALUES (%d, %d, '%s', '%s', %d)",
+    $item['item_revision_id'], $repository['repo_id'], $item['path'],
+    $item['revision'], $item['type']
+  );
+  return $item;
+}
+
+/**
+ * Insert an item entry into the {versioncontrol_operation_items} table.
+ * The items is expected to have an 'item_revision_id' property already.
+ */
+function _versioncontrol_insert_operation_item($operation, $item, $type) {
+  // Before inserting that item entry, make sure it doesn't exist already.
+  db_query("DELETE FROM {versioncontrol_operation_items}
+            WHERE vc_op_id = %d AND item_revision_id = %d",
+            $operation['vc_op_id'], $item['item_revision_id']);
+
+  db_query("INSERT INTO {versioncontrol_operation_items}
+            (vc_op_id, item_revision_id, type) VALUES (%d, %d, %d)",
+            $operation['vc_op_id'], $item['item_revision_id'], $type);
+}
+
+/**
+ * Insert an item entry into the {versioncontrol_source_items} table.
+ * Items are expected to have an 'item_revision_id' property already.
+ */
+function _versioncontrol_insert_source_revision($item, $source_item, $action) {
+  // Before inserting that item entry, make sure it doesn't exist already.
+  db_query("DELETE FROM {versioncontrol_source_items}
+            WHERE item_revision_id = %d AND source_item_revision_id = %d",
+            $item['item_revision_id'], $source_item['item_revision_id']);
+
+  db_query("INSERT INTO {versioncontrol_source_items}
+            (item_revision_id, source_item_revision_id, action)
+            VALUES (%d, %d, %d)",
+            $item['item_revision_id'], $source_item['item_revision_id'], $action);
 }
 
 /**
@@ -299,34 +427,6 @@ function versioncontrol_delete_operation($operation) {
             WHERE vc_op_id = %d', $operation['vc_op_id']);
   db_query('DELETE FROM {versioncontrol_operations}
             WHERE vc_op_id = %d', $operation['vc_op_id']);
-}
-
-///TODO: remove, but cherrypick the useful stuff first
-function _versioncontrol_get_commit_action_paths($commit_actions) {
-  $paths = array();
-
-  // Gather the paths of all current and source items.
-  foreach ($commit_actions as $path => $action) {
-    if (isset($action['current item'])) {
-      $paths[] = $action['current item']['path'];
-    }
-    // Modified and deleted items normally have similar paths in the source
-    // and current items. Even if they don't (may happen with Subversion), we
-    // we don't want to take that into account here as the "real" source file
-    // is at the new place already.
-    if ($action['action'] == VERSIONCONTROL_ACTION_MODIFIED
-        || $action['action'] == VERSIONCONTROL_ACTION_DELETED) {
-      continue;
-    }
-    // If we haven't dropped out until now, we also want the source items
-    // to be included in the affected paths.
-    if (isset($action['source items'])) {
-      foreach ($action['source items'] as $item) {
-        $paths[] = $item['path'];
-      }
-    }
-  }
-  return $paths;
 }
 
 /**
@@ -363,7 +463,7 @@ function _versioncontrol_fill_operation(&$operation, $include_unauthorized = FAL
   // fill in the log message if it's unset. We don't want to do this for
   // write access checks because empty messages are denied access,
   // which requires distinguishing between unset and empty.
-  if (isset($operation['date'] && !isset($operation['message'])) {
+  if (isset($operation['date']) && !isset($operation['message'])) {
     $operation['message'] = '';
   }
   return $operation;
