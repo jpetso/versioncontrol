@@ -256,9 +256,7 @@ function versioncontrol_insert_operation($opertion, $operation_items) {
   // So much for the operation itself, now the more verbose part:
   // Inserting item revisions and labels. First up, item revisions.
   foreach ($operation_items as $path => $item) {
-    // TODO: check item correctness: no source items for "added" actions,
-    //       only one source item for actions != "merged" or "other",
-    //       VERSIONCONTROL_ITEM_*_DELETED for "deleted" actions.
+    $item = _versioncontrol_sanitize_item($operation['repository'], $item);
     $item = _versioncontrol_ensure_item_revision(
       $operation['repository'], $item
     );
@@ -316,6 +314,65 @@ function versioncontrol_insert_operation($opertion, $operation_items) {
   module_invoke_all('versioncontrol_operation',
                     'insert', $operation, $operation_items);
   return $operation;
+}
+
+/**
+ * Check and if necessary correct item arrays so that item type and
+ * the number of source items correspond to specified actions.
+ */
+function _versioncontrol_sanitize_item($repository, $item) {
+  if (isset($item['action'])) {
+    // Make sure the number of source items corresponds with the action.
+    switch ($item['action']) {
+      // No source items for "added" actions.
+      case VERSIONCONTROL_ACTION_ADDED:
+        if (count($item['source_items']) > 0) {
+          _versioncontrol_bad_item_warning($repository, $item, 'At least one source item exists although the "added" action was set (which mandates an empty \'source_items\' array.');
+          $item['source_items'] = array(reset($item['source_items'])); // first item
+          $item['source_items'] = array();
+        }
+        break;
+      // Exactly one source item for actions other than "added", "merged" or "other".
+      case VERSIONCONTROL_ACTION_MODIFIED:
+      case VERSIONCONTROL_ACTION_MOVED:
+      case VERSIONCONTROL_ACTION_COPIED:
+      case VERSIONCONTROL_ACTION_DELETED:
+        if (count($item['source_items']) > 1) {
+          _versioncontrol_bad_item_warning($repository, $item, 'More than one source item exists although a "modified", "moved", "copied" or "deleted" action was set (which allows only one of those).');
+          $item['source_items'] = array(reset($item['source_items'])); // first item
+        }
+        // fall through
+      case VERSIONCONTROL_ACTION_MERGED:
+        if (empty($item['source_items'])) {
+          _versioncontrol_bad_item_warning($repository, $item, 'No source item exists although a "modified", "moved", "copied", "merged" or "deleted" action was set (which requires at least or exactly one of those).');
+        }
+        break;
+      default:
+        break;
+    }
+    // For a "delete" action, make sure the item type is also a "deleted" one.
+    // That's quite a minor error, so don't complain but rather fix it quietly.
+    if ($item['action'] == VERSIONCONTROL_ACTION_DELETED) {
+      if ($item['type'] == VERSIONCONTROL_ITEM_FILE) {
+        $item['type'] = VERSIONCONTROL_ITEM_FILE_DELETED;
+      }
+      else if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
+        $item['type'] = VERSIONCONTROL_ITEM_DIRECTORY_DELETED;
+      }
+    }
+  }
+  return $item;
+}
+
+/**
+ * Print out a "Bad item received from VCS backend" warning to watchdog.
+ */
+function _versioncontrol_bad_item_warning($repository, $item, $message) {
+  watchdog('special',
+    'Bad item received from VCS backend: '. $message
+      .'<br/><pre>Item array: '. print_r($item)
+      ."\nRepository array: ". print_r($repository) .'</pre>',
+    'warning');
 }
 
 /**
