@@ -234,7 +234,7 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   and 'uid' properties filled in, and 'repo_id' removed if it existed before.
  *   In case of an error, NULL is returned instead of the operation array.
  */
-function versioncontrol_insert_operation($opertion, $operation_items) {
+function versioncontrol_insert_operation($operation, $operation_items) {
   $operation = _versioncontrol_fill_operation($operation, TRUE);
 
   if (!isset($operation['repository'])) {
