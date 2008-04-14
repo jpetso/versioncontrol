@@ -49,6 +49,9 @@
  *        is a structured array with the following keys:
  *
  *        - 'name': The branch or tag name (a string).
+ *        - 'type': Whether this label is a branch (indicated by the
+ *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *             (VERSIONCONTROL_OPERATION_TAG).
  *        - 'action': Specifies what happened to this label in this operation.
  *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
  *             For branch or tag operations (or commits that emulate those),
@@ -212,6 +215,9 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *        is a structured array with the following keys:
  *
  *        - 'name': The branch or tag name (a string).
+ *        - 'type': Whether this label is a branch (indicated by the
+ *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *             (VERSIONCONTROL_OPERATION_TAG).
  *        - 'action': Specifies what happened to this label in this operation.
  *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
  *             For branch or tag operations (or commits that emulate those),
@@ -229,12 +235,19 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   'source_items' elements (and optionally 'replaced_item') that are also
  *   described in the versioncontrol_get_operation_items() API documentation.
  *
+ *   This parameter is passed by reference as the insert operation will
+ *   check the validity of a few item properties and will also assign an
+ *   'item_revision_id' property to each of the given items. So when this
+ *   function returns with a result other than NULL, the @p $operation_items
+ *   array will also be up to snuff for further processing.
+ *
  * @return
  *   The finalized operation array, with all of the 'vc_op_id', 'repository'
  *   and 'uid' properties filled in, and 'repo_id' removed if it existed before.
+ *   Labels are now equipped with an additional 'label_id' property.
  *   In case of an error, NULL is returned instead of the operation array.
  */
-function versioncontrol_insert_operation($operation, $operation_items) {
+function versioncontrol_insert_operation($operation, &$operation_items) {
   $operation = _versioncontrol_fill_operation($operation, TRUE);
 
   if (!isset($operation['repository'])) {
@@ -253,8 +266,14 @@ function versioncontrol_insert_operation($operation, $operation_items) {
     $operation['username'], $operation['revision'], $operation['message']
   );
 
-  // So much for the operation itself, now the more verbose part:
-  // Inserting item revisions and labels. First up, item revisions.
+  // Insert labels that are attached to the operation.
+  foreach ($operation['labels'] as $key => $label) {
+    $label = _versioncontrol_ensure_label($operation['repository'], $label);
+    _versioncontrol_insert_operation_label($operation, $label);
+    $operation['labels'][$key] = $label; // because it now has a 'label_id'
+  }
+
+  // So much for the operation itself, now the more verbose part: items.
   foreach ($operation_items as $path => $item) {
     $item = _versioncontrol_sanitize_item($operation['repository'], $item);
     $item = _versioncontrol_ensure_item_revision(
@@ -301,7 +320,6 @@ function versioncontrol_insert_operation($operation, $operation_items) {
     }
     $operation_items[$path] = $item;
   }
-  // TODO: implement inserting labels
 
   $vcs = $operation['repository']['vcs'];
 
@@ -314,6 +332,63 @@ function versioncontrol_insert_operation($operation, $operation_items) {
   module_invoke_all('versioncontrol_operation',
                     'insert', $operation, $operation_items);
   return $operation;
+}
+
+/**
+ * Insert a label entry into the {versioncontrol_labels} table,
+ * or retrieve the same one that's already there.
+ *
+ * @return
+ *   The @p $label variable, enhanced with the newly added property 'label_id'
+ *   specifying the database identifier for that label. There may be labels
+ *   with a similar 'name' but different 'type' properties, those are considered
+ *   to be different and will both go into the database side by side.
+ */
+function _versioncontrol_ensure_label($repository, $label) {
+  $result = db_query(
+    "SELECT label_id, repo_id, name, type FROM {versioncontrol_labels}
+      WHERE repo_id = %d AND name = '%s' AND type = %d",
+    $repository['repo_id'], $label['name'], $label['type']
+  );
+  while ($row = db_fetch_object($result)) {
+    // Replace / fill in properties that were not in the WHERE condition.
+    $label['label_id'] = $row->label_id;
+    return $label;
+  }
+  // The item doesn't yet exist in the database, so create it.
+  return _versioncontrol_insert_label($repository, $label);
+}
+
+function _versioncontrol_insert_label($repository, $label) {
+  if (isset($label['label_id'])) {
+    db_query("DELETE FROM {versioncontrol_labels}
+              WHERE label_id = %d", $label['label_id']);
+  }
+  else {
+    $label['label_id'] = db_next_id('{versioncontrol_labels}_label_id');
+  }
+  db_query(
+    "INSERT INTO {versioncontrol_labels}
+      (label_id, repo_id, name, type)
+      VALUES (%d, %d, '%s', %d)",
+    $label['label_id'], $repository['repo_id'], $label['name'], $label['type']
+  );
+  return $label;
+}
+
+/**
+ * Insert a label entry into the {versioncontrol_operation_labels} table.
+ * The label is expected to have a 'label_id' property already.
+ */
+function _versioncontrol_insert_operation_label($operation, $label) {
+  // Before inserting that item entry, make sure it doesn't exist already.
+  db_query("DELETE FROM {versioncontrol_operation_labels}
+            WHERE vc_op_id = %d AND label_id = %d",
+            $operation['vc_op_id'], $label['label_id']);
+
+  db_query("INSERT INTO {versioncontrol_operation_labels}
+            (vc_op_id, label_id, action) VALUES (%d, %d, %d)",
+            $operation['vc_op_id'], $label['label_id'], $label['action']);
 }
 
 /**
@@ -424,7 +499,7 @@ function _versioncontrol_insert_item_revision($repository, $item) {
 
 /**
  * Insert an item entry into the {versioncontrol_operation_items} table.
- * The items is expected to have an 'item_revision_id' property already.
+ * The item is expected to have an 'item_revision_id' property already.
  */
 function _versioncontrol_insert_operation_item($operation, $item, $type) {
   // Before inserting that item entry, make sure it doesn't exist already.
@@ -439,7 +514,8 @@ function _versioncontrol_insert_operation_item($operation, $item, $type) {
 
 /**
  * Insert an item entry into the {versioncontrol_source_items} table.
- * Items are expected to have an 'item_revision_id' property already.
+ * Both target and source items are expected to have an 'item_revision_id'
+ * property already.
  */
 function _versioncontrol_insert_source_revision($item, $source_item, $action) {
   // Before inserting that item entry, make sure it doesn't exist already.
@@ -857,10 +933,33 @@ function versioncontrol_delete_repository($repository) {
   foreach ($operations as $operation) {
     versioncontrol_delete_operation($operation);
   }
+  unset($operations); // conserve memory, this might get quite large
+
   // Delete labels.
   db_query('DELETE FROM {versioncontrol_labels}
             WHERE repo_id = %d', $repository['repo_id']);
-  ///TODO: delete item revisions and source items.
+
+  // Delete item revisions and related source item entries.
+  $result = db_query('SELECT item_revision_id
+                      FROM {versioncontrol_item_revisions}
+                      WHERE repo_id = %d', $repository['repo_id']);
+  $item_ids = array();
+  $placeholders = array();
+
+  while ($item_revision = db_fetch_object($result)) {
+    $item_ids[] = $item_revision->item_revision_id;
+    $placeholders[] = '%d';
+  }
+  $placeholders = '('. implode(',', $placeholders) .')';
+
+  db_query('DELETE FROM {versioncontrol_source_items}
+            WHERE item_revision_id IN '. $placeholders, $item_ids);
+  db_query('DELETE FROM {versioncontrol_source_items}
+            WHERE source_item_revision_id IN '. $placeholders, $item_ids);
+  db_query('DELETE FROM {versioncontrol_item_revisions}
+            WHERE repo_id = %d', $repository['repo_id']);
+  unset($item_ids); // conserve memory, this might get quite large
+  unset($placeholders); // ...likewise
 
   // Delete accounts.
   $accounts = versioncontrol_get_accounts(

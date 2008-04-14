@@ -877,9 +877,12 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *        or 'master' - is also considered a branch. Each element in 'labels'
  *        is a structured array with the following keys:
  *
- *        - 'id': The label identifier (a simple integer), used for unique
+ *        - 'label_id': The label identifier (a simple integer), used for unique
  *             identification of branches and tags in the database.
  *        - 'name': The branch or tag name (a string).
+ *        - 'type': Whether this label is a branch (indicated by the
+ *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *             (VERSIONCONTROL_OPERATION_TAG).
  *        - 'action': Specifies what happened to this label in this operation.
  *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
  *             For branch or tag operations (or commits that emulate those),
@@ -951,8 +954,8 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
   }
 
   // Add the corresponding labels to each operation.
-  $result = db_query('SELECT op.vc_op_id,
-                             label.label_id, label.name, label.action
+  $result = db_query('SELECT op.vc_op_id, oplabel.action,
+                             label.label_id, label.name, label.type
                       FROM {versioncontrol_operations} op
                        INNER JOIN {versioncontrol_operation_labels} oplabel
                         ON op.vc_op_id = oplabel.vc_op_id
@@ -963,8 +966,9 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
 
   while ($row = db_fetch_object($result)) {
     $ops[$row->vc_op_id]['labels'][] = array(
-      'id' => $row->label_id,
+      'label_id' => $row->label_id,
       'name' => $row->name,
+      'type' => $row->type,
       'action' => $row->action,
     );
   }
