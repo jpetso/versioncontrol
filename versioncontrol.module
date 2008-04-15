@@ -1270,7 +1270,9 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  * @param $fetch_source_items
  *   If TRUE, source and replaced items will be retrieved as well,
  *   and stored as additional properties inside each item array.
- *   If FALSE (default), only current/new items will be retrieved.
+ *   If FALSE, only current/new items will be retrieved.
+ *   If NULL (default), source and replaced items will be retrieved for commits
+ *   but not for branch or tag operations.
  *
  * @return
  *   A structured array containing all items that were affected by the given
@@ -1310,7 +1312,7 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  *        was deleted and replaced by a different one that was just moved
  *        or copied to this location.
  */
-function versioncontrol_get_operation_items($operation, $fetch_source_items = TRUE) {
+function versioncontrol_get_operation_items($operation, $fetch_source_items = NULL) {
   $items = array();
   $result = db_query(
     'SELECT ir.item_revision_id, ir.path, ir.revision, ir.type
@@ -1327,6 +1329,11 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = TR
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->item_revision_id,
     );
+  }
+
+  if (!isset($fetch_source_items)) {
+    // By default, fetch source items for commits but not for branch or tag ops.
+    $fetch_source_items = ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT);
   }
   if ($fetch_source_items) {
     versioncontrol_add_source_items($items);
@@ -1832,31 +1839,31 @@ function _versioncontrol_get_repository_urls($repository) {
 
 /**
  * Get the user-visible version of a commit identifier a.k.a. 'revision',
- * as plaintext. By default, this function returns $commit['revision'] if
- * that property exists, or $commit['vc_op_id'] as fallback.
+ * as plaintext. By default, this function returns $operation['revision']
+ * if that property exists, or $operation['vc_op_id'] as fallback.
  *
  * Version control backends can, however, choose to implement their own version
  * of this function, which for example makes it possible to cut the SHA-1 hash
  * in distributed version control systems down to a readable length.
  *
- * @param $commit
- *   The commit whose commit identifier should be themed.
+ * @param $operation
+ *   The operation whose commit identifier should be themed.
  * @param $format
  *   Either 'full' for the original version, or 'short' for a more compact form.
  *   If the commit identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_format_commit_identifier($commit, $format = 'short') {
-  if (empty($commit['revision'])) {
-    return $commit['vc_op_id'];
+function versioncontrol_format_commit_identifier($operation, $format = 'short') {
+  if (empty($operation['revision'])) {
+    return $operation['vc_op_id'];
   }
-  $vcs = $commit['repository']['vcs'];
+  $vcs = $operation['repository']['vcs'];
   if ($format == 'short' && versioncontrol_backend_implements($vcs, 'format_short_revision_identifier')) {
     return _versioncontrol_call_backend(
-      $vcs, 'format_short_revision_identifier', array($commit['revision'])
+      $vcs, 'format_short_revision_identifier', array($operation['revision'])
     );
   }
-  return $commit['revision'];
+  return $operation['revision'];
 }
 
 /**
@@ -1904,8 +1911,7 @@ function versioncontrol_get_commit_statistics($commit, $commit_actions = NULL) {
 /**
  * Retrieve the item of the deepest-level directory in the repository that is
  * common to all the changed/branched/tagged items in a commit, branch or
- * tag operation. In other words, this function gets you the item
- * for $operation['directory'].
+ * tag operation.
  *
  * @param $operation
  *   The commit, branch or tag operation whose deepest-level
@@ -1917,8 +1923,7 @@ function versioncontrol_get_commit_statistics($commit, $commit_actions = NULL) {
  *
  *   - 'type': Specifies the item type, which in this case can only be
  *        VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the directory, which will be the same
- *        as $operation['directory'].
+ *   - 'path': The path of the directory.
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
@@ -1926,23 +1931,10 @@ function versioncontrol_get_commit_statistics($commit, $commit_actions = NULL) {
  *        item info. ("[xxx]" is the unique string identifier
  *        of the respective version control system.)
  */
+// TODO: keep or remove?
 function versioncontrol_get_directory_item($operation) {
   return _versioncontrol_call_backend(
     $operation['repository']['vcs'], 'get_directory_item', array($operation)
-  );
-}
-
-/**
- * Retrieve the branches that have been affected by the given commit.
- *
- * @return
- *   An array of strings that identify a branch in the respective repository,
- *   like for example array('DRUPAL-5') or array('trunk', '5.x').
- *   If no branch was affected by the given commit, an empty array is returned.
- */
-function versioncontrol_get_commit_branches($commit) {
-  return _versioncontrol_call_backend(
-    $commit['repository']['vcs'], 'get_commit_branches', array($commit)
   );
 }
 
@@ -1975,6 +1967,7 @@ function versioncontrol_get_commit_branches($commit) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
+// TODO: remove
 function versioncontrol_get_branched_items($branch) {
   return _versioncontrol_call_backend(
     $branch['repository']['vcs'], 'get_branched_items', array($branch)
@@ -2010,6 +2003,7 @@ function versioncontrol_get_branched_items($branch) {
  *   A real-life example of such a result array can be found
  *   in the FakeVCS example module.
  */
+// TODO: remove
 function versioncontrol_get_tagged_items($tag) {
   return _versioncontrol_call_backend(
     $tag['repository']['vcs'], 'get_tagged_items', array($tag)

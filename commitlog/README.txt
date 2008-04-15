@@ -1,17 +1,18 @@
 $Id$
 
 Commit Log -
-Display a history of commits, optionally filtered by a set
-of constraint arguments.
+Display a history of commits, branches and tags,
+optionally filtered by a set of constraint arguments.
 
 
 SHORT DESCRIPTION
 -----------------
-This module provides a page with commit logs of commits known to the
-Version Control API. By default, it displays all commits in all repositories,
-but the list of commits can be filtered by passing appropriate URLs.
-If the Version Control API knows about URLs of repository viewers and
-issue trackers, this module provides links to those in the commit logs.
+This module provides a page with logs of version control operations (commits,
+branches and tags) known to the Version Control API. By default, it displays
+all operations in all repositories, but the list of operations can be filtered
+by passing appropriate URLs. If the Version Control API knows about URLs
+of repository viewers and issue trackers, this module provides links to those
+in the logs.
 
 Additionally, Commit Log can send out these logs to the version control
 administrator's e-mail address if the corresponding option is enabled.

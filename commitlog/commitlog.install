@@ -2,8 +2,8 @@
 // $Id$
 /**
  * @file
- * Commit Log - Display a history of commits, optionally filtered by a set
- * of constraint arguments.
+ * Commit Log - Display a history of commits, branches and tags,
+ * optionally filtered by a set of constraint arguments.
  *
  * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
