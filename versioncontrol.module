@@ -949,7 +949,7 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
   // Add the corresponding repository array to each operation.
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
   foreach ($ops as $op_id => $op) {
-    $ops[$op_id]['repository'] = $repositories[$operations[$op_id]['repo_id']];
+    $ops[$op_id]['repository'] = $repositories[$op['repo_id']];
     unset($operations[$op_id]['repo_id']);
   }
 
@@ -1319,7 +1319,7 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
      FROM {versioncontrol_operation_items} opitem
       INNER JOIN {versioncontrol_item_revisions} ir
        ON opitem.item_revision_id = ir.item_revision_id
-     WHERE vc_op_id = %d AND type = %d',
+     WHERE opitem.vc_op_id = %d AND opitem.type = %d',
     $operation['vc_op_id'], VERSIONCONTROL_OPERATION_MEMBER_ITEM);
 
   while ($item_revision = db_fetch_object($result)) {
@@ -1364,6 +1364,9 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
  *        or copied to this location.
  */
 function versioncontrol_add_source_items(&$items) {
+  if (empty($items)) {
+    return $items;
+  }
   $placeholders = array();
   $ids = array();
   $item_keys = array();

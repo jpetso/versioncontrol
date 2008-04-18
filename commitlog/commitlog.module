@@ -456,7 +456,7 @@ function commitlog_operation($operation, $operation_items, $username = NULL, $fo
   // TODO: adapt for tags and branches
   $variables['id'] = theme('commitlog_commit_identifier', $operation, $format);
   $variables['repository_name'] = theme('commitlog_repository', $operation['repository'], $format);
-  $variables['time'] = format_date($commit['date'], 'custom', 'H:i');
+  $variables['time'] = format_date($operation['date'], 'custom', 'H:i');
 
   $variables['actions'] = theme('commitlog_operation_items', $operation, $operation_items, $format);
   $variables['message'] = theme('commitlog_operation_message', $operation, $format);
@@ -508,7 +508,9 @@ function theme_commitlog_operation_plaintext($variables) {
     '!time' => $variables['time'],
   )) ."\n\n";
 
-  $output .= $variables['message'] ."\n\n";
+  if (!empty($variables['message'])) {
+    $output .= $variables['message'] ."\n\n";
+  }
   $output .= $variables['actions'] ."\n";
 
   return $output;
@@ -616,6 +618,7 @@ function theme_commitlog_operation_message($operation, $format = 'html') {
 }
 
 function theme_commitlog_operation_branches($operation, $format = 'html') {
+  return '';
   // TODO: adapt to use $operation['labels'] (including tags),
   // or rethink this function altogether.
   $branches = versioncontrol_get_commit_branches($operation); // function doesn't exist anymore
@@ -650,8 +653,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
   $op_directory_item = versioncontrol_get_directory_item($operation);
 
   if (module_exists('versioncontrol_project')) {
-    // TODO: 'directory' is gone
-    $project = versioncontrol_project_get_project_for_item($operation['repository'], $operation['directory']);
+    $project = versioncontrol_project_get_project_for_item($operation['repository'], $op_directory_item['path']);
     if (isset($project)) {
       $project_item = versioncontrol_get_parent_item(
         $operation['repository'], $op_directory_item, $project['directory']
