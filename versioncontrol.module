@@ -886,8 +886,8 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *        - 'action': Specifies what happened to this label in this operation.
  *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
  *             For branch or tag operations (or commits that emulate those),
- *             it can be one of VERSIONCONTROL_ACTION_ADDED,
- *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
+ *             it can be either VERSIONCONTROL_ACTION_ADDED or
+ *             VERSIONCONTROL_ACTION_DELETED.
  *
  *   If not a single operation matches these constraints,
  *   an empty array is returned.
@@ -1414,6 +1414,30 @@ function versioncontrol_add_source_items(&$items) {
   }
 }
 
+/**
+ * Return TRUE if the given item is an existing or an already deleted file,
+ * or FALSE if it's not.
+ */
+function versioncontrol_is_file_item($item) {
+  if ($item['type'] == VERSIONCONTROL_ITEM_FILE
+      || $item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Return TRUE if the given item is an existing or an already deleted directory,
+ * or FALSE if it's not.
+ */
+function versioncontrol_is_directory_item($item) {
+  if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY
+      || $item['type'] == VERSIONCONTROL_ITEM_DIRECTORY_DELETED) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
 
 /**
  * Retrieve a set of Drupal uid / VCS username mappings
@@ -1871,17 +1895,17 @@ function versioncontrol_format_commit_identifier($operation, $format = 'short') 
 
 /**
  * Retrieve general statistics about what happened in a single commit. For more granular
- * details about what happened in a single commit, use versioncontrol_get_commit_actions.
+ * details about what happened in a single commit, use versioncontrol_get_operation_items().
  *
  * This function is optional for VCS backends to implement, be sure to check
  * with versioncontrol_backend_implements($repository['vcs'], 'get_commit_statistics')
  * if the particular backend actually implements it.
  *
- * @param $commit
- *   The commit to retrieve statistics about.
- * @param $commit_actions
- *   The commit actions array belonging to the above commit. Can be passed by
- *   the caller if the caller already has the actions, or can be left absent
+ * @param $operation
+ *   The commit operation to retrieve statistics about.
+ * @param $operation_items
+ *   The set of items belonging to the above operation. Can be passed by
+ *   the caller if the caller already has the items, or can be left absent
  *   and they will be automatically obtained.
  *
  * @return
@@ -1890,12 +1914,12 @@ function versioncontrol_format_commit_identifier($operation, $format = 'short') 
  *
  *   - 'lines_added': Total number of lines added during this commit.
  *   - 'lines_removed': Total number of lines removed during this commit.
- *   - 'action_count': Total number of actions within this commit.
- *   - 'per_action_statistics': An array containing statistics on individual
- *        actions. Array keys are the current/new paths (just as with
- *        versioncontrol_get_commit_actions()).
+ *   - 'number_items': Total number of items/actions in this commit.
+ *   - 'per_item_statistics': An array containing statistics on individual
+ *        items/actions. Array keys are the current/new paths (just as with
+ *        versioncontrol_get_operation_items()).
  *
- *   The array values of the 'per_action_statistics' element are again
+ *   The array values of the 'per_item_statistics' element are again
  *   structured arrays and consist of elements with the following keys:
  *
  *   - 'lines_added': Number of lines added to this item.
@@ -1905,9 +1929,10 @@ function versioncontrol_format_commit_identifier($operation, $format = 'short') 
  *   combined, hence why totals are given rather than averages. A real-life
  *   example of such a result array can be found in the FakeVCS example module.
  */
-function versioncontrol_get_commit_statistics($commit, $commit_actions = NULL) {
+// TODO: rethink - I'm not satisfied with the current API for this.
+function versioncontrol_get_commit_statistics($operation, $operation_items = NULL) {
   return _versioncontrol_call_backend(
-    $commit['repository']['vcs'], 'get_commit_statistics', array($commit, $commit_actions)
+    $operation['repository']['vcs'], 'get_commit_statistics', array($operation, $operation_items)
   );
 }
 
@@ -2017,7 +2042,7 @@ function versioncontrol_get_tagged_items($tag) {
 /**
  * Retrieve the current branch that this item is in.
  *
- * If this item was part of the result of versioncontrol_get_commit_actions(),
+ * If this item was part of the result of versioncontrol_get_operation_items(),
  * this will probably be the branch that this item was committed to.
  * The main branch ('HEAD', 'trunk', 'master' or however it is called
  * in the respective VCS) is also a valid branch and should be expected
@@ -2043,9 +2068,9 @@ function versioncontrol_get_current_item_branch($repository, $item) {
 /**
  * Retrieve the current tag that has been applied to this item.
  *
- * If this item was retrieved by calling versioncontrol_get_tagged_items() or
- * versioncontrol_get_all_item_tags() then this function will return the name
- * of that respective tag, e.g. 'DRUPAL-5--1-1'. The current item tag is
+ * If this item was retrieved by calling versioncontrol_get_operation_items()
+ * or versioncontrol_get_all_item_tags() then this function will return the
+ * name of that respective tag, e.g. 'DRUPAL-5--1-1'. The current item tag is
  * also expected to propagate through calls of versioncontrol_get_parent_item()
  * and versioncontrol_get_directory_contents(), if applicable.
  *
@@ -2463,8 +2488,8 @@ function _versioncontrol_get_item_paths($items) {
  * and determine how and for which commits the statistics are displayed.
  * @see versioncontrol_get_user_statistics
  */
-function theme_versioncontrol_user_statistics($constraints, $order_by = 'last_commit', $limit = NULL) {
-  $statistics = versioncontrol_get_user_statistics($constraints, $order_by, $limit);
+function theme_versioncontrol_user_statistics($constraints, $order = 'by_date', $limit = NULL) {
+  $statistics = versioncontrol_get_user_statistics($constraints, $order, $limit);
   $header = array(t('User'), t('Last commit'), t('First commit'), t('Commits'));
   $rows = array();
 
@@ -2503,19 +2528,19 @@ function theme_versioncontrol_user_statistics($constraints, $order_by = 'last_co
 }
 
 /**
- * Retrieve statistics about users from a set of commits.
+ * Retrieve statistics about users from a set of operations.
  *
  * @param $constraints
- *   The constraints (as passed to versioncontrol_get_commits()) that define
- *   which commits are taken into consideration for the statistics.
- * @param $order_by
+ *   The constraints (as passed to versioncontrol_get_operations()) that define
+ *   which operations are taken into consideration for the statistics.
+ * @param $order
  *   Determines how the result array is ordered:
- *   - 'last_commit' for descending order of the last commit's date (in other
+ *   - 'by_date' for descending order of the last operation's date (in other
  *        words, the first item corresponds to the most recent committer).
- *   - 'number_commits' for descending order of the commit count (in other
+ *   - 'by_quantity' for descending order of the operation count (in other
  *        words, the first item corresponds to the most active committer).
  * @param $limit
- *   If given, only the n most active users (in terms of commits)
+ *   If given, only the n most active users (in terms of operations)
  *   will be included in the result.
  *
  * @return
@@ -2523,46 +2548,46 @@ function theme_versioncontrol_user_statistics($constraints, $order_by = 'last_co
  *   one user's statistics and consists of the following elements:
  *   - 'uid': The Drupal user id to which these statistics correspond.
  *   - 'name': The respective Drupal username.
- *   - 'number_commits': The number of commits by this user
- *        (out of the given commits).
- *   - 'first_commit': The commit array of the first commit by this user
- *        (out of the given commits).
- *   - 'last_commit': The commit array of the last commit by this user
- *        (out of the given commits).
+ *   - 'number_operations': The number of operations by this user
+ *        (out of the selected operations).
+ *   - 'first_operation': The operation array of the first operation
+ *        by this user (out of the selected operations).
+ *   - 'last_operation': The operation array of the last operation
+ *        by this user (out of the selected operations).
  *
  *   The order of the items in this array is determined by the
- *   $order_by parameter. If no commits matching the given constraints
+ *   $order parameter. If no operations matching the given constraints
  *   can be found, an empty array is returned.
  */
-function versioncontrol_get_user_statistics($constraints, $order_by = 'last_commit', $limit = NULL) {
+function versioncontrol_get_user_statistics($constraints, $order = 'by_date', $limit = NULL) {
   $uids = array();
-  $first_commits = array();
-  $last_commits = array();
+  $first_ops = array();
+  $last_ops = array();
 
-  $commits = versioncontrol_get_commits($constraints);
+  $operations = versioncontrol_get_operations($constraints);
 
   // Find out which projects are affected, and how active they have been.
   $i = 0;
-  foreach ($commits as $commit) {
-    $uid = $commit['uid'];
+  foreach ($operations as $operation) {
+    $uid = $operation['uid'];
     $uids[] = $uid;
 
-    // Write the first commit for each iteration, the last one encountered is
-    // the first one in time. ($commits is sorted reverse chronologically.)
-    $first_commits[$uid] = $commit;
+    // Write the first operation for each iteration, the last one encountered
+    // is the oldest one. ($operations is sorted reverse chronologically.)
+    $first_ops[$uid] = $operation;
 
-    // Similar for the last commit which is the first one that we get to see.
-    if (!isset($last_commits[$uid])) {
-      $last_commits[$uid] = $commit;
+    // Similar for the most recent op which is the first one that we get to see.
+    if (!isset($last_ops[$uid])) {
+      $last_ops[$uid] = $operation;
     }
   }
 
-  // Sort by commit count.
-  $commit_counts = array_count_values($uids);
-  arsort($commit_counts);
+  // Sort by operation count.
+  $op_counts = array_count_values($uids);
+  arsort($op_counts);
 
-  // Default sorting: Put users with more recent commits first.
-  if ($order_by == 'last_commit') {
+  // Default sorting: Put users with more recent operations first.
+  if ($order == 'by_date') {
     $limited_uids = array();
     $i = 0;
     foreach (array_unique($uids) as $uid) {
@@ -2574,19 +2599,19 @@ function versioncontrol_get_user_statistics($constraints, $order_by = 'last_comm
     }
     $uids = $limited_uids;
   }
-  // Alternative sorting: Put users with the most commits first.
-  else { // if ($order_by == 'number_commits') {
-    $limited_commit_counts = array();
+  // Alternative sorting: Put users with the most operations first.
+  else { // if ($order == 'by_quantity') {
+    $limited_op_counts = array();
     $i = 0;
-    foreach ($commit_counts as $uid => $count) {
-      $limited_commit_counts[$uid] = $count;
+    foreach ($op_counts as $uid => $count) {
+      $limited_op_counts[$uid] = $count;
       ++$i;
       if (isset($limit) && $i >= $limit) {
         break;
       }
     }
-    $uids = array_unique(array_keys($limited_commit_counts));
-    $commit_counts = $limited_commit_counts;
+    $uids = array_unique(array_keys($limited_op_counts));
+    $op_counts = $limited_op_counts;
   }
 
   // No projects in the result, so we can return right now.
@@ -2608,9 +2633,9 @@ function versioncontrol_get_user_statistics($constraints, $order_by = 'last_comm
     $statistics[$user->uid] = array(
       'uid' => $user->uid,
       'name' => $user->name,
-      'number_commits' => $commit_counts[$user->uid],
-      'first_commit' => $first_commits[$user->uid],
-      'last_commit' => $last_commits[$user->uid],
+      'number_operations' => $op_counts[$user->uid],
+      'first_operation' => $first_ops[$user->uid],
+      'last_operation' => $last_ops[$user->uid],
     );
   }
 

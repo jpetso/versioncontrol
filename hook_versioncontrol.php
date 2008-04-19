@@ -77,8 +77,8 @@
  *        - 'action': Specifies what happened to this label in this operation.
  *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
  *             For branch or tag operations (or commits that emulate those),
- *             it can be one of VERSIONCONTROL_ACTION_ADDED,
- *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
+ *             it can be either VERSIONCONTROL_ACTION_ADDED or
+ *             VERSIONCONTROL_ACTION_DELETED.
  *
  * @param $operation_items
  *   A structured array containing all items that were affected by the above
@@ -172,8 +172,8 @@ function hook_versioncontrol_operation($op, $operation, $operation_items) {
  *        - 'action': Specifies what happened to this label in this operation.
  *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
  *             For branch or tag operations (or commits that emulate those),
- *             it can be one of VERSIONCONTROL_ACTION_ADDED,
- *             VERSIONCONTROL_ACTION_DELETED or VERSIONCONTROL_ACTION_MOVED.
+ *             it can be either VERSIONCONTROL_ACTION_ADDED or
+ *             VERSIONCONTROL_ACTION_DELETED.
  *
  * @param $operation_items
  *   A structured array containing the exact details of what is about to happen

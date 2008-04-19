@@ -300,7 +300,7 @@ function versioncontrol_fakevcs_get_directory_item($operation) {
  * Implementation of [versioncontrol_backend]_get_current_item_branch():
  * Retrieve the current branch that this item is in.
  *
- * If this item was part of the result of versioncontrol_get_commit_actions(),
+ * If this item was part of the result of versioncontrol_get_operation_items(),
  * this will probably be the branch that this item was committed to.
  * The main branch ('HEAD', 'trunk', 'master' or however it is called
  * in the respective VCS) is also a valid branch and should be expected
