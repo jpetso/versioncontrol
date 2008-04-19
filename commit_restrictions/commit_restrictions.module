@@ -5,7 +5,7 @@
  * Commit Restrictions - Restrict commits, branches and tags
  * based on item path or branch/tag name.
  *
- * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 /**
@@ -244,18 +244,30 @@ function _commit_restrictions_load($repo_id) {
  *   write access callbacks say.
  */
 function commit_restrictions_versioncontrol_write_access($operation, $operation_items) {
+  if (empty($operation_items)) {
+    return array(); // no idea if this is ever going to happen, but let's be prepared
+  }
   // Allow the committer to delete branches and labels (also invalid ones),
   // provided that nothing else is done in this operation.
   if (_commit_restrictions_contains_only_delete_labels($operation)) {
     return array(); // even invalid labels should be allowed to be deleted
   }
 
+  $restrictions = _commit_restrictions_load($operation['repository']['repo_id']);
+  $error_messages = _commit_restrictions_label_access($operation, $restrictions);
+
+  if (!empty($error_messages)) {
+    return $error_messages;
+  }
+
   switch ($operation['type']) {
     case VERSIONCONTROL_OPERATION_COMMIT:
-      return _commit_restrictions_commit_access($operation, $operation_items);
+      return _commit_restrictions_commit_item_access($operation_items, $restrictions);
+
     case VERSIONCONTROL_OPERATION_BRANCH:
     case VERSIONCONTROL_OPERATION_TAG:
-      return _commit_restrictions_branch_tag_access($operation, $operation_items);
+      // Make sure that branches may be created at all for all of these items.
+      return _commit_restrictions_branch_tag_item_access($operation_items, $restrictions);
   }
 }
 
@@ -273,13 +285,12 @@ function _commit_restrictions_contains_only_delete_labels($operation) {
 
 /**
  * Implementation of hook_versioncontrol_write_access() for commit operations.
+ *
+ * @return
+ *   An empty array if the all items are allowed to be committed, or an array
+ *   with error messages if at least one item may not be committed.
  */
-function _commit_restrictions_commit_access($operation, $operation_items) {
-  if (empty($operation_items)) {
-    return array(); // no idea if this is ever going to happen, but let's be prepared
-  }
-
-  $restrictions = _commit_restrictions_load($operation['repository']['repo_id']);
+function _commit_restrictions_commit_item_access($operation_items, $restrictions) {
   $error_messages = array();
 
   // Paths where it is always allowed to commit.
@@ -328,18 +339,14 @@ function _commit_restrictions_commit_access($operation, $operation_items) {
 }
 
 /**
- * Implementation of hook_versioncontrol_write_access()
- * for branch and tag operations.
+ * Determine if the operation labels may be created or modified.
+ *
+ * @return
+ *   An empty array if the each of the labels matches at least one of the
+ *   valid label regexps (or if there are no regexps to be matched),
+ *   or an array filled with error messages if at least one label doesn't.
  */
-function _commit_restrictions_branch_tag_access($operation, $operation_items) {
-  $restrictions = _commit_restrictions_load($operation['repository']['repo_id']);
-
-  // Make sure that branches may be created at all for all of these items.
-  $error_messages = _commit_restrictions_check_branch_tag_paths($operation_items, $restrictions);
-  if (!empty($error_messages)) {
-    return $error_messages;
-  }
-  // Reset errors, just for documentation purposes. (It's array() anyways now.)
+function _commit_restrictions_label_access($operation, $restrictions) {
   $error_messages = array();
 
   // This code will work for both branches and tags, given some preset values.
@@ -363,7 +370,9 @@ function _commit_restrictions_branch_tag_access($operation, $operation_items) {
   );
 
   foreach ($operation['labels'] as $label) {
-    // This code will work for both branches and tags, given some preset values.
+    if ($label['action'] == VERSIONCONTROL_ACTION_DELETED) {
+      continue; // we don't want no errors for deleted labels, skip those
+    }
     $labelinfo = $labelinfos[$label['type']];
 
     // Make sure that the assigned branch name is allowed.
@@ -402,16 +411,12 @@ function _commit_restrictions_branch_tag_access($operation, $operation_items) {
  * at least one of the valid branch/tag paths regexps, and return
  * an appropriate error message array.
  *
- * @param $items
- *   The branched or tagged items.
- * @param $restrictions
- *   The preloaded array of the repository's commit restrictions.
- *
  * @return
- *   An empty array if the items match at least one of the valid path regexps,
- *   or an array filled with an error message if it doesn't.
+ *   An empty array if the each of the items matches at least one of the
+ *   valid path regexps (or if there are no regexps to be matched),
+ *   or an array filled with error messages if at least one item doesn't.
  */
-function _commit_restrictions_check_branch_tag_paths($items, $restrictions) {
+function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
   $error_messages = array();
 
   if (!empty($restrictions['valid_branch_tag_paths'])) {
@@ -419,7 +424,7 @@ function _commit_restrictions_check_branch_tag_paths($items, $restrictions) {
       $valid = FALSE;
 
       foreach ($restrictions['valid_branch_tag_paths'] as $valid_path_regexp) {
-        if (_commit_restrictions_preg_item_match($item)) {
+        if (_commit_restrictions_preg_item_match($valid_path_regexp, $item)) {
           $valid = TRUE;
           break;
         }

@@ -5,7 +5,7 @@
  * FakeVCS backend for Version Control API -
  * An example module illustrating how to write a VCS backend.
  *
- * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 // Update methods.

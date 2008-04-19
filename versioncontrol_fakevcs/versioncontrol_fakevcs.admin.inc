@@ -9,7 +9,7 @@
  * for accounts and repositories.
  *
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
- * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 define('VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH', 5);

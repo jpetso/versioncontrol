@@ -10,7 +10,7 @@
  * Hooks that are intended for VCS backends are not to be found in this file
  * as they are already documented in versioncontrol_fakevcs.module.
  *
- * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 
