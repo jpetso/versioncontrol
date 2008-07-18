@@ -784,7 +784,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
       'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
       'revision' => '',
       'fakevcs_specific' => array('selected_branch_name' => 'DRUPAL-5--1'),
-    ),
+    );
   // $repository is some CVS repository and $recursive == FALSE.
 
   return array(
@@ -932,7 +932,8 @@ function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
           $commit['vc_op_id'], $type, $path, $revision, $action['action'],
           $source_revision
         );
-        break;
+      }
+      break;
 
     case 'delete':
       db_query('DELETE FROM {versioncontrol_fakevcs_item_revisions}
