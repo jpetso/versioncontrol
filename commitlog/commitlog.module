@@ -414,7 +414,7 @@ function theme_commitlog_rss($commits) {
     $title = t('!location by @username', array('!location' => $location, '@username' => $html_username));
     $link = url('commitlog', 'ids='. $commit['vc_op_id'], NULL, TRUE);
     $extra = array(
-      array('key' => 'pubDate', 'value' =>  format_date($operation['date'], 'custom', 'r')),
+      array('key' => 'pubDate', 'value' => gmdate('r', $operation['date'])),
       array('key' => 'dc:creator', 'value' => $plain_username),
       array('key' => 'guid',
         'value' => 'Version control operation '. $operation['vc_op_id'] .' at '. $base_url,
