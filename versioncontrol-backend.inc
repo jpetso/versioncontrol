@@ -950,14 +950,16 @@ function versioncontrol_delete_repository($repository) {
     $item_ids[] = $item_revision->item_revision_id;
     $placeholders[] = '%d';
   }
-  $placeholders = '('. implode(',', $placeholders) .')';
+  if (!empty($item_ids)) {
+    $placeholders = '('. implode(',', $placeholders) .')';
 
-  db_query('DELETE FROM {versioncontrol_source_items}
-            WHERE item_revision_id IN '. $placeholders, $item_ids);
-  db_query('DELETE FROM {versioncontrol_source_items}
-            WHERE source_item_revision_id IN '. $placeholders, $item_ids);
-  db_query('DELETE FROM {versioncontrol_item_revisions}
-            WHERE repo_id = %d', $repository['repo_id']);
+    db_query('DELETE FROM {versioncontrol_source_items}
+              WHERE item_revision_id IN '. $placeholders, $item_ids);
+    db_query('DELETE FROM {versioncontrol_source_items}
+              WHERE source_item_revision_id IN '. $placeholders, $item_ids);
+    db_query('DELETE FROM {versioncontrol_item_revisions}
+              WHERE repo_id = %d', $repository['repo_id']);
+  }
   unset($item_ids); // conserve memory, this might get quite large
   unset($placeholders); // ...likewise
 
