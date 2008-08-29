@@ -563,11 +563,9 @@ function theme_commitlog_repository($repository, $format = 'html') {
 
 
 function theme_commitlog_operation_location($operation, $directory_item = NULL, $format = 'html') {
-  $item = isset($directory_item)
-          ? $directory_item
-          : versioncontrol_get_directory_item($operation);
-  $location = theme('commitlog_item', $operation['repository'], $item, $directory_item['path'], $format);
-  $branches = theme('commitlog_operation_branches', $operation, $format);
+  //TODO: construct directory item out of individual items.
+  //$location = theme('commitlog_item', $operation['repository'], $directory_item, NULL, $format);
+  /*$branches = theme('commitlog_operation_branches', $operation, $format);
   if (!empty($branches)) {
     $location = t('!branches: !directory', array(
       '!directory' => $location,
@@ -575,6 +573,8 @@ function theme_commitlog_operation_location($operation, $directory_item = NULL, 
     ));
   }
   return $location;
+  */
+  return '[todo:commitlog_operation_location]';
 }
 
 function theme_commitlog_commit_identifier($operation, $format = 'html') {
@@ -650,7 +650,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     return '';
   }
 
-  $op_directory_item = versioncontrol_get_directory_item($operation);
+  /*$op_directory_item = versioncontrol_get_directory_item($operation);
 
   if (module_exists('versioncontrol_project')) {
     $project = versioncontrol_project_get_project_for_item($operation['repository'], $op_directory_item['path']);
@@ -661,12 +661,15 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       $project_string = theme('commitlog_project', $operation['repository'], $project, $format);
     }
   }
-  $directory_item = isset($project_item) ? $project_item : $op_directory_item;
+  $directory_item = isset($project_item) ? $project_item : $op_directory_item;*/
+  $directory_item_path = '/'; // temporary HACK, until we can do the least-common-denominator-dir again
 
   $lines = array();
 
   foreach ($operation_items as $path => $item) {
     if (module_exists('versioncontrol_project')) {
+      // If all our items belong to the same project, don't try to find out
+      // the project for this specific item.
       if (isset($project)) {
         $item_project = $project;
       }
@@ -677,13 +680,16 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       }
     }
 
-    $offset = ($directory_item['path'] == '/') ? 0 : 1;
-    $item_path = substr($item['path'], strlen($directory_item['path']) + $offset);
+    // Determine how the item path should be displayed.
+    $offset = ($directory_item_path == '/') ? 0 : 1;
+    $item_path = substr($item['path'], strlen($directory_item_path) + $offset);
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
       $item_path = t('!path [directory]', array('!path' => $item_path));
     }
     $item_string = theme('commitlog_item', $operation['repository'], $item, $item_path, $format);
 
+    // See if there have been one or more previous versions of this item, and
+    // make a displayable string out of those.
     if (isset($item['source_items'])) {
       $oldrev_string = theme('commitlog_item_revision',
         $operation['repository'], $item['source_items'][0], $format
@@ -691,12 +697,13 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
 
       $olditems = array();
       foreach ($item['source_items'] as $source_item) {
-        $item_path = substr($source_item['path'], strlen($directory_item['path']) + $offset);
+        $item_path = substr($source_item['path'], strlen($directory_item_path) + $offset);
         $olditems[] = theme('commitlog_item', $operation['repository'], $source_item, $item_path, $format);
       }
       $olditems_string = implode(', ', $olditems);
     }
 
+    // If there is a diff to the previous version, show the appropriate link too.
     $show_diff = FALSE;
     if ($format == 'html') {
       $diff_string = theme('commitlog_diff_link', $operation, $item);
@@ -705,6 +712,8 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       }
     }
 
+    // Depending on what happened to the items, make a readable string out of
+    // the separate pieces of information that we've got by now.
     switch ($item['action']) {
       case VERSIONCONTROL_ACTION_ADDED:
         $action_string = t('!item (added)');
@@ -756,7 +765,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     ));
   }
 
-  $location = theme('commitlog_operation_location', $operation, $directory_item, $format);
+  $location = theme('commitlog_operation_location', $operation, /*TODO: $directory_item*/ NULL, $format);
 
   if ($format == 'html') {
     $output = '<div class="location">'. $location .'</div>'."\n";
@@ -772,7 +781,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
   return $output;
 }
 
-function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html') {
+function theme_commitlog_item($repository, $item, $path_override = NULL, $format = 'html') {
   $backends = versioncontrol_get_backends();
 
   if (!isset($backends[$repository['vcs']])) {
@@ -785,9 +794,7 @@ function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html'
     $has_atomic_commits = TRUE;
   }
 
-  if (!isset($path)) {
-    $path = $item['path'];
-  }
+  $path = isset($path_override) ? $path_override : $item['path'];
 
   // For version control systems without atomic commits, display the revision
   // next to the path. For all other ones this doesn't make sense, as there is
