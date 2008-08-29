@@ -1382,8 +1382,8 @@ function versioncontrol_add_source_items(&$items) {
             ir.path, ir.revision, ir.type
      FROM {versioncontrol_source_items} sit
       INNER JOIN {versioncontrol_item_revisions} ir
-       ON src.source_item_revision_id = ir.item_revision_id
-     WHERE item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
+       ON sit.source_item_revision_id = ir.item_revision_id
+     WHERE sit.item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
 
   while ($item_revision = db_fetch_object($result)) {
     $key = $item_keys[$item_revision->item_revision_id];

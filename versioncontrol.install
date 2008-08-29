@@ -73,7 +73,8 @@ function versioncontrol_install() {
         revision varchar(255) NOT NULL default '',
         type tinyint unsigned NOT NULL default 0,
         PRIMARY KEY (item_revision_id),
-        UNIQUE KEY (repo_id, path),
+        /* UNIQUE KEY (repo_id, path, revision) -- key too long */
+        KEY (repo_id, path),
         KEY revision (revision)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
@@ -172,8 +173,9 @@ function versioncontrol_install() {
         revision varchar(255) NOT NULL default '',
         type smallint NOT NULL default 0,
         PRIMARY KEY (item_revision_id),
-        UNIQUE (repo_id, path)
+        /* UNIQUE (repo_id, path) -- key too long */
       )");
+      db_query("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
       db_query("CREATE INDEX {versioncontrol_item_revisions}_revision_idx ON {versioncontrol_item_revisions} (revision)");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
@@ -693,5 +695,26 @@ function versioncontrol_update_4() {
     $ret[] = update_sql("DELETE FROM {sequences} WHERE name = '{versioncontrol_branch_operations}_branch_op_id'");
   }
 
+  return $ret;
+}
+
+/**
+ * Update 5: Fix wrong unique key constraint.
+ */
+function versioncontrol_update_5() {
+  $ret = array();
+
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_item_revisions} DROP KEY repo_id");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_item_revisions} ADD KEY (repo_id, path)");
+      break;
+
+    case 'pgsql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_item_revisions} DROP CONSTRAINT {versioncontrol_item_revisions}_repo_id_key");
+      $ret[] = update_sql("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
+      break;
+  }
   return $ret;
 }
