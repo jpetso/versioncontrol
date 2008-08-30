@@ -692,7 +692,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     // make a displayable string out of those.
     if (isset($item['source_items'])) {
       $oldrev_string = theme('commitlog_item_revision',
-        $operation['repository'], $item['source_items'][0], $format
+        $operation['repository'], reset($item['source_items']), $format
       );
 
       $olditems = array();
