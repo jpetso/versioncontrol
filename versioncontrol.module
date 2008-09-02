@@ -1737,7 +1737,8 @@ function versioncontrol_get_url_item_log_view($repository, $item) {
     return url('commitlog',
       'repos='. $repository['repo_id']
       .'&paths='. drupal_urlencode($item['path'])
-      . (isset($current_branch) ? '&branches='. $current_branch : '')
+      . (isset($current_branch) ? '&branches='. $current_branch : ''),
+      NULL, TRUE /* return absolute URL */
     );
   }
   return ''; // in case we really can't retrieve any sensible URL
