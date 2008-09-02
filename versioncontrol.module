@@ -24,30 +24,31 @@ define('VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS', 3);
 define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      1);
 
 // VCS item types.
-define('VERSIONCONTROL_ITEM_FILE',              0);
-define('VERSIONCONTROL_ITEM_DIRECTORY',         1);
+define('VERSIONCONTROL_ITEM_EMPTY',             0);
+define('VERSIONCONTROL_ITEM_FILE',              1);
+define('VERSIONCONTROL_ITEM_DIRECTORY',         2);
 // "Deleted" item types are only used for items that don't exist in the
 // repository (anymore), at least not in the given revision. That is mostly
 // the case with items that were deleted by a commit and are returned as result
 // by versioncontrol_get_operation_items(). A "deleted file" can also be
 // returned by directory listings for CVS, representing "dead files".
-define('VERSIONCONTROL_ITEM_FILE_DELETED',      2);
-define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 3);
+define('VERSIONCONTROL_ITEM_FILE_DELETED',      3);
+define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 4);
 
 // VCS file types.
-define('VERSIONCONTROL_FILE_TEXT',            0);
-define('VERSIONCONTROL_FILE_BINARY',          1);
+define('VERSIONCONTROL_FILE_TEXT',            1);
+define('VERSIONCONTROL_FILE_BINARY',          2);
 
 // VCS actions for a single item (file or directory) in a commit,
 // or for branches and tags.
-define('VERSIONCONTROL_ACTION_ADDED',         0);
-define('VERSIONCONTROL_ACTION_MODIFIED',      1);
-define('VERSIONCONTROL_ACTION_MOVED',         2); // == renamed
-define('VERSIONCONTROL_ACTION_COPIED',        3);
-define('VERSIONCONTROL_ACTION_MERGED',        4);
-define('VERSIONCONTROL_ACTION_DELETED',       5);
-define('VERSIONCONTROL_ACTION_REPLACED',      6);
-define('VERSIONCONTROL_ACTION_OTHER',         7); // for example, SVN revprop-only changes
+define('VERSIONCONTROL_ACTION_ADDED',         1);
+define('VERSIONCONTROL_ACTION_MODIFIED',      2);
+define('VERSIONCONTROL_ACTION_MOVED',         3); // == renamed
+define('VERSIONCONTROL_ACTION_COPIED',        4);
+define('VERSIONCONTROL_ACTION_MERGED',        5);
+define('VERSIONCONTROL_ACTION_DELETED',       6);
+define('VERSIONCONTROL_ACTION_REPLACED',      7);
+define('VERSIONCONTROL_ACTION_OTHER',         8); // for example, SVN revprop-only changes
 
 // The flag for operation item database entries, specifying whether an item
 // is actually a direct "member" item of that operation or just a cached
@@ -1403,14 +1404,13 @@ function versioncontrol_add_source_items(&$items) {
     }
     else if ($item_revision->action == VERSIONCONTROL_ACTION_ADDED) {
       $items[$key]['action'] = $item_revision->action;
-      // Added items only have an id == "0" source item, don't add that one.
+      // Added items only have the VERSIONCONTROL_ITEM_EMPTY item assigned,
+      // ignore that one instead of adding it to the source items.
     }
     else {
       $items[$key]['action'] = $item_revision->action;
       $items[$key]['source_items'][$item_revision->path] = $item;
     }
-    ///TODO: added items don't have source items, make it work nevertheless
-    /// needs a "0" item revision that we can assign as source for added items
   }
 }
 

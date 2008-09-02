@@ -216,6 +216,14 @@ function versioncontrol_install() {
       )");
       break;
   }
+
+  // Insert an empty "0" item for joining the {versioncontrol_operation_items}
+  // table with {versioncontrol_item_revisions} without omitting items.
+  // (Required for versioncontrol_add_source_items().)
+  db_query("INSERT INTO {versioncontrol_item_revisions}
+            (item_revision_id, repo_id, path, revision, type)
+            VALUES (%d, %d, '%s', '%s', %d)",
+            0, 0, '', '', 0 /* VERSIONCONTROL_ITEM_EMPTY */);
 }
 
 
@@ -716,5 +724,17 @@ function versioncontrol_update_5() {
       $ret[] = update_sql("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
       break;
   }
+  return $ret;
+}
+
+/**
+ * Update 6: Insert an empty "0" item for joining the
+ * {versioncontrol_operation_items} table with {versioncontrol_item_revisions}.
+ */
+function versioncontrol_update_6() {
+  $ret = array();
+  $ret[] = update_sql("INSERT INTO {versioncontrol_item_revisions}
+            (item_revision_id, repo_id, path, revision, type)
+            VALUES (0, 0, '', '', 0)");
   return $ret;
 }
