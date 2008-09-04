@@ -235,8 +235,8 @@ function commitlog_operations_rss() {
 
 
 /**
- * Retrieve the commit constraints for the page display by dissecting
- * the $_REQUEST variable.
+ * Retrieve the operation constraints for the page display by dissecting the
+ * $_REQUEST variable.
  *
  * @return
  *   An array($constraints, $attributes) where $constraints is an array of
@@ -261,8 +261,8 @@ function _commitlog_get_constraints() {
     // TODO: 'types' constraint
   );
 
-  // Transform query string into query string. We use $_REQUEST because we
-  // need to support both GET and POST requests.
+  // Transform query string into commit constraints. We use $_REQUEST because
+  // we need to support both GET and POST requests.
   foreach ($constraint_request_map as $constraint => $request) {
     if (isset($request['multiple']) && isset($_REQUEST[$request['multiple']])) {
       $constraints[$constraint] = explode(',', $_REQUEST[$request['multiple']]);
@@ -288,6 +288,8 @@ function _commitlog_get_constraints() {
       $attributes['maintainers'] = $_REQUEST['maintainers'];
     }
     if (!empty($project_constraints)) {
+      // TODO: will get renamed in versioncontrol_project, or wholly deleted
+      //       in the first place (in favor of an altered get_operations()).
       $constraints = versioncontrol_project_get_commit_constraints(
         $constraints, $project_constraints
       );

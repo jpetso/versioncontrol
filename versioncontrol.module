@@ -896,6 +896,9 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
 function versioncontrol_get_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   list($and_constraints, $params, $joins) =
     _versioncontrol_construct_operation_constraints($constraints);
+  // TODO: let modules alter the query - say, versioncontrol_project should be
+  //       able to introduce a new constraint for project node ids and filter
+  //       by it. Also see issue http://drupal.org/node/216373
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
@@ -1934,36 +1937,6 @@ function versioncontrol_format_commit_identifier($operation, $format = 'short') 
 function versioncontrol_get_commit_statistics($operation, $operation_items = NULL) {
   return _versioncontrol_call_backend(
     $operation['repository']['vcs'], 'get_commit_statistics', array($operation, $operation_items)
-  );
-}
-
-/**
- * Retrieve the item of the deepest-level directory in the repository that is
- * common to all the changed/branched/tagged items in a commit, branch or
- * tag operation.
- *
- * @param $operation
- *   The commit, branch or tag operation whose deepest-level
- *   changed/branched/tagged directory should be retrieved.
- *
- * @return
- *   The requested directory item. Item values are structured arrays and
- *   consist of elements with the following keys:
- *
- *   - 'type': Specifies the item type, which in this case can only be
- *        VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the directory.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier
- *        of the respective version control system.)
- */
-// TODO: keep or remove?
-function versioncontrol_get_directory_item($operation) {
-  return _versioncontrol_call_backend(
-    $operation['repository']['vcs'], 'get_directory_item', array($operation)
   );
 }
 
