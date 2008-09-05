@@ -246,75 +246,117 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_current_item_branch():
- * Retrieve the current branch that this item is in.
- *
- * If this item was part of the result of versioncontrol_get_operation_items(),
- * this will probably be the branch that this item was committed to.
- * The main branch ('HEAD', 'trunk', 'master' or however it is called
- * in the respective VCS) is also a valid branch and should be expected
- * as return value. The current item branch is also expected to propagate
- * through calls of versioncontrol_get_parent_item() and
- * versioncontrol_get_directory_contents(), if applicable.
+ * Implementation of [versioncontrol_backend]_get_selected_operation_item_label():
+ * Retrieve the tag or branch that applied to that item during the given
+ * operation. The result of this function will be used for the 'selected_label'
+ * property of each item, which is necessary to provide a starting point for
+ * branch and tag navigation.
  *
  * This function is mandatory for backends to implement.
  *
- * @param $repository
- *   The repository that the item is located in.
+ * @param $operation
+ *   A single operation array to which the item belongs, like the ones returned
+ *   by versioncontrol_get_operations(). Specifically, $operation contains the
+ *   'labels' element which should probably be reused by this function.
  * @param $item
- *   The item whose current branch should be retrieved.
+ *   The item revision array for which the label should be retrieved.
  *
  * @return
- *   A string containing the name of the current item branch,
- *   or NULL if no branch is known or applicable.
+ *   A label array, consisting of the following elements:
+ *
+ *   - 'name': The branch or tag name (a string).
+ *   - 'type': Whether this label is a branch (indicated by the
+ *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *        (VERSIONCONTROL_OPERATION_TAG).
+ *   - 'action': Specifies what happened to this label in this operation. For
+ *        plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED. For
+ *        branch or tag operations (or commits that emulate those), it can be
+ *        either VERSIONCONTROL_ACTION_ADDED or VERSIONCONTROL_ACTION_DELETED.
+ *
+ *   Optionally, the label array can also contain the 'label_id' element in
+ *   case the label details are already loaded from the database (which is
+ *   the case for labels taken from the $operation['labels'] array).
  */
-function versioncontrol_fakevcs_get_current_item_branch($repository, $item) {
-  // How CVS would probably do it
-  return 'DRUPAL-5--1';
-  // How SVN could also do it
-  return 'trunk';
+function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $item) {
+  // How CVS and many other version control systems will probably do it,
+  // as they have exactly one label assigned to each operation.
+  return $operation['labels'][0];
+
+  // If an operation - or more specifically, a commit - applies to multiple
+  // branches and/or tags (as can happen in SVN, for example), then the correct
+  // label for each item has to be determined.
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_current_item_tag():
- * Retrieve the current tag that has been applied to this item.
- *
- * If this item was retrieved by calling versioncontrol_get_tagged_items() or
- * versioncontrol_get_all_item_tags() then this function will return the name
- * of that respective tag, e.g. 'DRUPAL-5--1-1'. The current item tag is
- * also expected to propagate through calls of versioncontrol_get_parent_item()
- * and versioncontrol_get_directory_contents(), if applicable.
+ * Implementation of [versioncontrol_backend]_get_selected_source_item_label():
+ * Retrieve the tag or branch that applied to the source item of a given
+ * successor item revision (a.k.a. "target item"). The result of this function
+ * will be used for the 'selected_label' property of each item, which is
+ * necessary to provide a starting point for branch and tag navigation.
  *
  * This function is mandatory for backends to implement.
  *
  * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose current tag should be retrieved.
+ *   The repository array (like returned by versioncontrol_get_repository())
+ *   of the repository which contains both the source and the successor item.
+ * @param $successor_item
+ *   The item revision that the selected label should be derived from.
+ *   For example, if @p $successor_item in a CVS repository is at revision
+ *   '1.5.2.1' which is on the 'DRUPAL-6--1' branch, and the @p $source_item
+ *   is at revision '1.5' (its predecessor) which is present on both the
+ *   'DRUPAL-6--1' and 'HEAD' branches, then this function should return a
+ *   label array for the 'DRUPAL-6--1' branch.
+ * @param $source_item
+ *   The item revision for which the label should be retrieved.
  *
  * @return
- *   A string containing the name of the current item tag,
- *   or NULL if no tag is known or applicable.
+ *   NULL if the given item does not belong to any label or if the appropriate
+ *   label cannot be retrieved. Otherwise a label array is returned, consisting
+ *   of the following elements:
+ *
+ *   - 'name': The branch or tag name (a string).
+ *   - 'type': Whether this label is a branch (indicated by the
+ *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *        (VERSIONCONTROL_OPERATION_TAG).
+ *
+ *   In case the label array also contains the 'label_id' element (which
+ *   happens when it's copied from the $operation['labels'] array) there will
+ *   be a small performance improvement as the label doesn't need to be
+ *   compared to and loaded from the database anymore.
  */
-function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
-  // How CVS would probably do it. (The information itself is either fetched
-  // from the database, or has been stored somewhere in the item, or is
-  // calculated on the fly.) Let's say $item looks like this, then:
-  $item = array(
-    'path' => '/contributions/modules/versioncontrol_cvs',
-    'type' => VERSIONCONTROL_ITEM_DIRECTORY,
-    'revision' => '',
-    'selected_tag' => 'DRUPAL-5--1-1', // might have been added by get_tagged_items()
-  );
-  return isset($item['selected_tag']) ? $item['selected_tag'] : NULL;
+function versioncontrol_fakevcs_get_selected_source_item_label($repository, $successor_item, $source_item) {
+  $label = $successor_item['selected_label'];
 
-  // How Subversion could also do it.
-  $item = array(
-    'path' => '/tags/5.x-1.x/5.x-1.0/contributions/modules/versioncontrol_svn/versioncontrol_svn.module',
-    'type' => VERSIONCONTROL_ITEM_FILE,
-    'revision' => '12345',
-  );
-  return '5.x-1.0'; // extracted from the item path
+  if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
+    return $label;
+    // ...assuming that any given source item is also on the same branch as
+    // its successor, which may not be true for all version control systems.
+  }
+  // Otherwise we can't really figure out know the successor item's branch
+  // (it's a tag label array or NULL), so the backend needs to figure out
+  // a way by itself. This code looks if the commit that's associated to the
+  // revision of the source item exists in the database, and uses the commit
+  // operation's first label, whatever it is. (That code is from the
+  // CVS backend where only one label exists for each commit, so that's ok.)
+  // Other backends might want to provide different or more attempts.
+  else {
+    $constraints = array('repo_ids' => array($repository['repo_id']));
+    if (isset($source_item['item_revision_id'])) {
+      $constraints['item_revision_id'] = array($source_item['item_revision_id']);
+    }
+    else {
+      $constraints['item_revisions'] = array($source_item['revision']);
+      $constraints['paths'] = array($source_item['path']);
+    }
+    $commit_operations = versioncontrol_get_commits($constraints);
+
+    if (!empty($commit_operations)) { // yo, found the associated commit!
+      $commit_operation = reset($commit_operations); // first (only) array element
+      return $commit_operation['labels'][0];
+    }
+  }
+  // No label could be retrieved by looking at the successor item, sorry.
+  return NULL;
 }
 
 /**
@@ -342,6 +384,8 @@ function versioncontrol_fakevcs_get_current_item_tag($repository, $item) {
  *   NULL is returned.
  */
 function versioncontrol_fakevcs_get_parent_item($repository, $item, $parent_path) {
+  // This is the default implementation, don't implement this function unless
+  // you need to modify more item properties.
   if (!isset($parent_path)) {
     $item['path'] = dirname($item['path']);
     return $item;

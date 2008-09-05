@@ -244,7 +244,10 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  * @return
  *   The finalized operation array, with all of the 'vc_op_id', 'repository'
  *   and 'uid' properties filled in, and 'repo_id' removed if it existed before.
- *   Labels are now equipped with an additional 'label_id' property.
+ *   Labels are now equipped with an additional 'label_id' property, and items
+ *   come with a 'selected_label' array. (For more info on these elements, see
+ *   the API documentation for versioncontrol_get_operations() and
+ *   versioncontrol_get_operation_items().)
  *   In case of an error, NULL is returned instead of the operation array.
  */
 function versioncontrol_insert_operation($operation, &$operation_items) {
@@ -273,6 +276,8 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
     $operation['labels'][$key] = $label; // because it now has a 'label_id'
   }
 
+  $vcs = $operation['repository']['vcs'];
+
   // So much for the operation itself, now the more verbose part: items.
   foreach ($operation_items as $path => $item) {
     $item = _versioncontrol_sanitize_item($operation['repository'], $item);
@@ -281,6 +286,10 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
     );
     _versioncontrol_insert_operation_item(
       $operation, $item, VERSIONCONTROL_OPERATION_MEMBER_ITEM
+    );
+    $item['selected_label'] = _versioncontrol_item_get_selected_label(
+      $operation['repository'], 'get_selected_operation_item_label',
+      array($operation, $item)
     );
 
     // If we've got source items (which is the case for commit operations),
@@ -305,6 +314,11 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
         default: // No additional caching for added, modified or deleted items.
           break;
       }
+
+      $source_item['selected_label'] = _versioncontrol_item_get_selected_label(
+        $operation['repository'], 'get_selected_source_item_label',
+        array($operation['repository'], $item, $source_item)
+      );
       $item['source_items'][$key] = $source_item;
     }
 
@@ -317,11 +331,13 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
       _versioncontrol_insert_source_revision(
         $item, $item['replaced_item'], VERSIONCONTROL_ACTION_REPLACED
       );
+      $item['replaced_item']['selected_label'] = _versioncontrol_item_get_selected_label(
+        $operation['repository'], 'get_selected_source_item_label',
+        array($operation['repository'], $item, $item['replaced_item'])
+      );
     }
     $operation_items[$path] = $item;
   }
-
-  $vcs = $operation['repository']['vcs'];
 
   // Notify the backend first.
   if (versioncontrol_backend_implements($vcs, 'operation')) {
@@ -332,48 +348,6 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
   module_invoke_all('versioncontrol_operation',
                     'insert', $operation, $operation_items);
   return $operation;
-}
-
-/**
- * Insert a label entry into the {versioncontrol_labels} table,
- * or retrieve the same one that's already there.
- *
- * @return
- *   The @p $label variable, enhanced with the newly added property 'label_id'
- *   specifying the database identifier for that label. There may be labels
- *   with a similar 'name' but different 'type' properties, those are considered
- *   to be different and will both go into the database side by side.
- */
-function _versioncontrol_ensure_label($repository, $label) {
-  $result = db_query(
-    "SELECT label_id, repo_id, name, type FROM {versioncontrol_labels}
-      WHERE repo_id = %d AND name = '%s' AND type = %d",
-    $repository['repo_id'], $label['name'], $label['type']
-  );
-  while ($row = db_fetch_object($result)) {
-    // Replace / fill in properties that were not in the WHERE condition.
-    $label['label_id'] = $row->label_id;
-    return $label;
-  }
-  // The item doesn't yet exist in the database, so create it.
-  return _versioncontrol_insert_label($repository, $label);
-}
-
-function _versioncontrol_insert_label($repository, $label) {
-  if (isset($label['label_id'])) {
-    db_query("DELETE FROM {versioncontrol_labels}
-              WHERE label_id = %d", $label['label_id']);
-  }
-  else {
-    $label['label_id'] = db_next_id('{versioncontrol_labels}_label_id');
-  }
-  db_query(
-    "INSERT INTO {versioncontrol_labels}
-      (label_id, repo_id, name, type)
-      VALUES (%d, %d, '%s', %d)",
-    $label['label_id'], $repository['repo_id'], $label['name'], $label['type']
-  );
-  return $label;
 }
 
 /**
