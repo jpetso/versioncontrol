@@ -855,7 +855,7 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *        as key) in 'labels'. Commits might affect any number of branches,
  *        including none. Commits that emulate branches and/or tags (like
  *        in Subversion, where they're not a native concept) can also include
- *        add/delete/move operations for labels, as detailed below.
+ *        add or delete operations for labels, as detailed below.
  *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
  *        or 'master' - is also considered a branch. Each element in 'labels'
  *        is a structured array with the following keys:
