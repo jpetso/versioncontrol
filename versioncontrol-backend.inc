@@ -225,8 +225,8 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *             VERSIONCONTROL_ACTION_DELETED.
  *
  * @param $operation_items
- *   A structured array containing the exact details of what is about to happen
- *   to each item in this commit. The structure of this array is the same as
+ *   A structured array containing the exact details of happened to each
+ *   item in this operation. The structure of this array is the same as
  *   the return value of versioncontrol_get_operation_items() - that is,
  *   elements for 'type', 'path' and 'revision' - but doesn't include the
  *   'item_revision_id' element, that one will be filled in by this function.
@@ -278,6 +278,8 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
 
   $vcs = $operation['repository']['vcs'];
 
+  // TODO: Sort operation items alphabetically by their key, a.k.a. $path.
+
   // So much for the operation itself, now the more verbose part: items.
   foreach ($operation_items as $path => $item) {
     $item = _versioncontrol_sanitize_item($operation['repository'], $item);
@@ -320,6 +322,11 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
         array($operation['repository'], $item, $source_item)
       );
       $item['source_items'][$key] = $source_item;
+    }
+    // Plus a special case for the "added" action, as it needs an entry in the
+    // source items table but contains no items in the 'source_items' property.
+    if ($item['action'] == VERSIONCONTROL_ACTION_ADDED) {
+      _versioncontrol_insert_source_revision($item, 0, $item['action']);
     }
 
     // If we've got a replaced item (might happen for copy/move commits),
@@ -489,9 +496,13 @@ function _versioncontrol_insert_operation_item($operation, $item, $type) {
 /**
  * Insert an item entry into the {versioncontrol_source_items} table.
  * Both target and source items are expected to have an 'item_revision_id'
- * property already.
+ * property already. For "added" actions, it's also possible to pass 0 as the
+ * @p $source_item parameter instead of a full item array.
  */
 function _versioncontrol_insert_source_revision($item, $source_item, $action) {
+  if ($action == VERSIONCONTROL_ACTION_ADDED && $source_item === 0) {
+    $source_item = array('item_revision_id' => 0);
+  }
   // Before inserting that item entry, make sure it doesn't exist already.
   db_query("DELETE FROM {versioncontrol_source_items}
             WHERE item_revision_id = %d AND source_item_revision_id = %d",
