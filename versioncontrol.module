@@ -1342,22 +1342,6 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  *        (such as versioncontrol_get_directory_contents() or
  *        versioncontrol_get_all_item_branches()) might not include
  *        this identifier, for obvious reasons.
- *   - 'selected_label': The branch or tag that was affected by this particular
- *        item. (Remember that for example Subversion can affect multiple
- *        branches or tags in a single commit, so this is the way to specify
- *        the label per item.) The selected label is also meant to help with
- *        branch/tag-based navigation, so item navigation functions will try to
- *        preserve it as good as possible, as far as it's accurate. In case
- *        no branch or tag applies to that item or could not be retrieved for
- *        whatever other reasons (depends on the VCS backend), this can also
- *        contain NULL. Otherwise, it's a label array with the following keys:
- *
- *        - 'label_id': The label identifier (a simple integer), used for
- *             unique identification of branches and tags in the database.
- *        - 'name': The branch or tag name (a string).
- *        - 'type': Whether this label is a branch (indicated by the
- *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
- *             (VERSIONCONTROL_OPERATION_TAG).
  *
  *   If the @p $fetch_source_items parameter is TRUE,
  *   versioncontrol_add_source_items() will be called on the list of items
@@ -1390,11 +1374,11 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
       'revision' => $item_revision->revision,
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->item_revision_id,
+      'selected_label' => new StdClass(),
     );
-    $items[$item_revision->path]['selected_label'] = _versioncontrol_item_get_selected_label(
-      $operation['repository'], 'get_selected_operation_item_label',
-      array($operation, $item)
-    );
+    $items[$item_revision->path]['selected_label'] = new StdClass();
+    $items[$item_revision->path]['selected_label']->get_from = 'operation';
+    $items[$item_revision->path]['selected_label']->successor_item = &$operation;
   }
 
   if (!isset($fetch_source_items)) {
@@ -1466,10 +1450,9 @@ function versioncontrol_add_source_items($repository, &$items) {
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->source_item_revision_id,
     );
-    $item['selected_label'] = _versioncontrol_item_get_selected_label(
-      $repository, 'get_selected_source_item_label',
-      array($repository, $items[$successor_key], $item)
-    );
+    $item['selected_label'] = new StdClass();
+    $item['selected_label']->get_from = 'successor_item';
+    $item['selected_label']->successor_item = &$items[$successor_key];
 
     // Insert the item and its associated action into the successor item.
     if ($item_revision->action == VERSIONCONTROL_ACTION_REPLACED) {
@@ -1488,20 +1471,69 @@ function versioncontrol_add_source_items($repository, &$items) {
 }
 
 /**
- * Helper function to retrieve an item's the 'selected_label' property.
- * (Each item needs a selected label - even if it's NULL - so that the caller
- * can later navigate around in the tags and branches of that item.)
- * The backend is queried for the label with the appropriate callback function.
+ * Retrieve an item's selected label.
+ *
+ * When first retrieving an item, the selected label is initialized with a
+ * sensible value - for example, versioncontrol_get_operation_items() assigns
+ * the affected branch or tag of that operation to all the items. (This is
+ * especially important for version control systems like Subversion where there
+ * is a need to specify the label per item and not per operation, as a single
+ * commit can affect multiple branches or tags at once.)
+ *
+ * The selected label is also meant to help with branch/tag-based navigation,
+ * so item navigation functions will try to preserve it as good as possible, as
+ * far as it's accurate. In case no branch or tag applies to that item or could
+ * not be retrieved for whatever other reasons (depends on the VCS backend),
+ * the selected label can also be NULL. Otherwise, it's a label array
+ * describing the selected label, with the following keys:
+ *
+ * - 'label_id': The label identifier (a simple integer), used for unique
+ *      identification of branches and tags in the database.
+ * - 'name': The branch or tag name (a string).
+ * - 'type': Whether this label is a branch (indicated by the
+ *      VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *      (VERSIONCONTROL_OPERATION_TAG).
  */
-function _versioncontrol_item_get_selected_label($repository, $callback, $callback_arguments) {
-  $selected_label = _versioncontrol_call_backend(
-    $repository['vcs'], $callback, $callback_arguments
-  );
-  // 'action' might make sense in an operation, but not in an item array.
-  if (isset($selected_label['action'])) {
-    unset($selected_label['action']);
+function versioncontrol_get_item_selected_label($repository, &$item) {
+  // If the label is already retrieved, we can return it just that way.
+  if (isset($item['selected_label']->label)) {
+    return ($item['selected_label']->label === FALSE)
+            ? NULL : $item['selected_label']->label;
   }
-  return _versioncontrol_ensure_label($repository, $selected_label);
+  if (!isset($item['selected_label']->get_from)) {
+    $item['selected_label']->label = FALSE;
+    return NULL;
+  }
+  $function_prefix = 'versioncontrol_'. $repository['vcs'];
+
+  // Otherwise, determine how we might be able to retrieve the selected label.
+  switch($item['selected_label']->get_from) {
+    case 'operation':
+      $function = $function_prefix .'_get_selected_operation_item_label';
+      $selected_label = $function($item['selected_label']->operation, $item);
+      break;
+    case 'successor_item':
+      $function = $function_prefix .'_get_selected_source_item_label';
+      $selected_label = $function($repository, $item['selected_label']->successor_item, $item);
+  }
+
+  if (isset($selected_label)) {
+    // Just to make sure that we only pass applicable info:
+    // 'action' might make sense in an operation, but not in an item array.
+    if (isset($selected_label['action'])) {
+      unset($selected_label['action']);
+    }
+    $item['selected_label']->label = _versioncontrol_ensure_label($repository, $selected_label);
+  }
+  else {
+    $item['selected_label']->label = FALSE;
+  }
+
+  // Now that we've got the real label, we can get rid of the retrieval recipe.
+  unset($item['selected_label']->{$item['selected_label']->get_from});
+  unset($item['selected_label']->get_from);
+
+  return $item['selected_label']->label;
 }
 
 /**
@@ -1548,6 +1580,7 @@ function _versioncontrol_insert_label($repository, $label) {
   );
   return $label;
 }
+
 
 /**
  * Return TRUE if the given item is an existing or an already deleted file,
@@ -1853,9 +1886,9 @@ function versioncontrol_get_url_commit_view($commit) {
  *   (and if not even Commit Log is enabled), or if the item cannot be viewed
  *   for any reason.
  */
-function versioncontrol_get_url_item_log_view($repository, $item) {
+function versioncontrol_get_url_item_log_view($repository, &$item) {
   $urls = _versioncontrol_get_repository_urls($repository);
-  $label = $item['selected_label'];
+  $label = versioncontrol_get_item_selected_label($repository, $item);
 
   if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
     $current_branch = $label['name'];
@@ -1897,9 +1930,9 @@ function versioncontrol_get_url_item_log_view($repository, $item) {
  *   An empty string is returned if no item view URL has been defined,
  *   or if the item cannot be viewed for any reason.
  */
-function versioncontrol_get_url_item_view($repository, $item) {
+function versioncontrol_get_url_item_view($repository, &$item) {
   $urls = _versioncontrol_get_repository_urls($repository);
-  $label = $item['selected_label'];
+  $label = versioncontrol_get_item_selected_label($repository, $item);
 
   if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
     $current_branch = $label['name'];
@@ -1937,9 +1970,9 @@ function versioncontrol_get_url_item_view($repository, $item) {
  *   An empty string is returned if no diff URL has been defined,
  *   or if the two items cannot be diffed for any reason.
  */
-function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old) {
+function versioncontrol_get_url_diff($repository, &$file_item_new, $file_item_old) {
   $urls = _versioncontrol_get_repository_urls($repository);
-  $label = $file_item_new['selected_label'];
+  $label = versioncontrol_get_item_selected_label($repository, $file_item_new);
 
   if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
     $current_branch = $label['name'];

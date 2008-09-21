@@ -248,7 +248,7 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
 /**
  * Implementation of [versioncontrol_backend]_get_selected_operation_item_label():
  * Retrieve the tag or branch that applied to that item during the given
- * operation. The result of this function will be used for the 'selected_label'
+ * operation. The result of this function will be used for the selected label
  * property of each item, which is necessary to provide a starting point for
  * branch and tag navigation.
  *
@@ -259,23 +259,22 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
  *   by versioncontrol_get_operations(). Specifically, $operation contains the
  *   'labels' element which should probably be reused by this function.
  * @param $item
- *   The item revision array for which the label should be retrieved.
+ *   The item revision for which the label should be retrieved.
  *
  * @return
- *   A label array, consisting of the following elements:
+ *   NULL if the given item does not belong to any label or if the appropriate
+ *   label cannot be retrieved. Otherwise a label array is returned, consisting
+ *   of the following elements:
  *
  *   - 'name': The branch or tag name (a string).
  *   - 'type': Whether this label is a branch (indicated by the
  *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
  *        (VERSIONCONTROL_OPERATION_TAG).
- *   - 'action': Specifies what happened to this label in this operation. For
- *        plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED. For
- *        branch or tag operations (or commits that emulate those), it can be
- *        either VERSIONCONTROL_ACTION_ADDED or VERSIONCONTROL_ACTION_DELETED.
  *
- *   Optionally, the label array can also contain the 'label_id' element in
- *   case the label details are already loaded from the database (which is
- *   the case for labels taken from the $operation['labels'] array).
+ *   In case the label array also contains the 'label_id' element (which
+ *   happens when it's copied from the $operation['labels'] array) there will
+ *   be a small performance improvement as the label doesn't need to be
+ *   compared to and loaded from the database anymore.
  */
 function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $item) {
   // How CVS and many other version control systems will probably do it,
@@ -291,7 +290,7 @@ function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $i
  * Implementation of [versioncontrol_backend]_get_selected_source_item_label():
  * Retrieve the tag or branch that applied to the source item of a given
  * successor item revision (a.k.a. "target item"). The result of this function
- * will be used for the 'selected_label' property of each item, which is
+ * will be used for the selected label property of each item, which is
  * necessary to provide a starting point for branch and tag navigation.
  *
  * This function is mandatory for backends to implement.
@@ -325,7 +324,7 @@ function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $i
  *   compared to and loaded from the database anymore.
  */
 function versioncontrol_fakevcs_get_selected_source_item_label($repository, $successor_item, $source_item) {
-  $label = $successor_item['selected_label'];
+  $label = versioncontrol_get_item_selected_label($repository, $successor_item);
 
   if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
     return $label;

@@ -244,10 +244,9 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  * @return
  *   The finalized operation array, with all of the 'vc_op_id', 'repository'
  *   and 'uid' properties filled in, and 'repo_id' removed if it existed before.
- *   Labels are now equipped with an additional 'label_id' property, and items
- *   come with a 'selected_label' array. (For more info on these elements, see
- *   the API documentation for versioncontrol_get_operations() and
- *   versioncontrol_get_operation_items().)
+ *   Labels are now equipped with an additional 'label_id' property.
+ *   (For more info on these labels, see the API documentation for
+ *   versioncontrol_get_operations() and versioncontrol_get_operation_items().)
  *   In case of an error, NULL is returned instead of the operation array.
  */
 function versioncontrol_insert_operation($operation, &$operation_items) {
@@ -289,10 +288,9 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
     _versioncontrol_insert_operation_item(
       $operation, $item, VERSIONCONTROL_OPERATION_MEMBER_ITEM
     );
-    $item['selected_label'] = _versioncontrol_item_get_selected_label(
-      $operation['repository'], 'get_selected_operation_item_label',
-      array($operation, $item)
-    );
+    $item['selected_label'] = new StdClass();
+    $item['selected_label']->get_from = 'operation';
+    $item['selected_label']->successor_item = &$operation;
 
     // If we've got source items (which is the case for commit operations),
     // add them to the item revisions and source revisions tables as well.
@@ -317,10 +315,10 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
           break;
       }
 
-      $source_item['selected_label'] = _versioncontrol_item_get_selected_label(
-        $operation['repository'], 'get_selected_source_item_label',
-        array($operation['repository'], $item, $source_item)
-      );
+      $source_item['selected_label'] = new StdClass();
+      $source_item['selected_label']->get_from = 'successor_item';
+      $source_item['selected_label']->successor_item = &$item;
+
       $item['source_items'][$key] = $source_item;
     }
     // Plus a special case for the "added" action, as it needs an entry in the
@@ -338,10 +336,9 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
       _versioncontrol_insert_source_revision(
         $item, $item['replaced_item'], VERSIONCONTROL_ACTION_REPLACED
       );
-      $item['replaced_item']['selected_label'] = _versioncontrol_item_get_selected_label(
-        $operation['repository'], 'get_selected_source_item_label',
-        array($operation['repository'], $item, $item['replaced_item'])
-      );
+      $item['replaced_item']['selected_label'] = new StdClass();
+      $item['replaced_item']['selected_label']->get_from = 'successor_item';
+      $item['replaced_item']['selected_label']->successor_item = &$item;
     }
     $operation_items[$path] = $item;
   }
