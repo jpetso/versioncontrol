@@ -278,9 +278,9 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
 
   $vcs = $operation['repository']['vcs'];
 
-  // TODO: Sort operation items alphabetically by their key, a.k.a. $path.
-
   // So much for the operation itself, now the more verbose part: items.
+  ksort($operation_items); // similar paths should be next to each other
+
   foreach ($operation_items as $path => $item) {
     $item = _versioncontrol_sanitize_item($operation['repository'], $item);
     $item = _versioncontrol_ensure_item_revision(

@@ -1404,6 +1404,7 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
   if ($fetch_source_items) {
     versioncontrol_add_source_items($operation['repository'], $items);
   }
+  ksort($items); // similar paths should be next to each other
   return $items;
 }
 

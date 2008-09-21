@@ -897,6 +897,7 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
  *   each item in this commit. The structure of this array is the same as
  *   the return value of versioncontrol_get_commit_actions().
  */
+// TODO: port to the 2.x function signature and to an example that still makes sense.
 function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
   // If nothing has to be stored in addition to the commit info that
   // versioncontrol_insert_commit() stores by itself, this function
