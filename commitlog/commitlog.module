@@ -677,7 +677,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       }
       else {
         $item_project = versioncontrol_project_get_project_for_item(
-          $operation['repository'], $item['path']
+          $operation['repository'], $item
         );
       }
     }
