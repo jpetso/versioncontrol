@@ -1482,17 +1482,24 @@ function versioncontrol_add_source_items($repository, &$items) {
  *
  * The selected label is also meant to help with branch/tag-based navigation,
  * so item navigation functions will try to preserve it as good as possible, as
- * far as it's accurate. In case no branch or tag applies to that item or could
- * not be retrieved for whatever other reasons (depends on the VCS backend),
- * the selected label can also be NULL. Otherwise, it's a label array
- * describing the selected label, with the following keys:
+ * far as it's accurate.
  *
- * - 'label_id': The label identifier (a simple integer), used for unique
- *      identification of branches and tags in the database.
- * - 'name': The branch or tag name (a string).
- * - 'type': Whether this label is a branch (indicated by the
- *      VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
- *      (VERSIONCONTROL_OPERATION_TAG).
+ * @param $repository
+ *   The repository where the item is located.
+ * @param $item
+ *   The item revision for which the label should be retrieved.
+ *
+ * @return
+ *   In case no branch or tag applies to that item or could not be retrieved
+ *   for whatever reasons, the selected label can also be NULL. Otherwise, it's
+ *   a label array describing the selected label, with the following keys:
+ *
+ *   - 'label_id': The label identifier (a simple integer), used for unique
+ *        identification of branches and tags in the database.
+ *   - 'name': The branch or tag name (a string).
+ *   - 'type': Whether this label is a branch (indicated by the
+ *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *        (VERSIONCONTROL_OPERATION_TAG).
  */
 function versioncontrol_get_item_selected_label($repository, &$item) {
   // If the label is already retrieved, we can return it just that way.
@@ -1515,6 +1522,7 @@ function versioncontrol_get_item_selected_label($repository, &$item) {
     case 'successor_item':
       $function = $function_prefix .'_get_selected_source_item_label';
       $selected_label = $function($repository, $item['selected_label']->successor_item, $item);
+      break;
   }
 
   if (isset($selected_label)) {
@@ -1530,7 +1538,9 @@ function versioncontrol_get_item_selected_label($repository, &$item) {
   }
 
   // Now that we've got the real label, we can get rid of the retrieval recipe.
-  unset($item['selected_label']->{$item['selected_label']->get_from});
+  if (isset($item['selected_label']->{$item['selected_label']->get_from})) {
+    unset($item['selected_label']->{$item['selected_label']->get_from});
+  }
   unset($item['selected_label']->get_from);
 
   return $item['selected_label']->label;
@@ -2119,6 +2129,55 @@ function versioncontrol_get_commit_statistics($operation, $operation_items = NUL
 
 
 /**
+ * Try to retrieve a given item in a repository.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_item')
+ * if the particular backend actually implements it.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $path
+ *   The path of the requested item.
+ * @param $revision
+ *   A specific revision for the requested item (as interpreted by the
+ *   VCS backend), or NULL if any revision is good enough - preferably,
+ *   the most recent one.
+ *
+ * @return
+ *   If the item with the given path and revision cannot be retrieved, NULL is
+ *   returned. Otherwise the result is an item array, consisting of the
+ *   following elements:
+ *
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for items
+ *        that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED respectively
+ *        VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items that have been
+ *        removed.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The currently selected (file-level) revision of the item.
+ *        If there is no such revision (which may be the case for directory
+ *        items) then the 'revision' element is an empty string.
+ *
+ *   If the returned item is already present in the database, the
+ *   'item_revision_id' database identifier might also be filled in
+ *   (optionally, depending on the VCS backend).
+ */
+function versioncontrol_get_item($repository, $path, $revision = NULL) {
+  $info = _versioncontrol_call_backend(
+    $repository['vcs'], 'get_item', array($repository, $path, $revision)
+  );
+  if (empty($info)) {
+    return NULL;
+  }
+  $item = $info['item'];
+  $item['selected_label'] = new StdClass();
+  $item['selected_label']->label = is_null($info['selected_label'])
+                                    ? FALSE : $info['selected_label'];
+  return $item;
+}
+
+/**
  * Retrieve the parent (directory) item of a given item.
  *
  * @param $repository
@@ -2318,9 +2377,6 @@ function versioncontrol_format_item_revision($repository, $item, $format = 'shor
  *   - 'revision': The (file-level) revision when the item was changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -2365,9 +2421,6 @@ function versioncontrol_get_item_history($repository, $item) {
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
@@ -2376,13 +2429,23 @@ function versioncontrol_get_item_history($repository, $item) {
  *   in the FakeVCS example module.
  */
 function versioncontrol_get_directory_contents($repository, $directory_item, $recursive = FALSE) {
-  if ($directory_item['type'] != VERSIONCONTROL_ITEM_DIRECTORY) {
+  if (!versioncontrol_is_directory_item($directory_item)) {
     return NULL;
   }
-  return _versioncontrol_call_backend(
+  $contents = _versioncontrol_call_backend(
     $repository['vcs'], 'get_directory_contents',
     array($repository, $directory_item, $recursive)
   );
+  $items = array();
+
+  foreach ($contents as $path => $content) {
+    $items[$path] = $content['item'];
+    $items[$path]['selected_label'] = new StdClass();
+    $items[$path]['selected_label']->label = is_null($content['selected_label'])
+                                              ? NULL
+                                              : $content['selected_label'];
+  }
+  return $items;
 }
 
 
@@ -2413,7 +2476,7 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
  *   in the FakeVCS example module.
  */
 function versioncontrol_get_file_contents($repository, $file_item) {
-  if ($file_item['type'] != VERSIONCONTROL_ITEM_FILE) {
+  if (!versioncontrol_is_file_item($file_item)) {
     return NULL;
   }
   return _versioncontrol_call_backend(
@@ -2452,7 +2515,7 @@ function versioncontrol_get_file_contents($repository, $file_item) {
  *   in the FakeVCS example module.
  */
 function versioncontrol_get_file_annotation($repository, $file_item) {
-  if ($file_item['type'] != VERSIONCONTROL_ITEM_FILE) {
+  if (!versioncontrol_is_file_item($file_item)) {
     return NULL;
   }
   return _versioncontrol_call_backend(

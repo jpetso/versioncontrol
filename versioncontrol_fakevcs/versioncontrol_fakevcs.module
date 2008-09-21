@@ -359,6 +359,79 @@ function versioncontrol_fakevcs_get_selected_source_item_label($repository, $suc
 }
 
 /**
+ * Implementation of [vcs_backend]_get_item():
+ * Try to retrieve a given item in a repository.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_item')
+ * if the particular backend actually implements it.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $path
+ *   The path of the requested item.
+ * @param $revision
+ *   A specific revision for the requested item (as interpreted by the
+ *   VCS backend), or NULL if any revision is good enough - preferably,
+ *   the most recent one.
+ *
+ * @return
+ *   If the item with the given path and revision cannot be retrieved, NULL is
+ *   returned. Otherwise the result of the backend function is a structured
+ *   array with the elements 'item' and 'selected_label', making up the whole
+ *   picture.
+ *
+ *   - 'item': An item array, consisting of the following elements:
+ *
+ *        - 'type': Specifies the item type, which is either
+ *             VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for
+ *             items that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED
+ *             respectively VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items
+ *             that have been removed.
+ *        - 'path': The path of the item at the specific revision.
+ *        - 'revision': The currently selected (file-level) revision of the
+ *             item. If there is no such revision (which may be the case for
+ *             directory items) then the 'revision' element is an empty string.
+ *
+ *        If the returned item is already present in the database, the
+ *        'item_revision_id' database identifier might also be filled in
+ *        (optionally, depending on the VCS backend).
+ *
+ *   - 'selected_label':
+ *        In case no branch or tag applies to that item or could not be
+ *        retrieved for whatever reasons, the selected label can also be NULL.
+ *        Otherwise, it's a label array describing the selected label, with the
+ *        following keys:
+ *
+ *        - 'name': The branch or tag name (a string).
+ *        - 'type': Whether this label is a branch (indicated by the
+ *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *             (VERSIONCONTROL_OPERATION_TAG).
+ *
+ *        In case the label array also contains the 'label_id' element (which
+ *        happens when it's copied from the $operation['labels'] array) there
+ *        will be a small performance improvement as the label doesn't need to
+ *        be compared to and loaded from the database anymore.
+ */
+function versioncontrol_fakevcs_get_item($repository, $path, $revision = '') {
+  // Slightly adapted version of the SVN backend's implementation.
+  if (empty($revision)) {
+    $revision = 'HEAD';
+  }
+  // Wherever you get your item info from.
+  $info = fakevcs_item_info($repository, $path, $revision);
+
+  $item = array(
+    'path' => $path,
+    'revision' => $info['rev'],
+    'type' => ($info['rev'] == 'dir')
+              ? VERSIONCONTROL_ITEM_DIRECTORY
+              : VERSIONCONTROL_ITEM_FILE,
+  );
+  return array('item' => $item, 'selected_label' => NULL);
+}
+
+/**
  * Implementation of [vcs_backend]_get_parent_item():
  * Retrieve the parent (directory) item of a given item.
  *
@@ -589,9 +662,6 @@ function versioncontrol_fakevcs_get_all_item_tags($repository, $item) {
  *   - 'revision': The (file-level) revision when the item was changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
@@ -651,24 +721,47 @@ function versioncontrol_get_item_history($repository, $item) {
  *   If TRUE, you'll get every single descendant of $path.
  *
  * @return
- *   A structured item array containing the exact details of which items have
- *   been inside the directory at the time of the commit, including the
- *   directory itself. Array keys are the current/new paths.
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
+ *   An array containing the exact details of which items have been inside the
+ *   directory at the revision of the directory item, including the directory
+ *   item itself. Array keys are the current/new paths. The corresponding
+ *   values are again structured arrays, each with a pair of 'item' and
+ *   'selected_label' elements as follows.
  *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
+ *   - 'item': An item array, consisting of the following elements:
  *
- *   NULL is returned if the given item is not inside the repository,
- *   or if it is not a directory item at all.
+ *        - 'type': Specifies the item type, which is either
+ *             VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for
+ *             items that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED
+ *             respectively VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items
+ *             that have been removed.
+ *        - 'path': The path of the item at the specific revision.
+ *        - 'revision': The currently selected (file-level) revision of the
+ *             item. If there is no such revision (which may be the case for
+ *             directory items) then the 'revision' element is an empty string.
+ *
+ *        If the returned item is already present in the database, the
+ *        'item_revision_id' database identifier might also be filled in
+ *        (optionally, depending on the VCS backend).
+ *
+ *   - 'selected_label':
+ *        In case no branch or tag applies to that item or could not be
+ *        retrieved for whatever reasons, the selected label can also be NULL.
+ *        Otherwise, it's a label array describing the selected label, with the
+ *        following keys:
+ *
+ *        - 'name': The branch or tag name (a string).
+ *        - 'type': Whether this label is a branch (indicated by the
+ *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *             (VERSIONCONTROL_OPERATION_TAG).
+ *
+ *        In case the label array also contains the 'label_id' element (which
+ *        happens when it's copied from the $operation['labels'] array) there
+ *        will be a small performance improvement as the label doesn't need to
+ *        be compared to and loaded from the database anymore.
+ *
+ *   NULL is returned if the given item is not under version control,
+ *   or was not under version control at the time of the given revision.
+ *   The API module ensures that the passed item is a directory item.
  */
 function versioncontrol_fakevcs_get_directory_contents($repository, $directory_item, $recursive = FALSE) {
   // Assuming $parent_item is an item array that looks like this:
@@ -677,38 +770,57 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     'path'     => '/trunk/contributions/modules/versioncontrol',
     'revision' => '666',
   );
-  // $repository is some SVN repository and $recursive == FALSE.
+  // $repository is some SVN repository and $recursive == FALSE. SVN without
+  // branch/tag emulation can return NULL for all the selected labels.
 
   return array(
-    '/trunk/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'      => '/trunk/contributions/modules/versioncontrol',
-      'revision'  => '502',
-    ),
+    '/trunk/contributions/modules/versioncontrol' => array(
+      'item' => array( // == rtrim($path, '/')
+        'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'      => '/trunk/contributions/modules/versioncontrol',
+        'revision'  => '502',
+      ),
+      'selected_label' => NULL,
+    )
     '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision'  => '502',
+      'item' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.module',
+        'revision'  => '502',
+      ),
+      'selected_label' => NULL,
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol.info' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
-      'revision'  => '404',
+      'item' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
+        'revision'  => '404',
+      ),
+      'selected_label' => NULL,
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol.install' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.install',
-      'revision'  => '404',
+      'item' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol.install',
+        'revision'  => '404',
+      ),
+      'selected_label' => NULL,
     ),
     '/trunk/contributions/modules/versioncontrol/README.txt' => array(
-      'type'      => VERSIONCONTROL_ITEM_FILE,
-      'path'      => '/trunk/contributions/modules/versioncontrol/README.txt',
-      'revision'  => '404',
+      'item' => array(
+        'type'      => VERSIONCONTROL_ITEM_FILE,
+        'path'      => '/trunk/contributions/modules/versioncontrol/README.txt',
+        'revision'  => '404',
+      ),
+      'selected_label' => NULL,
     ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
-      'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs.txt',
-      'revision'  => '497',
+      'item' => array(
+        'type'      => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'      => '/trunk/contributions/modules/versioncontrol/versioncontrol_fakevcs.txt',
+        'revision'  => '497',
+      ),
+      'selected_label' => NULL,
     ),
   );
 
@@ -720,77 +832,82 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
     'revision' => '',
   );
   // $repository is some CVS repository and $recursive == TRUE.
+  // For the purpose of example, we use the same label as the directory item.
+  // (Real-life usage might or might not require more correctness checks.)
+  $selected_label = versioncontrol_get_selected_label($directory_item);
 
   return array(
-    '/contributions/modules/versioncontrol' => array( // == rtrim($path, '/')
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol',
-      'revision' => '', // CVS doesn't track directory-level revisions
+    '/contributions/modules/versioncontrol' => array(
+      'item' => array( // == rtrim($path, '/')
+        'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'     => '/contributions/modules/versioncontrol',
+        'revision' => '', // CVS doesn't track directory-level revisions
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/versioncontrol.module' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision' => '1.19',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
+        'revision' => '1.19',
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/versioncontrol.info' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol.info',
-      'revision' => '1.1',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol.info',
+        'revision' => '1.1',
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/versioncontrol.install' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol.install',
-      'revision' => '1.5',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol.install',
+        'revision' => '1.5',
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/README.txt' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/README.txt',
-      'revision' => '1.1',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/README.txt',
+        'revision' => '1.1',
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/fakevcs_backend' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol/fakevcs_backend',
-      'revision' => '',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'     => '/contributions/modules/versioncontrol/fakevcs_backend',
+        'revision' => '',
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE_DELETED, // only for non-atomic-commit VCSs (= CVS)
-      'path'     => '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module',
-      'revision' => '1.11', // last existing version
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE_DELETED, // only for non-atomic-commit VCSs (= CVS)
+        'path'     => '/contributions/modules/versioncontrol/fakevcs_backend/fakevcs_backend.module',
+        'revision' => '1.11', // last existing version
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision' => '',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
+        'revision' => '',
+      ),
+      'selected_label' => $selected_label,
     ),
     '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
-      'revision' => '1.2',
-    ),
-  );
-
-  // And when an item comes in that has been marked with another branch or tag,
-  // then use that one instead of the main branch.
-  $directory_item = array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision' => '',
-      'fakevcs_specific' => array('selected_branch_name' => 'DRUPAL-5--1'),
-    );
-  // $repository is some CVS repository and $recursive == FALSE.
-
-  return array(
-    '/contributions/modules/versioncontrol/versioncontrol_fakevcs' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs',
-      'revision' => '',
-      'fakevcs_specific' => array('selected_branch_name' => 'DRUPAL-5--1'),
-    ),
-    '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
-      'revision' => '1.2',
-      'fakevcs_specific' => array('selected_branch_name' => 'DRUPAL-5--1'),
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol_fakevcs/versioncontrol_fakevcs.module',
+        'revision' => '1.2',
+      ),
+      'selected_label' => $selected_label,
     ),
   );
 }
@@ -816,8 +933,8 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
  *   - 'contents': The raw contents of the file.
  *
  *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision,
- *   or if it is not a file item at all.
+ *   or was not under version control at the time of the given revision.
+ *   The API module ensures that the passed item is a file item.
  */
 function versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
   // In case the file is marked as text file:
@@ -859,7 +976,8 @@ function versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision,
- *   or if it is not a file item at all, or if it is marked as binary file.
+ *   or if it is marked as binary file.
+ *   The API module ensures that the passed item is a file item.
  */
 function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
   // In case the file is marked as text file:
