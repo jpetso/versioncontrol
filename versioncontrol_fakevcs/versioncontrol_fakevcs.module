@@ -104,7 +104,7 @@ function versioncontrol_fakevcs_versioncontrol_backends() {
  *   has been set by this module, it may even be filled with values already.)
  * @param $fakevcs_specific_constraints
  *   An array of FakeVCS specific filter constraints which were passed to
- *   versioncontrol_get_commits(). Say, if FakeVCS supported modules like
+ *   versioncontrol_get_repositories(). Say, if FakeVCS supported modules like
  *   the CVS ones, the array would maybe contain a 'modules' constraint
  *   for filtering by module.
  */
@@ -246,11 +246,11 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_selected_operation_item_label():
+ * Implementation of [versioncontrol_backend]_get_selected_label_from_operation():
  * Retrieve the tag or branch that applied to that item during the given
  * operation. The result of this function will be used for the selected label
- * property of each item, which is necessary to provide a starting point for
- * branch and tag navigation.
+ * property of the item, which is necessary to preserve the item state
+ * throughout navigational API functions.
  *
  * This function is mandatory for backends to implement.
  *
@@ -258,7 +258,7 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
  *   A single operation array to which the item belongs, like the ones returned
  *   by versioncontrol_get_operations(). Specifically, $operation contains the
  *   'labels' element which should probably be reused by this function.
- * @param $item
+ * @param $target_item
  *   The item revision for which the label should be retrieved.
  *
  * @return
@@ -276,7 +276,7 @@ function versioncontrol_fakevcs_get_commit_statistics($commit, $commit_actions =
  *   be a small performance improvement as the label doesn't need to be
  *   compared to and loaded from the database anymore.
  */
-function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $item) {
+function versioncontrol_fakevcs_get_selected_label_from_operation($operation, $target_item) {
   // How CVS and many other version control systems will probably do it,
   // as they have exactly one label assigned to each operation.
   return $operation['labels'][0];
@@ -287,29 +287,49 @@ function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $i
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_selected_source_item_label():
- * Retrieve the tag or branch that applied to the source item of a given
- * successor item revision (a.k.a. "target item"). The result of this function
- * will be used for the selected label property of each item, which is
- * necessary to provide a starting point for branch and tag navigation.
+ * Implementation of [versioncontrol_backend]_get_selected_label_from_other_item():
+ * Retrieve a valid label (tag or branch) for a new @p $target_item that is
+ * (hopefully) similar or related to that of the given @p $other_item which
+ * already has a selected label assigned. If the backend cannot find a related
+ * label, return any valid label. The result of this function will be used for
+ * the selected label property of each item, which is necessary to preserve the
+ * item state throughout navigational API functions.
  *
  * This function is mandatory for backends to implement.
  *
  * @param $repository
  *   The repository array (like returned by versioncontrol_get_repository())
  *   of the repository which contains both the source and the successor item.
- * @param $successor_item
+ * @param $target_item
+ *   The item revision for which the label should be retrieved.
+ * @param $other_item
  *   The item revision that the selected label should be derived from.
- *   For example, if @p $successor_item in a CVS repository is at revision
- *   '1.5.2.1' which is on the 'DRUPAL-6--1' branch, and the @p $source_item
+ *   For example, if @p $other_item in a CVS repository is at revision
+ *   '1.5.2.1' which is on the 'DRUPAL-6--1' branch, and the @p $target_item
  *   is at revision '1.5' (its predecessor) which is present on both the
  *   'DRUPAL-6--1' and 'HEAD' branches, then this function should return a
  *   label array for the 'DRUPAL-6--1' branch.
- * @param $source_item
- *   The item revision for which the label should be retrieved.
+ * @param $other_item_tags
+ *   An array with a simple list of strings that describe properties of the
+ *   @p $other_item, in relation to the @p $target_item. You can use those
+ *   in order to make assumptions so that the selected label can be retrieved
+ *   more accurately or with better performance. Version Control API passes a
+ *   list that may contain zero or more of the following tags:
+ *
+ *   - 'source_item': The @p $other_item is a predecessor of the
+ *        @p $target_item - same entity, but in an earlier revision and
+ *        potentially with a different path, too (only if the backend supports
+ *        item moves).
+ *   - 'successor_item': The @p $other_item is a successor of the
+ *        @p $target_item - same entity, but in a later revision and
+ *        potentially with a different path, too (only if the backend supports
+ *        item moves).
+ *   - 'same_revision': The @p $other_item is at the same (global) revision
+ *        as the @p $target_item. Specifically meant for backends whose
+ *        version control systems don't support atomic commits.
  *
  * @return
- *   NULL if the given item does not belong to any label or if the appropriate
+ *   NULL if the given item does not belong to any label or if an appropriate
  *   label cannot be retrieved. Otherwise a label array is returned, consisting
  *   of the following elements:
  *
@@ -323,38 +343,53 @@ function versioncontrol_fakevcs_get_selected_operation_item_label($operation, $i
  *   be a small performance improvement as the label doesn't need to be
  *   compared to and loaded from the database anymore.
  */
-function versioncontrol_fakevcs_get_selected_source_item_label($repository, $successor_item, $source_item) {
-  $label = versioncontrol_get_item_selected_label($repository, $successor_item);
+function versioncontrol_fakevcs_get_selected_label_from_other_item($repository, $target_item, &$other_item, $other_item_tags = array()) {
+  // First up, optimizations - maybe we can do without the generic
+  // "label transfer" code from further down and use assumptions instead.
 
-  if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
-    return $label;
-    // ...assuming that any given source item is also on the same branch as
-    // its successor, which may not be true for all version control systems.
+  // Let's assume for FakeVCS repositories that if an item wears a label, then
+  // an item at another path but with the same (file-level) revision can also
+  // wear that same label. That is the case with some version control systems
+  // (e.g. Git, Mercurial, Bazaar) but might not be the case with others
+  // (CVS for its lack of global revision identifiers, SVN for its use of
+  // directory structure as tag/branch identifiers).
+  if ($item['revision'] == $other_item['revision']) {
+    return versioncontrol_get_item_selected_label($repository, $other_item);
   }
-  // Otherwise we can't really figure out know the successor item's branch
-  // (it's a tag label array or NULL), so the backend needs to figure out
-  // a way by itself. This code looks if the commit that's associated to the
-  // revision of the source item exists in the database, and uses the commit
-  // operation's first label, whatever it is. (That code is from the
-  // CVS backend where only one label exists for each commit, so that's ok.)
-  // Other backends might want to provide different or more attempts.
-  else {
-    $constraints = array('repo_ids' => array($repository['repo_id']));
-    if (isset($source_item['item_revision_id'])) {
-      $constraints['item_revision_id'] = array($source_item['item_revision_id']);
+
+  // If the $other_item is a successor item on a branch, some version control
+  // systems (like CVS) can guarantee that the $target_item, the predecessor,
+  // is always on the same branch. So no need for database queries, yay.
+  if (in_array('successor_item', $other_item_tags)) {
+    $label = versioncontrol_get_item_selected_label($repository, $other_item);
+
+    if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
+      return $label;
     }
-    else {
-      $constraints['item_revisions'] = array($source_item['revision']);
-      $constraints['paths'] = array($source_item['path']);
-    }
-    $commit_operations = versioncontrol_get_commits($constraints);
+  }
+
+  // Otherwise we might not be able to derive the $target_item's label,
+  // in which case we need to fall back to the database or a VCS invocation.
+  // For example, something like this.
+  if (versioncontrol_fetch_item_revision_id($target_item)) {
+    $constraints = array(
+      'item_revision_id' => array($target_item['item_revision_id']),
+    );
+    $commit_operations = versioncontrol_get_commit_operations($constraints);
 
     if (!empty($commit_operations)) { // yo, found the associated commit!
-      $commit_operation = reset($commit_operations); // first (only) array element
+      // Code taken from the CVS backend, which only assigns a single branch
+      // to any given commit operation, so it can just take the first one.
+      $commit_operation = reset($commit_operations); // first (only) element
       return $commit_operation['labels'][0];
     }
   }
-  // No label could be retrieved by looking at the successor item, sorry.
+
+  // (You can even do more attempts if you want to, like trying to ask
+  // the VCS itself. Or maybe not, depends on your motivation and the
+  // VCS's capabilities.)
+
+  // No label could be retrieved by looking at the other item, sorry.
   return NULL;
 }
 

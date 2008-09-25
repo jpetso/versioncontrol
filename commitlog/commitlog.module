@@ -312,7 +312,7 @@ function commitlog_get_paged_operations($constraints, $limit = NULL, $element = 
   if (!isset($limit)) {
     $limit = variable_get('commitlog_pager', 10);
   }
-  $operations = versioncontrol_get_commits($constraints, $result_count, $page, $limit);
+  $operations = versioncontrol_get_operations($constraints, $result_count, $page, $limit);
 
   // Emulate pager_query() in order to get a proper theme('pager').
   $pager_total_items[$element] = $result_count;

@@ -316,8 +316,9 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
       }
 
       $source_item['selected_label'] = new StdClass();
-      $source_item['selected_label']->get_from = 'successor_item';
-      $source_item['selected_label']->successor_item = &$item;
+      $source_item['selected_label']->get_from = 'other_item';
+      $source_item['selected_label']->other_item = &$item;
+      $source_item['selected_label']->other_item_tags = array('successor_item');
 
       $item['source_items'][$key] = $source_item;
     }
@@ -337,8 +338,9 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
         $item, $item['replaced_item'], VERSIONCONTROL_ACTION_REPLACED
       );
       $item['replaced_item']['selected_label'] = new StdClass();
-      $item['replaced_item']['selected_label']->get_from = 'successor_item';
-      $item['replaced_item']['selected_label']->successor_item = &$item;
+      $item['replaced_item']['selected_label']->get_from = 'other_item';
+      $item['replaced_item']['selected_label']->other_item = &$item;
+      $item['replaced_item']['selected_label']->other_item_tags = array('successor_item');
     }
     $operation_items[$path] = $item;
   }

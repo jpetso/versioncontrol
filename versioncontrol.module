@@ -716,7 +716,7 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  * (so only commits are returned). Parameters and result array are the same
  * as those from versioncontrol_get_operations().
  */
-function versioncontrol_get_commits($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+function versioncontrol_get_commit_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   if (isset($constraints['types']) && !in_array(VERSIONCONTROL_OPERATION_COMMIT, $constraints['types'])) {
     return array(); // no commits in the original constraints, intersects to empty
   }
@@ -1344,7 +1344,7 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  *        this identifier, for obvious reasons.
  *
  *   If the @p $fetch_source_items parameter is TRUE,
- *   versioncontrol_add_source_items() will be called on the list of items
+ *   versioncontrol_fetch_source_items() will be called on the list of items
  *   in order to retrieve additional information about their origin.
  *   The following elements will be set for each item in addition
  *   to the ones listed above:
@@ -1378,7 +1378,7 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
     );
     $items[$item_revision->path]['selected_label'] = new StdClass();
     $items[$item_revision->path]['selected_label']->get_from = 'operation';
-    $items[$item_revision->path]['selected_label']->successor_item = &$operation;
+    $items[$item_revision->path]['selected_label']->operation = &$operation;
   }
 
   if (!isset($fetch_source_items)) {
@@ -1386,7 +1386,7 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
     $fetch_source_items = ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT);
   }
   if ($fetch_source_items) {
-    versioncontrol_add_source_items($operation['repository'], $items);
+    versioncontrol_fetch_source_items($operation['repository'], $items);
   }
   ksort($items); // similar paths should be next to each other
   return $items;
@@ -1410,24 +1410,29 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
  *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
  *   - 'source_items': An array with the previous revision(s) of the affected
- *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED. The key for
+ *        all items in this array is the respective item path.
  *   - 'replaced_item': The previous but technically unrelated item at the
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
  *        or copied to this location.
  */
-function versioncontrol_add_source_items($repository, &$items) {
+function versioncontrol_fetch_source_items($repository, &$items) {
   if (empty($items)) {
-    return $items;
+    return;
   }
   $placeholders = array();
   $ids = array();
   $item_keys = array();
 
   foreach ($items as $key => $item) {
-    $placeholders[] = '%d';
-    $ids[] = $item['item_revision_id'];
-    $item_keys[$item['item_revision_id']] = $key;
+    // If we don't yet know the item_revision_id (required for db queries), try
+    // to retrieve it. If we don't find it, we can't fetch this item's sources.
+    if (versioncontrol_fetch_item_revision_id($repository, $item)) {
+      $placeholders[] = '%d';
+      $ids[] = $item['item_revision_id'];
+      $item_keys[$item['item_revision_id']] = $key;
+    }
   }
 
   $result = db_query(
@@ -1451,8 +1456,9 @@ function versioncontrol_add_source_items($repository, &$items) {
       'item_revision_id' => $item_revision->source_item_revision_id,
     );
     $item['selected_label'] = new StdClass();
-    $item['selected_label']->get_from = 'successor_item';
-    $item['selected_label']->successor_item = &$items[$successor_key];
+    $item['selected_label']->get_from = 'other_item';
+    $item['selected_label']->other_item = &$items[$successor_key];
+    $item['selected_label']->other_item_tags = array('successor_item');
 
     // Insert the item and its associated action into the successor item.
     if ($item_revision->action == VERSIONCONTROL_ACTION_REPLACED) {
@@ -1465,9 +1471,269 @@ function versioncontrol_add_source_items($repository, &$items) {
     }
     else {
       $items[$successor_key]['action'] = $item_revision->action;
-      $items[$successor_key]['source_items'][$item_revision->path] = $item;
+      $items[$successor_key]['source_items'][$item['path']] = $item;
     }
   }
+}
+
+/**
+ * Retrieve additional information about the successors of a given set
+ * of items.
+ *
+ * @param $repository
+ *   The repository that the items are located in.
+ * @param $items
+ *   An array of item arrays, for example as returned by
+ *   versioncontrol_get_operation_items().
+ *
+ * @return
+ *   This function does not have a return value; instead, it alters the
+ *   given item arrays and adds additional information about their successors.
+ *   The following elements will be set for all items whose successor items
+ *   could be retrieved.
+ *
+ *   - 'successor_items': An array with the previous revision(s) of the
+ *        affected item. The key for all items in this array is the respective
+ *        item path, and all of these items will have the 'actions' and
+ *        'source_items' properties (as documented by
+ *        versioncontrol_fetch_source_items()) filled in.
+ *   - 'replaced_by_item': The succeeding but technically unrelated item at the
+ *        same location as the current item. Only exists if the original item
+ *        was deleted and replaced by a the succeeding one that was just moved
+ *        or copied to this location.
+ */
+function versioncontrol_fetch_successor_items($repository, &$items) {
+  if (empty($items)) {
+    return;
+  }
+  $placeholders = array();
+  $ids = array();
+  $item_keys = array();
+
+  foreach ($items as $key => $item) {
+    // If we don't yet know the item_revision_id (required for db queries), try
+    // to retrieve it. If we don't find it, we can't fetch this item's sources.
+    if (versioncontrol_fetch_item_revision_id($repository, $item)) {
+      $placeholders[] = '%d';
+      $ids[] = $item['item_revision_id'];
+      $item_keys[$item['item_revision_id']] = $key;
+    }
+  }
+
+  $result = db_query(
+    'SELECT sit.item_revision_id, sit.source_item_revision_id, sit.action,
+            ir.path, ir.revision, ir.type
+     FROM {versioncontrol_source_items} sit
+      INNER JOIN {versioncontrol_item_revisions} ir
+       ON sit.item_revision_id = ir.item_revision_id
+     WHERE sit.source_item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
+
+  while ($item_revision = db_fetch_object($result)) {
+    $source_key = $item_keys[$item_revision->source_item_revision_id];
+    if (!isset($items[$source_key]['successor_items'])) {
+      $items[$source_key]['successor_items'] = array();
+    }
+
+    $item = array(
+      'path' => $item_revision->path,
+      'revision' => $item_revision->revision,
+      'type' => $item_revision->type,
+      'item_revision_id' => $item_revision->item_revision_id,
+    );
+    $item['selected_label'] = new StdClass();
+    $item['selected_label']->get_from = 'other_item';
+    $item['selected_label']->other_item = &$items[$source_key];
+    $item['selected_label']->other_item_tags = array('source_item');
+
+    // Insert the item and its associated action into the source item.
+    if ($item_revision->action == VERSIONCONTROL_ACTION_REPLACED) {
+      $items[$source_key]['replaced_by_item'] = $item;
+    }
+    else {
+      if ($item_revision->action == VERSIONCONTROL_ACTION_MERGED) {
+        // If we've got a merge action then there are multiple source items,
+        // the one that we know is not sufficient. (And of course, we won't
+        // return an item with an incomplete 'source_items' property.)
+        // So let's retrieve all of those source items.
+        $successor_items = array($item['path'] => $item);
+        versioncontrol_fetch_source_items($repository, $successor_items);
+        $item = $successor_items[$item['path']];
+      }
+      else { // No "merged" action: the original item is the only source item.
+        $item['action'] = $item_revision->action;
+        $item['source_items'] = array(
+          $items[$source_key]['path'] => $items[$source_key],
+        );
+      }
+      $items[$source_key]['successor_items'][$item['path']] = $item;
+    }
+  }
+}
+
+/**
+ * Retrieve the revisions where the given item has been changed,
+ * in reverse chronological order.
+ *
+ * Only one direct source or successor of each item will be retrieved, which
+ * means that you won't get parallel history logs with a single function call.
+ * In order to retrieve the log for this item in a different branch, you need
+ * to switch the selected label of the item by retrieving a different version
+ * of it with a call of versioncontrol_get_all_item_branches() or
+ * versioncontrol_get_all_item_tags() (if the backend supports those functions).
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose history should be retrieved.
+ *
+ * @return
+ *   An array containing a list of item arrays, each one specifying a revision
+ *   of the same item that was given as argument. The array is sorted in
+ *   reverse chronological order, so the newest revision comes first. Each
+ *   element has its (file-level) item revision as key, and a standard item
+ *   array (as the ones retrieved by versioncontrol_get_operation_items())
+ *   as value. All items except for the oldest one will also have the 'action'
+ *   and 'source_items' properties filled in, the oldest item might or
+ *   might not have them. (If they exist for the oldest item, 'action' will be
+ *   VERSIONCONTROL_ACTION_ADDED and 'source_items' an empty array.)
+ *
+ *   NULL is returned if the given item is not under version control,
+ *   or was not under version control at the time of the given revision,
+ *   or if no history could be retrieved for any other reason.
+ */
+function versioncontrol_get_item_history($repository, &$item, $successor_item_limit = NULL, $source_item_limit = NULL) {
+  // Items without revision have no history, don't even try to fetch it.
+  if (empty($item['revision'])) {
+    return NULL;
+  }
+  // If we don't yet know the item_revision_id (required for db queries), try
+  // to retrieve it. If we don't find it, we can't go on with this function.
+  if (!versioncontrol_fetch_item_revision_id($repository, $item)) {
+    return NULL;
+  }
+
+  // Make sure we don't run into infinite loops when passed bad arguments.
+  if (is_numeric($successor_item_limit) && $successor_item_limit < 0) {
+    $successor_item_limit = 0;
+  }
+  if (is_numeric($source_item_limit) && $source_item_limit < 0) {
+    $source_item_limit = 0;
+  }
+
+  // Naive implementation - can probably be improved by sticking to the same
+  // repo_id/path until an action other than "modified" or "other" appears.
+  // (With the drawback that code will probably need to be duplicated among
+  // this function and versioncontrol_fetch_{source,successor}_items().
+
+  // Find (recursively) all successor items within the successor item limit.
+  $history_successor_items = array();
+  $source_item = $item;
+  static $successor_action_priority = array(
+    VERSIONCONTROL_ACTION_MOVED => 10,
+    VERSIONCONTROL_ACTION_MODIFIED => 10,
+    VERSIONCONTROL_ACTION_COPIED => 8,
+    VERSIONCONTROL_ACTION_MERGED => 9,
+    VERSIONCONTROL_ACTION_OTHER => 1,
+    VERSIONCONTROL_ACTION_DELETED => 1,
+    VERSIONCONTROL_ACTION_ADDED => 0, // does not happen, guard nonetheless
+    VERSIONCONTROL_ACTION_REPLACED => 0, // does not happen, guard nonetheless
+  );
+
+  while ((!isset($successor_item_limit) || ($successor_item_limit > 0))) {
+    $source_items = array($source_item['path'] => $source_item);
+    versioncontrol_fetch_successor_items($repository, $source_items);
+    $source_item = $source_items[$source_item['path']];
+
+    // If there are no successor items, we are obviously at the end of the log.
+    if (empty($source_item['successor_items'])) {
+      break;
+    }
+    // There might be multiple successor items - in most cases, the first one is
+    // the only one so that's ok except for "merged" actions.
+    $successor_item = NULL;
+    $highest_priority_so_far = 0;
+    foreach ($source_item['successor_items'] as $path => $succ_item) {
+      if (!isset($successor_item)
+          || $successor_action_priority[$succ_item['action']] > $highest_priority_so_far) {
+        $successor_item = $succ_item;
+        $highest_priority_so_far = $successor_action_priority[$succ_item['action']];
+      }
+    }
+    $history_successor_items[$successor_item['revision']] = $successor_item;
+    $source_item = $successor_item;
+
+    // Decrement the counter until the item limit is reached.
+    if (isset($successor_item_limit)) {
+      --$successor_item_limit;
+    }
+  }
+  // We want the newest revisions first, so reverse the successor array.
+  $history_successor_items = array_reverse($history_successor_items, TRUE);
+
+  // Find (recursively) all source items within the source item limit.
+  $history_source_items = array();
+  $successor_item = $item;
+
+  while (!isset($source_item_limit) || ($source_item_limit > 0)) {
+    $successor_items = array($successor_item['path'] => $successor_item);
+    versioncontrol_fetch_source_items($repository, $successor_items);
+    $successor_item = $successor_items[$successor_item['path']];
+
+    // If there are no source items, we are obviously at the end of the log.
+    if (empty($successor_item['source_items'])) {
+      break;
+    }
+    // There might be multiple source items - in most cases, the first one is
+    // the only one so that's ok except for "merged" actions.
+    $source_item = NULL;
+    if ($successor_item['action'] == VERSIONCONTROL_ACTION_MERGED) {
+      if (isset($successor_item['source_items'][$successor_item['path']])) {
+        $source_item = $successor_item['source_items'][$successor_item['path']];
+      }
+    }
+    if (!isset($source_item)) {
+      $source_item = reset($successor_item['source_items']); // first item
+    }
+    $history_source_items[$source_item['revision']] = $source_item;
+    $successor_item = $source_item;
+
+    // Decrement the counter until the item limit is reached.
+    if (isset($source_item_limit)) {
+      --$source_item_limit;
+    }
+  }
+
+  return $history_successor_items + array($item['revision'] => $item) + $history_source_items;
+}
+
+/**
+ * Make sure that the 'item_revision_id' database identifier is among an item's
+ * properties, and if it's not then try to add it.
+ *
+ * @param $repository
+ *   The repository where the item is located.
+ * @param $item
+ *   The item revision for which the 'item_revision_id' property should
+ *   be retrieved.
+ *
+ * @return
+ *   TRUE if the 'item_revision_id' exists after calling this function,
+ *   FALSE if not.
+ */
+function versioncontrol_fetch_item_revision_id($repository, &$item) {
+  if (!empty($item['item_revision_id'])) {
+    return TRUE;
+  }
+  $id = db_result(db_query(
+    "SELECT item_revision_id FROM {versioncontrol_item_revisions}
+      WHERE repo_id = %d AND path = '%s' AND revision = '%s'",
+    $repository['repo_id'], $item['path'], $item['revision']
+  ));
+  if (empty($id)) {
+    return FALSE;
+  }
+  $item['item_revision_id'] = $id;
+  return TRUE;
 }
 
 /**
@@ -1516,12 +1782,13 @@ function versioncontrol_get_item_selected_label($repository, &$item) {
   // Otherwise, determine how we might be able to retrieve the selected label.
   switch($item['selected_label']->get_from) {
     case 'operation':
-      $function = $function_prefix .'_get_selected_operation_item_label';
+      $function = $function_prefix .'_get_selected_label_from_operation';
       $selected_label = $function($item['selected_label']->operation, $item);
       break;
-    case 'successor_item':
-      $function = $function_prefix .'_get_selected_source_item_label';
-      $selected_label = $function($repository, $item['selected_label']->successor_item, $item);
+    case 'other_item':
+      $function = $function_prefix .'_get_selected_label_from_other_item';
+      $selected_label = $function($repository, $item, $item['selected_label']->other_item, $item['selected_label']->other_item_tags);
+      unset($item['selected_label']->other_item_tags);
       break;
   }
 
@@ -2196,20 +2463,28 @@ function versioncontrol_get_item($repository, $path, $revision = NULL) {
  *   If the given directory path does not correspond to a parent item,
  *   NULL is returned.
  */
-function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL) {
+function versioncontrol_get_parent_item($repository, &$item, $parent_path = NULL) {
   if (versioncontrol_backend_implements($repository['vcs'], 'get_parent_item')) {
-    return _versioncontrol_call_backend(
+    $parent_item = _versioncontrol_call_backend(
       $repository['vcs'], 'get_parent_item', array($repository, $item, $parent_path)
     );
   }
-  // Backend doesn't provide that function, use the default implementation.
-  if (!isset($parent_path)) {
-    $item['path'] = dirname($item['path']);
-    return $item;
+  else {
+    // Backend doesn't provide that function, use the default implementation.
+    if (!isset($parent_path)) {
+      $parent_item = clone($item);
+      $parent_item['path'] = dirname($item['path']);
+    }
+    else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
+      $parent_item = clone($item);
+      $parent_item['path'] = $parent_path;
+    }
   }
-  else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
-    $item['path'] = $parent_path;
-    return $item;
+  if (isset($parent_item)) {
+    $parent_item['selected_label']->get_from = 'other_item';
+    $parent_item['selected_label']->other_item = &$item;
+    $parent_item['selected_label']->other_item_tags = array('same_revision');
+    return $parent_item;
   }
   return NULL;
 }
@@ -2335,60 +2610,6 @@ function versioncontrol_format_item_revision($repository, $item, $format = 'shor
     );
   }
   return $item['revision'];
-}
-
-/**
- * Retrieve the revisions where the given item has been changed,
- * in reverse chronological order.
- *
- * Only direct descendants or predecessors of this item will be retrieved.
- * That means that history of the same item in a different (parallel) branch
- * will not be returned, except if the given state of the item was moved/copied
- * from there or goes back there in a more recent revision. In short, you'll
- * not get "1.7" and "1.2.2.4" items side by side if it doesn't make sense.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose history should be retrieved.
- *
- * @return
- *   An array containing the exact details of all item changes. Each element
- *   of the array is a structured array consisting of elements with the
- *   following keys:
- *
- *   - 'action': Specifies how the item was modified.
- *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'modified': Boolean value, specifies if a file was modified in addition
- *        to the other action in the 'action' element of the array.
- *        Only exists for the VERSIONCONTROL_ACTION_MOVED
- *        and VERSIONCONTROL_ACTION_COPIED actions.
- *   - 'current item': The updated state of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
- *   - 'source items': An array with the previous state(s) of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
- *
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *
- *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision.
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
- */
-// TODO: could now be implemented by the API module, given the source_items table and all.
-function versioncontrol_get_item_history($repository, $item) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_item_history', array($repository, $item)
-  );
 }
 
 

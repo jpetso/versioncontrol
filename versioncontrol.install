@@ -219,7 +219,7 @@ function versioncontrol_install() {
 
   // Insert an empty "0" item for joining the {versioncontrol_operation_items}
   // table with {versioncontrol_item_revisions} without omitting items.
-  // (Required for versioncontrol_add_source_items().)
+  // (Required for versioncontrol_fetch_source_items().)
   db_query("INSERT INTO {versioncontrol_item_revisions}
             (item_revision_id, repo_id, path, revision, type)
             VALUES (%d, %d, '%s', '%s', %d)",
