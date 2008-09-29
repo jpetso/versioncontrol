@@ -35,10 +35,6 @@ define('VERSIONCONTROL_ITEM_DIRECTORY',         2);
 define('VERSIONCONTROL_ITEM_FILE_DELETED',      3);
 define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 4);
 
-// VCS file types.
-define('VERSIONCONTROL_FILE_TEXT',            1);
-define('VERSIONCONTROL_FILE_BINARY',          2);
-
 // VCS actions for a single item (file or directory) in a commit,
 // or for branches and tags.
 define('VERSIONCONTROL_ACTION_ADDED',         1);
@@ -2471,22 +2467,25 @@ function versioncontrol_get_parent_item($repository, &$item, $parent_path = NULL
   }
   else {
     // Backend doesn't provide that function, use the default implementation.
-    if (!isset($parent_path)) {
-      $parent_item = clone($item);
-      $parent_item['path'] = dirname($item['path']);
-    }
-    else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
-      $parent_item = clone($item);
-      $parent_item['path'] = $parent_path;
-    }
-  }
-  if (isset($parent_item)) {
+    $parent_item = array(
+      'type' => $item['type'],
+      'revision' => $item['revision'],
+    );
     $parent_item['selected_label']->get_from = 'other_item';
     $parent_item['selected_label']->other_item = &$item;
     $parent_item['selected_label']->other_item_tags = array('same_revision');
-    return $parent_item;
+
+    if (!isset($parent_path)) {
+      $parent_item['path'] = dirname($item['path']);
+    }
+    else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
+      $parent_item['path'] = $parent_path;
+    }
+    else {
+      return NULL;
+    }
   }
-  return NULL;
+  return isset($parent_item) ? $parent_item : NULL;
 }
 
 /**
@@ -2669,12 +2668,15 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
   return $items;
 }
 
-
 /**
- * Retrieve the text or binary data of the given file in the specified commit.
+ * Retrieve a copy of the contents of a given item in the repository.
+ * (You won't get the original because repositories can often be remote.)
+ * The caller should make sure to delete the file when it's not needed anymore.
+ * (That requirement might change in the future though, say, in Drupal 6 when
+ * temporary files are a lot easier to track.)
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_file_contents')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_file_copy')
  * if the particular backend actually implements it.
  *
  * @param $repository
@@ -2683,26 +2685,23 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
  *   The file item whose contents should be retrieved.
  *
  * @return
- *   A structured array that consists of elements with the following keys:
- *
- *   - 'file type': Specifies the file type, which is either
- *       VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
- *   - 'contents': The raw contents of the file.
- *
+ *   The local path of the created copy, if successful.
  *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision,
- *   or if it is not a file item at all.
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
+ *   or was not under version control at the time of the given revision.
  */
-function versioncontrol_get_file_contents($repository, $file_item) {
+function versioncontrol_get_file_copy($repository, $file_item) {
   if (!versioncontrol_is_file_item($file_item)) {
     return NULL;
   }
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_file_contents', array($repository, $file_item)
+  $filename = basename($file_item['path']);
+  $destination = file_directory_temp() .'/versioncontrol-'. mt_rand() .'-'. $filename;
+  $success = _versioncontrol_call_backend(
+    $repository['vcs'], 'get_file_copy', array($repository, $file_item, $destination)
   );
+  if ($success) {
+    return $destination;
+  }
+  return NULL;
 }
 
 /**

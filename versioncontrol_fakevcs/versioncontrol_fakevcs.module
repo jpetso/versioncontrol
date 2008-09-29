@@ -948,41 +948,37 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
 }
 
 /**
- * Implementation of [versioncontrol_backend]_get_file_contents():
- * Retrieve the text or binary data of the given file in the specified commit.
+ * Implementation of [versioncontrol_backend]_open_file_handle():
+ * Retrieve a copy of the contents of a given item in the repository.
+ * (You won't get the original because repositories can often be remote.)
+ *
+ * If a file could not be created, backends should take care to delete any
+ * remaining temporary files before returning.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_file_contents')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_file_copy')
  * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the file item is located in.
  * @param $file_item
  *   The file item whose contents should be retrieved.
+ * @param $destination
+ *   The path where the copied file should be written to.
  *
  * @return
- *   A structured array that consists of elements with the following keys:
- *
- *   - 'file type': Specifies the file type, which is either
- *       VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
- *   - 'contents': The raw contents of the file.
- *
- *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision.
+ *   TRUE if the file was successfully created, FALSE if not.
  *   The API module ensures that the passed item is a file item.
  */
-function versioncontrol_fakevcs_get_file_contents($repository, $file_item) {
-  // In case the file is marked as text file:
-  return array(
-    'file type' => VERSIONCONTROL_FILE_TEXT,
-    'contents'  => $file_contents,
-  );
+function versioncontrol_fakevcs_get_file_copy($repository, $file_item, $destination) {
+  exec('fakevcs cat '. $repository['root'] . $file_item['path'] .' > '. $destination,
+       $output, $return_code);
 
-  // In case the file is marked as binary file:
-  return array(
-    'file type' => VERSIONCONTROL_FILE_BINARY,
-    'contents'  => $file_contents,
-  );
+  if ($return_code != 0) {
+    @unlink($destination);
+    return FALSE;
+  }
+  return TRUE;
 }
 
 /**
