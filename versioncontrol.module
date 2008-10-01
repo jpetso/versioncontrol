@@ -111,6 +111,10 @@ function versioncontrol_menu($may_cache) {
   $admin_access = user_access('administer version control systems');
   $user_access = user_access('use version control systems') || $admin_access;
 
+  if (module_exists('workflow_ng') && !$may_cache) {
+    include_once(drupal_get_path('module', 'versioncontrol') .'/includes/versioncontrol.rules.inc');
+  }
+
   if ($may_cache) {
     // If Version Control API is used without the Project module,
     // we need to define our own version of /admin/project
@@ -2794,6 +2798,26 @@ function _versioncontrol_get_item_paths($items) {
     $paths[$item['path']] = TRUE;
   }
   return array_keys($paths);
+}
+
+/**
+ * Check if the @p $path_regexp applies to the path of the given @p $item.
+ * This function works just like preg_match(), with the single difference that
+ * it also accepts a trailing slash for item paths if the item is a directory.
+ *
+ * @return
+ *   The number of times @p $path_regexp matches. That will be either 0 times
+ *   (no match) or 1 time because preg_match() (which is what this function
+ *   uses internally) will stop searching after the first match.
+ *   FALSE will be returned if an error occurred.
+ */
+function versioncontrol_preg_item_match($path_regexp, $item) {
+  $path = $item['path'];
+
+  if (versioncontrol_is_directory_item($item) && $path != '/') {
+    $path .= '/';
+  }
+  return preg_match($path_regexp, $path);
 }
 
 

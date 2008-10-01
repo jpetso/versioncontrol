@@ -353,6 +353,13 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
   // Everything's done, let the world know about it!
   module_invoke_all('versioncontrol_operation',
                     'insert', $operation, $operation_items);
+
+  // Rules integration, because we like to enable people to be flexible.
+  workflow_ng_invoke_event('versioncontrol_operation_insert', array(
+    'operation' => $operation,
+    'items' => $operation_items,
+  ));
+
   return $operation;
 }
 

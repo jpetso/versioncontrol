@@ -299,7 +299,7 @@ function _commit_restrictions_commit_item_access($operation_items, $restrictions
       $always_allow = FALSE;
 
       foreach ($restrictions['allowed_paths'] as $allowed_path_regexp) {
-        if (_commit_restrictions_preg_item_match($allowed_path_regexp, $item)) {
+        if (versioncontrol_preg_item_match($allowed_path_regexp, $item)) {
           $always_allow = TRUE;
           break; // ok, this item is fine, next one
         }
@@ -329,7 +329,7 @@ function _commit_restrictions_commit_item_access($operation_items, $restrictions
   if (!empty($restrictions['forbidden_paths'])) {
     foreach ($operation_items as $item) {
       foreach ($restrictions['forbidden_paths'] as $forbidden_path_regexp) {
-        if (!_commit_restrictions_preg_item_match($forbidden_path_regexp, $item)) {
+        if (!versioncontrol_preg_item_match($forbidden_path_regexp, $item)) {
           $error_messages[] = _commit_restrictions_item_error_message($item, 'commit');
         }
       }
@@ -424,7 +424,7 @@ function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
       $valid = FALSE;
 
       foreach ($restrictions['valid_branch_tag_paths'] as $valid_path_regexp) {
-        if (_commit_restrictions_preg_item_match($valid_path_regexp, $item)) {
+        if (versioncontrol_preg_item_match($valid_path_regexp, $item)) {
           $valid = TRUE;
           break;
         }
@@ -435,24 +435,6 @@ function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
     }
   }
   return $error_messages;
-}
-
-/**
- * Check if the @p $path_regexp applies to the path of the given @p $item.
- *
- * @return
- *   The number of times @p $path_regexp matches. That will be either 0 times
- *   (no match) or 1 time because preg_match() (which is what this function
- *   uses internally) will stop searching after the first match.
- *   FALSE will be returned if an error occurred.
- */
-function _commit_restrictions_preg_item_match($path_regexp, $item) {
-  $path = $item['path'];
-
-  if (versioncontrol_is_directory_item($item) && $item['path'] != '/') {
-    $path = $item['path'] .'/';
-  }
-  return preg_match($path_regexp, $path);
 }
 
 function _commit_restrictions_item_error_message($item, $message_type) {
