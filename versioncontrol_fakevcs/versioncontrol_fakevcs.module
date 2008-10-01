@@ -371,7 +371,7 @@ function versioncontrol_fakevcs_get_selected_label_from_other_item($repository, 
   // Otherwise we might not be able to derive the $target_item's label,
   // in which case we need to fall back to the database or a VCS invocation.
   // For example, something like this.
-  if (versioncontrol_fetch_item_revision_id($target_item)) {
+  if (versioncontrol_fetch_item_revision_id($repository, $target_item)) {
     $constraints = array(
       'item_revision_id' => array($target_item['item_revision_id']),
     );
