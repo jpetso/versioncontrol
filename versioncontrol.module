@@ -775,6 +775,13 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *   - 'tags': An array of strings, like array('DRUPAL-6-1', 'DRUPAL-6--1-0').
  *        If given, only tag operations with one of these tag names will be
  *        returned.
+ *   - 'revisions': An array of strings, each containing a VCS-specific
+ *        (global) revision, like '27491' for Subversion or some SHA-1 key in
+ *        various distributed version control systems. If given, only
+ *        operations with that revision identifier will be returned. Note that
+ *        this constraint only works for version control systems that support
+ *        global revision identifiers, so this will filter out all
+ *        CVS operations.
  *   - 'labels': A combination of the 'branches' and 'tags' constraints.
  *   - 'paths': An array of strings (item locations), like
  *          array(
@@ -1011,6 +1018,22 @@ function _versioncontrol_construct_operation_constraints($constraints, $operatio
         $params[] = $op_id;
       }
       $and_constraints[] = $operations_table_alias .'.vc_op_id
+                           IN ('. implode(',', $placeholders) .')';
+    }
+  }
+
+  // Filter by revision identifiers.
+  if (isset($constraints['revisions'])) {
+    if (empty($constraints['revisions'])) {
+      return _versioncontrol_false_constraint();
+    }
+    else {
+      $placeholders = array();
+      foreach ($constraints['revisions'] as $revision) {
+        $placeholders[] = "'%s'";
+        $params[] = $revision;
+      }
+      $and_constraints[] = $operations_table_alias .'.revision
                            IN ('. implode(',', $placeholders) .')';
     }
   }
@@ -1307,6 +1330,97 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
   return $paged_operations;
 }
 
+/**
+ * Retrieve the commit operation corresponding to each item in a list of items.
+ *
+ * @param $repository
+ *   The repository that the items are located in.
+ * @param $items
+ *   An array of item arrays, for example as returned by
+ *   versioncontrol_get_operation_items().
+ *
+ * @return
+ *   This function does not have a return value; instead, it alters the
+ *   given item arrays and adds additional information about their
+ *   corresponding commit operation in an 'commit_operation' property.
+ *   If no corresponding commit was found, this property will not be set.
+ */
+function versioncontrol_fetch_item_commit_operations($repository, &$items) {
+  $placeholders = array();
+  $ids = array();
+  $item_keys = array();
+
+  $fetch_by_revision_id = FALSE;
+
+  // If there are atomic commits and versioned directories (= SVN), we'll miss
+  // out on operations for directory items if those are not (always) captured
+  // in the {versioncontrol_operation_items} table.
+  // So fetch by revision id instead in that case.
+  $backend = versioncontrol_get_backend($repository);
+
+  if (in_array(VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS, $backend['capabilities'])) {
+    $fetch_by_revision_id = TRUE;
+  }
+
+  foreach ($items as $key => $item) {
+    if (!empty($item['commit_operation'])) {
+      continue; // No need to insert an operation if it's already there.
+    }
+    if ($fetch_by_revision_id && !empty($item['revision'])) {
+      $ids[$item['revision']] = TRUE; // automatic duplicate elimination
+    }
+    // If we don't yet know the item_revision_id (required for db queries), try
+    // to retrieve it. If we don't find it, we can't fetch this item's sources.
+    if (versioncontrol_fetch_item_revision_id($repository, $item)) {
+      $placeholders[] = '%d';
+      $ids[] = $item['item_revision_id'];
+      $item_keys[$item['item_revision_id']] = $key;
+    }
+  }
+  if (empty($ids)) {
+    return;
+  }
+
+  if ($fetch_by_revision_id) {
+    $commit_operations = versioncontrol_get_commit_operations(array(
+      'repo_ids' => array($repository['repo_id']),
+      'revisions' => array_keys($ids),
+    ));
+    // Associate the commit operations to the items.
+    foreach ($items as $key => $item) {
+      foreach ($commit_operations as $commit_operation) {
+        if ($item['revision'] == $commit_operation['revision']) {
+          $items[$key]['commit_operation'] = $commit_operation;
+        }
+      }
+    }
+  }
+  else { // fetch by operation/item association
+    $result = db_query(
+      'SELECT item_revision_id, vc_op_id
+      FROM {versioncontrol_operation_items}
+      WHERE item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
+
+    $operation_item_mapping = array();
+    while ($opitem = db_fetch_object($result)) {
+      $operation_item_mapping[$opitem->vc_op_id][] = $opitem->item_revision_id;
+    }
+    $commit_operations = versioncontrol_get_commit_operations(array(
+      'vc_op_ids' => array_keys($operation_item_mapping),
+    ));
+
+    // Associate the commit operations to the items.
+    foreach ($commit_operations as $commit_operation) {
+      $item_revision_ids = $operation_item_mapping[$commit_operation['vc_op_id']];
+
+      foreach ($item_revision_ids as $item_revision_id) {
+        $item_key = $item_keys[$item_revision_id];
+        $items[$item_key]['commit_operation'] = $commit_operation;
+      }
+    }
+  }
+}
+
 
 /**
  * Retrieve all items that were affected by an operation.
@@ -1379,6 +1493,10 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
     $items[$item_revision->path]['selected_label'] = new StdClass();
     $items[$item_revision->path]['selected_label']->get_from = 'operation';
     $items[$item_revision->path]['selected_label']->operation = &$operation;
+
+    if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
+      $items[$item_revision->path]['commit_operation'] = $operation;
+    }
   }
 
   if (!isset($fetch_source_items)) {
@@ -2820,6 +2938,44 @@ function versioncontrol_preg_item_match($path_regexp, $item) {
   return preg_match($path_regexp, $path);
 }
 
+
+/**
+ * Return a the username of a VCS account.
+ *
+ * @param $uid
+ *   The Drupal user id of the user. If this is 0, the corresponding
+ *   Drupal user naturally can't be retrieved, with all implications for
+ *   displaying the username.
+ * @param $username
+ *   The VCS username for the account.
+ * @param $repository
+ *   The repository where this account is registered.
+ * @param $prefer_drupal_username
+ *   If TRUE (which is the default), this function tries to get the
+ *   corresponding Drupal user for the supplied uid and returns the "real"
+ *   username rather than the given one.
+ *   If FALSE, the given VCS username is always returned.
+ * @param $format
+ *   If 'html', the username will be linked to the user page (if possible)
+ *   or to the commit log page containing the user's commits.
+ *   If 'plaintext', the username will be returned without markup.
+ */
+function theme_versioncontrol_account_username($uid, $username, $repository, $prefer_drupal_username = TRUE, $format = 'html') {
+  if ($uid && $prefer_drupal_username) {
+    $user = user_load(array('uid' => $uid));
+
+    if ($user && $prefer_drupal_username) {
+      return ($format == 'html') ? theme('username', $user) : $user->name;
+    }
+  }
+
+  if ($format == 'html') {
+    return module_exists('commitlog')
+            ? commitlog_account_url($repository, $username)
+            : check_plain($username);
+  }
+  return $username;
+}
 
 /**
  * Print a list of contributors for the specified project.

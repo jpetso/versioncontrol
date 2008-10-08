@@ -144,7 +144,7 @@ function commitlog_versioncontrol_operation($op, $operation, $operation_items) {
  */
 function commitlog_send_notification_mail($mailto, $operation, $operation_items) {
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-  $username = commitlog_account_username(
+  $username = theme('versioncontrol_account_username',
     $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
   );
 
@@ -406,10 +406,10 @@ function theme_commitlog_rss($commits) {
     $operation_items = versioncontrol_get_operation_items($operation);
 
     $location = theme('commitlog_operation_location', $operation);
-    $html_username = commitlog_account_username(
+    $html_username = theme('versioncontrol_account_username',
       $operation['uid'], $operation['username'], $operation['repository']
     );
-    $plain_username = commitlog_account_username(
+    $plain_username = theme('versioncontrol_account_username',
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
     );
 
@@ -451,7 +451,7 @@ function commitlog_operation($operation, $operation_items, $username = NULL, $fo
     $variables['username'] = $username;
   }
   else {
-    $variables['username'] = commitlog_account_username(
+    $variables['username'] = theme('versioncontrol_account_username',
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, $format
     );
   }
@@ -518,42 +518,13 @@ function theme_commitlog_operation_plaintext($variables) {
   return $output;
 }
 
-
 /**
- * Return a the username of a VCS account.
- *
- * @param $uid
- *   The Drupal user id of the user. If this is 0, the corresponding
- *   Drupal user naturally can't be retrieved, with all implications for
- *   displaying the username.
- * @param $username
- *   The VCS username for the account.
- * @param $repository
- *   The repository where this account is registered.
- * @param $replace_with_drupal_username
- *   If TRUE (which is the default), this function tries to get the
- *   corresponding Drupal user for the supplied uid and returns the "real"
- *   username rather than the given one.
- *   If FALSE, the given VCS username is always returned.
- * @param $format
- *   If 'html', the username will be linked to the user page (if possible)
- *   or to the commit log page containing the user's commits.
- *   If 'plaintext', the username will be returned without markup.
+ * Return the commitlog URL for the log history of a given account.
  */
-function commitlog_account_username($uid, $username, $repository, $replace_with_drupal_username = TRUE, $format = 'html') {
-  if ($uid && $replace_with_drupal_username) {
-    $user = user_load(array('uid' => $uid));
-
-    if ($user) {
-      return ($format == 'html') ? theme('username', $user) : $user->name;
-    }
-  }
-
-  if ($format == 'html') {
-    return l($username, 'commitlog', NULL,
-             'usernames='. drupal_urlencode($username) .'&repos='. $repository['repo_id']);
-  }
-  return $username;
+function commitlog_account_url($repository, $username) {
+  return l($username, 'commitlog', NULL,
+    'usernames='. drupal_urlencode($username) .'&repos='. $repository['repo_id']
+  );
 }
 
 function theme_commitlog_repository($repository, $format = 'html') {
@@ -871,7 +842,7 @@ function commitlog_branch_or_tag_operation($type, $op, $items, $username = NULL,
     $variables['username'] = $username;
   }
   else {
-    $variables['username'] = commitlog_account_username(
+    $variables['username'] = theme('versioncontrol_account_username',
       $op['uid'], $op['username'], $op['repository'], TRUE, $format
     );
   }
