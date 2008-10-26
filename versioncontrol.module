@@ -1454,7 +1454,7 @@ function versioncontrol_fetch_item_commit_operations($repository, &$items) {
  *        Note that you can only rely on this element to exist for
  *        operation items - functions that interface directly with the VCS
  *        (such as versioncontrol_get_directory_contents() or
- *        versioncontrol_get_all_item_branches()) might not include
+ *        versioncontrol_get_parallel_items()) might not include
  *        this identifier, for obvious reasons.
  *
  *   If the @p $fetch_source_items parameter is TRUE,
@@ -1696,8 +1696,8 @@ function versioncontrol_fetch_successor_items($repository, &$items) {
  * means that you won't get parallel history logs with a single function call.
  * In order to retrieve the log for this item in a different branch, you need
  * to switch the selected label of the item by retrieving a different version
- * of it with a call of versioncontrol_get_all_item_branches() or
- * versioncontrol_get_all_item_tags() (if the backend supports those functions).
+ * of it with a call of versioncontrol_get_parallel_items() (if the backend
+ * supports this function).
  *
  * @param $repository
  *   The repository that the item is located in.
@@ -1995,6 +1995,17 @@ function versioncontrol_is_file_item($item) {
  */
 function versioncontrol_is_directory_item($item) {
   if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY
+      || $item['type'] == VERSIONCONTROL_ITEM_DIRECTORY_DELETED) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Return TRUE if the given item is marked as deleted, or FALSE if it exists.
+ */
+function versioncontrol_is_deleted_item($item) {
+  if ($item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED
       || $item['type'] == VERSIONCONTROL_ITEM_DIRECTORY_DELETED) {
     return TRUE;
   }
@@ -2611,110 +2622,68 @@ function versioncontrol_get_parent_item($repository, &$item, $parent_path = NULL
 }
 
 /**
- * Retrieve all branches that exist for the given item, and how this item
- * is named there. The main branch ('HEAD', 'trunk', 'master' or however it is
- * called in the respective VCS) is also included in the result.
+ * Given an item in a repository, retrieve related versions of that item on all
+ * different branches and/or tags where the item exists.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
+ * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the item is located in.
  * @param $item
- *   The item whose set of branches should be retrieved.
+ *   The item whose parallel sibling should be retrieved.
+ * @param $label_type
+ *   If unset, siblings will be retrieved both on branches and tags.
+ *   If set to VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG,
+ *   results are limited to just that label type.
  *
  * @return
- *   This function has three possible return value types: an array, the literal
- *   boolean FALSE, and NULL.
+ *   An item array of parallel items on all branches and tags, possibly
+ *   including the original item itself (if appropriate for the given
+ *   @p $label_type). Array keys do not convey any specific meaning, item
+ *   values are again structured arrays and consist of elements with the
+ *   following keys:
  *
- *   Array returns generally indicate success; an empty array is returned if
- *   there are no branches for this item. If branches are found, however, the
- *   function returns a structured array of the following form.
- *   @code
- *     array(
- *       $branch1_name => $branch1_item  = array(..),
- *       $branch2_name => $branch2_item  = array(..),
- *       ...
- *     ).
- *   @endcode
- *   The items are themselves arrays with the following keyed elements:
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'type': Specifies the item type, which should be the same as the type
+ *        of the given @p $item.
  *   - 'path': The path of the item at the specific revision.
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  *
- *   NULL is returned if the requested item is not inside the repository at the
- *   time of 'revision'.
+ *   Branch and tag names are implicitely stored and can be retrieved by
+ *   calling versioncontrol_get_item_selected_label() on each item in the
+ *   result array.
  *
- *   FALSE is returned if the repository backend does not support this type of
- *   request.
- *
- *   A sample returned array can be found in the FakeVCS example module.
+ *   NULL is returned if the given item is not inside the repository,
+ *   or has not been inside the repository at the specified revision.
+ *   An empty array is returned if the item is valid, but no parallel sibling
+ *   items can be found for the given @p $label_type.
  */
-function versioncontrol_get_all_item_branches($repository, $item) {
-  if (versioncontrol_backend_implements($repository['vcs'], 'get_all_item_branches')) {
-    return _versioncontrol_call_backend(
-      $repository['vcs'], 'get_all_item_branches', array($repository, $item)
-    );
+function versioncontrol_get_parallel_items($repository, $item, $label_type = NULL) {
+  if (is_array($label_type)) { // not documented, but just to make sure
+    $label_types = $label_type;
   }
   else {
-    return FALSE;
+    $label_types = isset($label_types)
+      ? array($label_type)
+      : array(VERSIONCONTROL_OPERATION_BRANCH, VERSIONCONTROL_OPERATION_TAG);
   }
-}
+  $results = _versioncontrol_call_backend(
+    $repository['vcs'], 'get_parallel_items',
+    array($repository, $item, $label_types)
+  );
+  $items = array();
 
-/**
- * Retrieve all tags that exist for the given item, and how this item
- * is named there.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose set of tags should be retrieved.
- *
- * @return
- *   This function has three possible return value types: an array, the literal
- *   boolean FALSE, and NULL.
- *
- *   Array returns generally indicate success; an empty array is returned if
- *   there are no tags for this item. If tags are found, however, the
- *   function returns a structured array of the following form.
- *   @code
- *     array(
- *       $tag1_name => $tag1_item  = array(..),
- *       $tag2_name => $tag2_item  = array(..),
- *       ...
- *     ).
- *   @endcode
- *   The items are themselves arrays with the following keyed elements:
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- *   NULL is returned if the requested item is not inside the repository at the
- *   time of 'revision'.
- *
- *   FALSE is returned if the repository backend does not support this type of
- *   request.
- *
- *   A sample returned array can be found in the FakeVCS example module.
- */
-function versioncontrol_get_all_item_tags($repository, $item) {
-  if (versioncontrol_backend_implements($repository['vcs'], 'get_all_item_tags')) {
-    return _versioncontrol_call_backend(
-      $repository['vcs'], 'get_all_item_tags', array($repository, $item)
-    );
+  foreach ($results as $key => $result) {
+    $items[$key] = $result['item'];
+    $items[$key]['selected_label'] = new StdClass();
+    $items[$key]['selected_label']->label = is_null($result['selected_label'])
+                                            ? NULL
+                                            : $result['selected_label'];
   }
-  else {
-    return FALSE;
-  }
+  return $items;
 }
 
 /**
@@ -2746,7 +2715,7 @@ function versioncontrol_format_item_revision($repository, $item, $format = 'shor
 
 /**
  * Retrieve the set of files and directories that exist at a specified revision
- * in the given directory inside the repository.
+ * inside the given directory in the repository.
  *
  * This function is optional for VCS backends to implement, be sure to check
  * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
@@ -2755,17 +2724,16 @@ function versioncontrol_format_item_revision($repository, $item, $format = 'shor
  * @param $repository
  *   The repository that the directory item is located in.
  * @param $directory_item
- *   The parent item of the the items that should be listed.
+ *   The parent item of the items that should be listed.
  * @param $recursive
  *   If FALSE, only the direct children of $path will be retrieved.
  *   If TRUE, you'll get every single descendant of $path.
  *
  * @return
- *   A structured item array containing the exact details of which items have
- *   been inside the directory at the time of the commit, including the
- *   directory itself. Array keys are the current/new paths.
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
+ *   A structured item array of items that have been inside the directory in
+ *   its given state, including the directory item itself. Array keys are the
+ *   current/new paths. The corresponding item values are again structured
+ *   arrays and consist of elements with the following keys:
  *
  *   - 'type': Specifies the item type, which is either
  *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.

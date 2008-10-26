@@ -100,7 +100,7 @@
  *        Note that you can only rely on this element to exist for
  *        operation items - functions that interface directly with the VCS
  *        (such as versioncontrol_get_directory_contents() or
- *        versioncontrol_get_all_item_branches()) might not include
+ *        versioncontrol_get_parallel_items()) might not include
  *        this identifier, for obvious reasons.
  *
  *   For commit operations, additional information about the origin of

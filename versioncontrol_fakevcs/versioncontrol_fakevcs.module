@@ -430,7 +430,7 @@ function versioncontrol_fakevcs_get_selected_label_from_other_item($repository, 
  *
  *        If the returned item is already present in the database, the
  *        'item_revision_id' database identifier might also be filled in
- *        (optionally, depending on the VCS backend).
+ *        (optional, depends on the VCS backend).
  *
  *   - 'selected_label':
  *        In case no branch or tag applies to that item or could not be
@@ -506,233 +506,122 @@ function versioncontrol_fakevcs_get_parent_item($repository, $item, $parent_path
 
 
 /**
- * Implementation of [versioncontrol_backend]_get_all_item_branches():
- * Retrieve all branches that exist for the given item, and how this item
- * is named there. The main branch ('HEAD', 'trunk', 'master' or however it is
- * called in the respective VCS) is also included in the result.
+ * Implementation of [versioncontrol_backend]_get_parallel_items():
+ * Given an item in a repository, retrieve related versions of that item on all
+ * different branches and/or tags where the item exists.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_all_item_branches')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
  * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the item is located in.
  * @param $item
- *   The item whose set of branches should be retrieved.
+ *   The item whose parallel sibling should be retrieved.
+ * @param $label_type
+ *   If unset, siblings will be retrieved both on branches and tags.
+ *   If set to VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG,
+ *   results are limited to just that label type.
  *
  * @return
- *   A structured array that looks like
- *     array(
- *       $branch1_name => $branch1_item,
- *       $branch2_name => $branch2_item,
- *       ...
- *     ).
+ *   A structured item array of parallel items on all branches and tags,
+ *   possibly including the original item itself (if appropriate for the given
+ *   @p $label_type).  Array keys do not convey any specific meaning, the
+ *   corresponding values are again structured arrays, each with a pair of
+ *   'item' and 'selected_label' elements as follows.
  *
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
+ *   - 'item': An item array, consisting of the following elements:
  *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
+ *        - 'type': Specifies the item type, which is either
+ *             VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for
+ *             items that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED
+ *             respectively VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items
+ *             that have been removed.
+ *        - 'path': The path of the item at the specific revision.
+ *        - 'revision': The currently selected (file-level) revision of the
+ *             item. If there is no such revision (which may be the case for
+ *             directory items) then the 'revision' element is an empty string.
  *
- *   An empty array is returned if there are no branches for this item.
- *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision'.
+ *        If the returned item is already present in the database, the
+ *        'item_revision_id' database identifier might also be filled in
+ *        (optional, depends on the VCS backend).
+ *
+ *   - 'selected_label':
+ *        A label array describing the selected label, with the following keys:
+ *
+ *        - 'name': The branch or tag name (a string).
+ *        - 'type': Whether this label is a branch (indicated by the
+ *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *             (VERSIONCONTROL_OPERATION_TAG).
+ *        - 'label_id': Optional. The label identifier (a simple integer), used
+ *             for unique identification of branches and tags in the database.
+ *
+ *   NULL is returned if the given item is not inside the repository,
+ *   or has not been inside the repository at the specified revision.
+ *   An empty array is returned if the item is valid, but no parallel sibling
+ *   items can be found for the given @p $label_type.
  */
-function versioncontrol_fakevcs_get_all_item_branches($repository, $item) {
+function versioncontrol_get_parallel_items($repository, $item, $label_type = NULL) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol/versioncontrol.module':
   return array(
-    'HEAD' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision' => '1.23',
-      'fakevcs_specific' => array('selected_branch_name' => 'HEAD'),
+    array(
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
+        'revision' => '1.23',
+      ),
+      'selected_label' => array(
+        'name' => 'HEAD',
+        'type' => VERSIONCONTROL_OPERATION_BRANCH,
+      ),
     ),
-    'DRUPAL-5--1' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision' => '1.23.2.42',
-      'fakevcs_specific' => array('selected_branch_name' => 'DRUPAL-5--1'),
+    array(
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
+        'revision' => '1.23.2.42',
+      ),
+      'selected_label' => array(
+        'name' => 'DRUPAL-5--1',
+        'type' => VERSIONCONTROL_OPERATION_BRANCH,
+      ),
+    ),
+    array(
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_FILE,
+        'path'     => '/contributions/modules/versioncontrol/versioncontrol.module',
+        'revision' => '1.23.2.42',
+      ),
+      'selected_label' => array(
+        'name' => 'DRUPAL-5--1-2',
+        'type' => VERSIONCONTROL_OPERATION_TAG,
+      ),
     ),
   );
   // How SVN could also do it, if for example
   // $item['path'] == '/trunk/contributions/modules/versioncontrol':
   return array(
-    'trunk' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/trunk/contributions/modules/versioncontrol',
-      'revision' => '23',
-    ),
-    '5.x-1.x' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/branches/5.x-1.x/contributions/modules/versioncontrol',
-      'revision' => '42',
-    ),
-  );
-}
-
-/**
- * Implementation of [versioncontrol_backend]_get_all_item_tags():
- * Retrieve all tags that exist for the given item $path, and how this item
- * is named there.
- *
- * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_all_item_tags')
- * if the particular backend actually implements it.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose history should be retrieved.
- *
- * @return
- *   A structured array that looks like
- *     array(
- *       $tag1_name => $tag1_item,
- *       $tag2_name => $tag2_item,
- *       ...
- *     ).
- *
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- *   An empty array is returned if there are no tags for this item.
- *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision'.
- */
-function versioncontrol_fakevcs_get_all_item_tags($repository, $item) {
-  // How CVS would probably do it, if for example
-  // $item['path'] == '/contributions/modules/versioncontrol':
-  return array(
-    'DRUPAL-5--1-1' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol',
-      'revision' => '', // Right, it's a directory in CVS -> unversioned.
-                        // Files of course would indeed get a 'revision' entry.
-      'fakevcs_specific' => array('tag' => 'DRUPAL-5--1-1'),
-    ),
-    'DRUPAL-5--1-2' => array(
-      'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
-      'path'     => '/contributions/modules/versioncontrol',
-      'revision' => '',
-      'fakevcs_specific' => array('tag' => 'DRUPAL-5--1-2'),
-    ),
-  );
-
-  // How SVN could also do it, if for example
-  // $item['path'] == '/tags/5.x-1.2/contributions/modules/versioncontrol/versioncontrol.module':
-  return array(
-    '5.x-1.1' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/tags/5.x-1.1/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision' => '15',
-    ),
-    '5.x-1.2' => array(
-      'type'     => VERSIONCONTROL_ITEM_FILE,
-      'path'     => '/tags/5.x-1.2/contributions/modules/versioncontrol/versioncontrol.module',
-      'revision' => '16',
-    ),
-  );
-}
-
-/**
- * Implementation of [versioncontrol_backend]_get_item_history():
- * Retrieve the revisions where the given item has been changed,
- * in reverse chronological order.
- *
- * Only direct descendants or predecessors of this item will be retrieved.
- * That means that history of the same item in a different (parallel) branch
- * will not be returned, except if the given state of the item was moved/copied
- * from there or goes back there in a more recent revision. In short, you'll
- * not get "1.7" and "1.2.2.4" items side by side if it doesn't make sense.
- *
- * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_item_history')
- * if the particular backend actually implements it.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose history should be retrieved.
- *
- * @return
- *   An array containing the exact details of all item changes. Each element
- *   of the array is a structured array consisting of elements with the
- *   following keys:
- *
- *   - 'action': Specifies how the item was modified.
- *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'modified': Boolean value, specifies if a file was modified in addition
- *        to the other action in the 'action' element of the array.
- *        Only exists for the VERSIONCONTROL_ACTION_MOVED
- *        and VERSIONCONTROL_ACTION_COPIED actions.
- *   - 'current item': The updated state of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
- *   - 'source items': An array with the previous state(s) of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
- *
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *
- *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision.
- */
-function versioncontrol_get_item_history($repository, $item) {
-  // Assuming $item is an item array that looks like this:
-  $item = array(
-    'type'     => VERSIONCONTROL_ITEM_FILE,
-    'path'     => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
-    'revision' => '666',
-  );
-  // and $repository is some SVN repository.
-
-  return array(
     array(
-      'action'       => VERSIONCONTROL_ACTION_MOVED,
-      'current item' => array(
-        'type'         => VERSIONCONTROL_ITEM_FILE,
-        'path'         => '/trunk/contributions/modules/versioncontrol/versioncontrol.info',
-        'revision'     => '404',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'     => '/trunk/contributions/modules/versioncontrol',
+        'revision' => '23',
       ),
-      'source items' => array(
-        array(
-          'type'       => VERSIONCONTROL_ITEM_FILE,
-          'revision'   => '42',
-          'path'       => '/branches/sandbox/jpetso/versioncontrol.info',
-        ),
+      'selected_label' => array(
+        'name' => 'trunk',
+        'type' => VERSIONCONTROL_OPERATION_BRANCH,
       ),
-      'modified'     => FALSE,
     ),
     array(
-      'action'       => VERSIONCONTROL_ACTION_ADDED,
-      'current item' => array(
-        'type'         => VERSIONCONTROL_ITEM_FILE,
-        'revision'     => '42',
-        'path'         => '/branches/sandbox/jpetso/versioncontrol.info',
+      'item' => array(
+        'type'     => VERSIONCONTROL_ITEM_DIRECTORY,
+        'path'     => '/branches/5.x-1.x/contributions/modules/versioncontrol',
+        'revision' => '42',
+      ),
+      'selected_label' => array(
+        'name' => '5.x-1.x',
+        'type' => VERSIONCONTROL_OPERATION_BRANCH,
       ),
     ),
   );
@@ -756,11 +645,10 @@ function versioncontrol_get_item_history($repository, $item) {
  *   If TRUE, you'll get every single descendant of $path.
  *
  * @return
- *   An array containing the exact details of which items have been inside the
- *   directory at the revision of the directory item, including the directory
- *   item itself. Array keys are the current/new paths. The corresponding
- *   values are again structured arrays, each with a pair of 'item' and
- *   'selected_label' elements as follows.
+ *   A structured item array of items that have been inside the directory in
+ *   its given state, including the directory item itself. Array keys are the
+ *   current/new paths. The corresponding values are again structured arrays,
+ *   each with a pair of 'item' and 'selected_label' elements as follows.
  *
  *   - 'item': An item array, consisting of the following elements:
  *
@@ -776,7 +664,7 @@ function versioncontrol_get_item_history($repository, $item) {
  *
  *        If the returned item is already present in the database, the
  *        'item_revision_id' database identifier might also be filled in
- *        (optionally, depending on the VCS backend).
+ *        (optional, depends on the VCS backend).
  *
  *   - 'selected_label':
  *        In case no branch or tag applies to that item or could not be
@@ -788,11 +676,6 @@ function versioncontrol_get_item_history($repository, $item) {
  *        - 'type': Whether this label is a branch (indicated by the
  *             VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
  *             (VERSIONCONTROL_OPERATION_TAG).
- *
- *        In case the label array also contains the 'label_id' element (which
- *        happens when it's copied from the $operation['labels'] array) there
- *        will be a small performance improvement as the label doesn't need to
- *        be compared to and loaded from the database anymore.
  *
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
