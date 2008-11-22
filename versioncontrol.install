@@ -223,6 +223,26 @@ function versioncontrol_install() {
          * beginning, with source_item_revision_id being 0 in that case.
          */
         action tinyint unsigned NOT NULL default 0,
+        /*
+         * Specifies whether line-change information is available (1 as value)
+         * or not (0 as value). Naturally, this should only apply to file
+         * items, not to directory items. VERSIONCONTROL_ACTION_DELETED and
+         * VERSIONCONTROL_ACTION_REPLACED actions are also not supposed to
+         * contain line-change information.
+         */
+        line_changes_recorded tinyint unsigned NOT NULL default 0,
+        /*
+         * If the line_changes_recorded column is 1 then this column contains
+         * the amount of lines that was added to the file compared to its
+         * source revision. (Equivalent to the 'plus' lines in a unified diff.)
+         */
+        line_changes_added int unsigned NOT NULL default 0,
+        /*
+         * If the line_changes_recorded column is 1 then this column contains
+         * the amount of lines that was removed from the file compared to its
+         * source revision. (Equivalent to the 'minus' lines in a unified diff.)
+         */
+        line_changes_removed int unsigned NOT NULL default 0,
 
         PRIMARY KEY (item_revision_id, source_item_revision_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
@@ -438,6 +458,9 @@ function versioncontrol_install() {
         item_revision_id int NOT NULL default 0,
         source_item_revision_id int NOT NULL default 0,
         action smallint NOT NULL default 0,
+        line_changes_recorded smallint NOT NULL default 0,
+        line_changes_added int NOT NULL default 0,
+        line_changes_removed int NOT NULL default 0,
         PRIMARY KEY (item_revision_id, source_item_revision_id)
       )");
 
@@ -1011,5 +1034,28 @@ function versioncontrol_update_6() {
   $ret[] = update_sql("INSERT INTO {versioncontrol_item_revisions}
             (item_revision_id, repo_id, path, revision, type)
             VALUES (0, 0, '', '', 0)");
+  return $ret;
+}
+
+/**
+ * Update 7: Add new columns for lines-changed information
+ * to the {versioncontrol_source_items} table.
+ */
+function versioncontrol_update_7() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_source_items} ADD line_changes_recorded tinyint unsigned NOT NULL default 0");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_source_items} ADD line_changes_added int unsigned NOT NULL default 0");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_source_items} ADD line_changes_removed int unsigned NOT NULL default 0");
+      break;
+
+    case 'pgsql':
+      db_add_column($ret, 'versioncontrol_source_items', 'line_changes_recorded', 'smallint', array('not null' => TRUE, 'default' => 0));
+      db_add_column($ret, 'versioncontrol_source_items', 'line_changes_added', 'int', array('not null' => TRUE, 'default' => 0));
+      db_add_column($ret, 'versioncontrol_source_items', 'line_changes_removed', 'int', array('not null' => TRUE, 'default' => 0));
+      break;
+  }
   return $ret;
 }

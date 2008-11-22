@@ -466,8 +466,7 @@ function commitlog_operation($operation, $operation_items, $username = NULL, $fo
 
   if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT
       && versioncontrol_backend_implements($operation['repository']['vcs'], 'get_commit_statistics')) {
-    $statistics = versioncontrol_get_commit_statistics($operation, $operation_items);
-    $variables['statistics'] = theme('commitlog_commit_statistics', $operation, $statistics, $format);
+    $variables['statistics'] = theme('commitlog_commit_statistics', $operation, $operation_items, $format);
   }
 
   if ($format == 'html') {
@@ -719,6 +718,13 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       //   break;
       default:
         return 'Error: action type enum value not known: '. $item['action'];
+    }
+    if (isset($item['line_changes'])) {
+      $action_string = t('!action, lines: +!added -!removed', array(
+        '!action'  => $action_string,
+        '!added'   => $item['line_changes']['added'],
+        '!removed' => $item['line_changes']['removed'],
+      ));
     }
 
     if ($format == 'html' && isset($item_project)) {

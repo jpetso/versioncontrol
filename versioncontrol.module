@@ -1471,6 +1471,10 @@ function versioncontrol_fetch_item_commit_operations($repository, &$items) {
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
  *        or copied to this location.
+ *   - 'line_changes': Only exists if line changes have been recorded for this
+ *        action - if so, this is an array containing the number of added lines
+ *        in an element with key 'added', and the number of removed lines in
+ *        the 'removed' key.
  */
 function versioncontrol_get_operation_items($operation, $fetch_source_items = NULL) {
   $items = array();
@@ -1534,6 +1538,10 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
  *        or copied to this location.
+ *   - 'line_changes': Only exists if line changes have been recorded for this
+ *        action - if so, this is an array containing the number of added lines
+ *        in an element with key 'added', and the number of removed lines in
+ *        the 'removed' key.
  */
 function versioncontrol_fetch_source_items($repository, &$items) {
   if (empty($items)) {
@@ -1555,7 +1563,8 @@ function versioncontrol_fetch_source_items($repository, &$items) {
 
   $result = db_query(
     'SELECT sit.item_revision_id, sit.source_item_revision_id, sit.action,
-            ir.path, ir.revision, ir.type
+            sit.line_changes_recorded, sit.line_changes_added,
+            sit.line_changes_removed, ir.path, ir.revision, ir.type
      FROM {versioncontrol_source_items} sit
       INNER JOIN {versioncontrol_item_revisions} ir
        ON sit.source_item_revision_id = ir.item_revision_id
@@ -1590,6 +1599,16 @@ function versioncontrol_fetch_source_items($repository, &$items) {
     else {
       $items[$successor_key]['action'] = $item_revision->action;
       $items[$successor_key]['source_items'][$item['path']] = $item;
+    }
+
+    // Add the lines-changed information if it has been recorded.
+    // Only a single source item entry should hold this information,
+    // so no emphasis is placed on merging it across multiple source items.
+    if ($item_revision->line_changes_recorded) {
+      $items[$successor_key]['line_changes'] = array(
+        'added' => $item_revision->line_changes_added,
+        'removed' => $item_revision->line_changes_removed,
+      );
     }
   }
 }
@@ -2478,49 +2497,6 @@ function versioncontrol_format_commit_identifier($operation, $format = 'short') 
     );
   }
   return $operation['revision'];
-}
-
-/**
- * Retrieve general statistics about what happened in a single commit. For more granular
- * details about what happened in a single commit, use versioncontrol_get_operation_items().
- *
- * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_commit_statistics')
- * if the particular backend actually implements it.
- *
- * @param $operation
- *   The commit operation to retrieve statistics about.
- * @param $operation_items
- *   The set of items belonging to the above operation. Can be passed by
- *   the caller if the caller already has the items, or can be left absent
- *   and they will be automatically obtained.
- *
- * @return
- *   A structured array containing general statistics about this commit.
- *   The array will consist of elements with the following keys:
- *
- *   - 'lines_added': Total number of lines added during this commit.
- *   - 'lines_removed': Total number of lines removed during this commit.
- *   - 'number_items': Total number of items/actions in this commit.
- *   - 'per_item_statistics': An array containing statistics on individual
- *        items/actions. Array keys are the current/new paths (just as with
- *        versioncontrol_get_operation_items()).
- *
- *   The array values of the 'per_item_statistics' element are again
- *   structured arrays and consist of elements with the following keys:
- *
- *   - 'lines_added': Number of lines added to this item.
- *   - 'lines_removed': Number of lines removed to this item.
- *
- *   These values are designed so that statistics from several commits can be
- *   combined, hence why totals are given rather than averages. A real-life
- *   example of such a result array can be found in the FakeVCS example module.
- */
-// TODO: rethink - I'm not satisfied with the current API for this.
-function versioncontrol_get_commit_statistics($operation, $operation_items = NULL) {
-  return _versioncontrol_call_backend(
-    $operation['repository']['vcs'], 'get_commit_statistics', array($operation, $operation_items)
-  );
 }
 
 

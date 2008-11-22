@@ -62,8 +62,9 @@
  *   A structured array containing the exact details of what is about to happen
  *   to each item in this commit. The structure of this array is the same as
  *   the return value of versioncontrol_get_operation_items() - that is,
- *   elements for 'type', 'path' and 'revision' - but doesn't include
- *   the 'item_revision_id' element as there's no relation to the database yet.
+ *   elements for 'type', 'path', 'revision', 'action', 'source_items' and
+ *   'replaced_item' - but doesn't include the 'item_revision_id' element as
+ *   there's no relation to the database yet.
  *
  *   The 'action', 'source_items', 'replaced_item' and 'revision' elements
  *   of each item are optional and may be left unset.
@@ -234,6 +235,8 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   For commit operations, you also have to fill in the 'action' and
  *   'source_items' elements (and optionally 'replaced_item') that are also
  *   described in the versioncontrol_get_operation_items() API documentation.
+ *   The 'line_changes' element, as in versioncontrol_get_operation_items(),
+ *   is optional to provide.
  *
  *   This parameter is passed by reference as the insert operation will
  *   check the validity of a few item properties and will also assign an
@@ -514,10 +517,15 @@ function _versioncontrol_insert_source_revision($item, $source_item, $action) {
             WHERE item_revision_id = %d AND source_item_revision_id = %d",
             $item['item_revision_id'], $source_item['item_revision_id']);
 
+  $line_changes = !empty($item['line_changes']);
   db_query("INSERT INTO {versioncontrol_source_items}
-            (item_revision_id, source_item_revision_id, action)
-            VALUES (%d, %d, %d)",
-            $item['item_revision_id'], $source_item['item_revision_id'], $action);
+            (item_revision_id, source_item_revision_id, action,
+             line_changes_recorded, line_changes_added, line_changes_removed)
+            VALUES (%d, %d, %d, %d, %d, %d)",
+            $item['item_revision_id'], $source_item['item_revision_id'],
+            $action, ($line_changes ? 1 : 0),
+            ($line_changes ? $item['line_changes']['added'] : 0),
+            ($line_changes ? $item['line_changes']['removed'] : 0));
 }
 
 /**
