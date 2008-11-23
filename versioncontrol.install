@@ -1059,3 +1059,15 @@ function versioncontrol_update_7() {
   }
   return $ret;
 }
+
+/**
+ * Update 8: Forgot to increase the "action" column
+ *   in {versioncontrol_operation_labels} - seems the old constants were
+ *   used at least in one place after all.
+ */
+function versioncontrol_update_8() {
+  $ret = array();
+  $ret[] = update_sql('UPDATE {versioncontrol_operation_labels}
+                        SET action = action + 1');
+  return $ret;
+}
