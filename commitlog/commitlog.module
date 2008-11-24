@@ -717,7 +717,15 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       //   $action_string = ???;
       //   break;
       default:
-        return 'Error: action type enum value not known: '. $item['action'];
+        if ($operation['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
+          $action_string = t('!item (branched)');
+        }
+        else if ($operation['type'] == VERSIONCONTROL_OPERATION_TAG) {
+          $action_string = t('!item (tagged)');
+        }
+        else {
+          return 'Error: action type enum value not known: '. $item['action'];
+        }
     }
     if (isset($item['line_changes'])) {
       $action_string = t('!action, lines: +!added -!removed', array(
