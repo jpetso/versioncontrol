@@ -358,10 +358,12 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
                     'insert', $operation, $operation_items);
 
   // Rules integration, because we like to enable people to be flexible.
-  workflow_ng_invoke_event('versioncontrol_operation_insert', array(
-    'operation' => $operation,
-    'items' => $operation_items,
-  ));
+  if (module_exists('workflow_ng')) {
+    workflow_ng_invoke_event('versioncontrol_operation_insert', array(
+      'operation' => $operation,
+      'items' => $operation_items,
+    ));
+  }
 
   return $operation;
 }
