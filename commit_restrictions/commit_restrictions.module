@@ -416,6 +416,9 @@ function _commit_restrictions_label_access($operation, $restrictions) {
  *   valid path regexps (or if there are no regexps to be matched),
  *   or an array filled with error messages if at least one item doesn't.
  */
+// FIXME: ideally we should be doing this per label (if a commit operation has
+//        multiple labels) but we don't know which items belong to which label.
+//        That would need an adaptation of the operation/items format. Bummer.
 function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
   $error_messages = array();
 
