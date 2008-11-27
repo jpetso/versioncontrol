@@ -250,7 +250,7 @@ function commit_restrictions_versioncontrol_write_access($operation, $operation_
   // Allow the committer to delete branches and labels (also invalid ones),
   // provided that nothing else is done in this operation.
   if (_commit_restrictions_contains_only_delete_labels($operation)) {
-    return array(); // even invalid labels should be allowed to be deleted
+    return array();
   }
 
   $restrictions = _commit_restrictions_load($operation['repository']['repo_id']);
@@ -398,7 +398,7 @@ function _commit_restrictions_label_access($operation, $restrictions) {
             }
           }
         }
-        $error_messages[] = $error_message;
+        $error_messages[] = $error;
       } // end of if (!$allowed)
     } // end of if (!empty($restrictions[$valid_restriction]))
   } // end of foreach ($operation['labels'])
