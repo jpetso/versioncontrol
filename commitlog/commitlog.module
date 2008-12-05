@@ -152,7 +152,10 @@ function commitlog_send_notification_mail($mailto, $operation, $operation_items)
   $subject = theme('commitlog_operation_email_subject',
     $operation, $operation_items, $username
   );
-  $message = commitlog_operation($operation, $operation_items, $username, 'plaintext');
+  $message = commitlog_operation($operation, $operation_items, array(
+    'format' => 'plaintext',
+    'username' => $username,
+  ));
 
   drupal_mail(
     'commitlog_notification_email', $mailto,
@@ -341,18 +344,11 @@ function _commitlog_check_request() {
 
 
 /**
- * Return a formatted date string if the given timestamp is on a different day
- * than the one that was passed previous call to this function, or NULL if the
- * previous call's timestamp argument is on the same day as this one.
+ * Return a formatted date string for the creation date of the given operation.
+ * (This will also be used for grouping log messages.)
  */
-function _commitlog_date($timestamp) {
-  static $last;
-  $date = format_date($timestamp, 'custom', 'F j, Y');
-  if ($date != $last) {
-    $last = $date;
-    return $date;
-  }
-  return NULL;
+function commitlog_operation_date($operation) {
+  return format_date($operation['date'], 'custom', 'F j, Y');
 }
 
 /**
@@ -360,32 +356,30 @@ function _commitlog_date($timestamp) {
  */
 function theme_commitlog_operations_page($operations, $attributes) {
   if (empty($operations)) {
-    return '<div id="commitlog"><p>'. t('No log messages found.') .'</p></div>';
+    return '<div class="commitlog"><p>'. t('No log messages found.') .'</p></div>';
   }
 
-  $output = '<div id="commitlog">';
-  $initial = TRUE;
+  $output = '<div class="commitlog"><div class="commitlog-messages">';
+  $operation_descriptions = array();
 
   foreach ($operations as $operation) {
     $operation_items = versioncontrol_get_operation_items($operation);
+    $date = commitlog_operation_date($operation);
 
-    $date = _commitlog_date($operation['date']);
-    if (isset($date)) { // begin a new list for each day
-      if (!$initial) {
-        $output .= '</ul>';
-      }
-      $initial = FALSE;
-      $output .= "<h3>$date</h3>";
-      $output .= '<ul>';
-    }
-    $output .= '<li>'. commitlog_operation($operation, $operation_items, NULL, 'html') .'</li>';
+    $operation_descriptions[$date][] = array(
+      commitlog_operation($operation, $operation_items, array('format' => 'html')),
+    );
   }
-  $output .= '</ul>';
+
+  $header = array();
+  foreach ($operation_descriptions as $date => $rows) {
+    $output .= '<h3>'. $date .'</h3>'. theme('table', $header, $rows);
+  }
 
   if ($pager = theme('pager', NULL, variable_get('commitlog_pager', 10), 0, $attributes)) {
     $output .= $pager;
   }
-  $output .= '</div>';
+  $output .= '</div></div>';
 
   $query_items = array();
   foreach ($attributes as $key => $value) {
@@ -397,7 +391,7 @@ function theme_commitlog_operations_page($operations, $attributes) {
   return $output;
 }
 
-function theme_commitlog_rss($commits) {
+function theme_commitlog_rss($operations) {
   global $base_url, $locale;
   $items = '';
   $namespaces = array('xmlns:dc="http://purl.org/dc/elements/1.1/"');
@@ -413,8 +407,8 @@ function theme_commitlog_rss($commits) {
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
     );
 
-    $title = t('!location by @username', array('!location' => $location, '@username' => $html_username));
-    $link = url('commitlog', 'ids='. $commit['vc_op_id'], NULL, TRUE);
+    $title = t('!location by @username', array('!location' => $location, '@username' => $plain_username));
+    $link = url('commitlog', 'id='. $operation['vc_op_id'], NULL, TRUE);
     $extra = array(
       array('key' => 'pubDate', 'value' => gmdate('r', $operation['date'])),
       array('key' => 'dc:creator', 'value' => $plain_username),
@@ -423,7 +417,10 @@ function theme_commitlog_rss($commits) {
         'attributes' => array('isPermaLink' => 'false'),
       ),
     );
-    $text = commitlog_operation($operation, $operation_items, $html_username, 'html');
+    $text = commitlog_operation($operation, $operation_items, array(
+      'format' => 'html',
+      'username' => $html_username,
+    ));
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
@@ -444,11 +441,29 @@ function theme_commitlog_rss($commits) {
   return $output;
 }
 
-function commitlog_operation($operation, $operation_items, $username = NULL, $format = 'html') {
+/**
+ * Return an operation formatted as HTML (or another supported format).
+ *
+ * @param $operation
+ *   The operation to format.
+ * @param $operation_items
+ *   The items belonging to this operation.
+ * @param $options
+ *   An array of options for customizing the output. Supported properties:
+ *
+ *     - 'format': Either 'html' (used by default if unset) or 'plaintext'.
+ *     - 'username': If set, this value will be used instead of the standard
+ *          VCS username that would be retrieved otherwise. Might make sense
+ *          if you want to use the output in special circumstances, or as
+ *          slight performance improvement if the username has already
+ *          been fetched.
+ */
+function commitlog_operation($operation, $operation_items, $options = array()) {
   $variables = array();
+  $format = isset($options['format']) ? $options['format'] : 'html';
 
-  if (isset($username)) {
-    $variables['username'] = $username;
+  if (isset($options['username'])) {
+    $variables['username'] = $options['username'];
   }
   else {
     $variables['username'] = theme('versioncontrol_account_username',
@@ -491,11 +506,11 @@ function theme_commitlog_operation_html($variables) {
   }
   $output .= "</div>\n"; // class "title"
 
-  $output .= '<div class="actions">'. $variables['actions'] .'</div>'."\n";
-
   if (!empty($variables['message'])) {
     $output .= '<div class="description"><pre>'. $variables['message'] .'</pre></div>'."\n";
   }
+
+  $output .= '<div class="actions">'. $variables['actions'] .'</div>'."\n";
 
   $output .= "</div>\n"; // class "commit"
   return $output;
