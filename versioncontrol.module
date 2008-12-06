@@ -18,6 +18,7 @@ define('VERSIONCONTROL_OPERATION_TAG',    3);
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          1);
 define('VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS',     2);
 define('VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS', 3);
+define('VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS',     4);
 
 // Flags that backends can set to specify if Version Control API
 // should do work for them.
@@ -37,14 +38,14 @@ define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 4);
 
 // VCS actions for a single item (file or directory) in a commit,
 // or for branches and tags.
-define('VERSIONCONTROL_ACTION_ADDED',         1);
-define('VERSIONCONTROL_ACTION_MODIFIED',      2);
-define('VERSIONCONTROL_ACTION_MOVED',         3); // == renamed
-define('VERSIONCONTROL_ACTION_COPIED',        4);
-define('VERSIONCONTROL_ACTION_MERGED',        5);
-define('VERSIONCONTROL_ACTION_DELETED',       6);
-define('VERSIONCONTROL_ACTION_REPLACED',      7);
-define('VERSIONCONTROL_ACTION_OTHER',         8); // for example, SVN revprop-only changes
+define('VERSIONCONTROL_ACTION_ADDED',    1);
+define('VERSIONCONTROL_ACTION_MODIFIED', 2);
+define('VERSIONCONTROL_ACTION_MOVED',    3); // == renamed
+define('VERSIONCONTROL_ACTION_COPIED',   4);
+define('VERSIONCONTROL_ACTION_MERGED',   5);
+define('VERSIONCONTROL_ACTION_DELETED',  6);
+define('VERSIONCONTROL_ACTION_REPLACED', 7);
+define('VERSIONCONTROL_ACTION_OTHER',    8); // for example, SVN revprop-only changes
 
 // The flag for operation item database entries, specifying whether an item
 // is actually a direct "member" item of that operation or just a cached
@@ -1466,7 +1467,8 @@ function versioncontrol_fetch_item_commit_operations($repository, &$items) {
  *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
  *   - 'source_items': An array with the previous revision(s) of the affected
- *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED. The key for
+ *        all items in this array is the respective item path.
  *   - 'replaced_item': The previous but technically unrelated item at the
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
@@ -1492,9 +1494,9 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
       'revision' => $item_revision->revision,
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->item_revision_id,
-      'selected_label' => new StdClass(),
+      'selected_label' => new stdClass(),
     );
-    $items[$item_revision->path]['selected_label'] = new StdClass();
+    $items[$item_revision->path]['selected_label'] = new stdClass();
     $items[$item_revision->path]['selected_label']->get_from = 'operation';
     $items[$item_revision->path]['selected_label']->operation = &$operation;
 
@@ -1582,7 +1584,7 @@ function versioncontrol_fetch_source_items($repository, &$items) {
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->source_item_revision_id,
     );
-    $item['selected_label'] = new StdClass();
+    $item['selected_label'] = new stdClass();
     $item['selected_label']->get_from = 'other_item';
     $item['selected_label']->other_item = &$items[$successor_key];
     $item['selected_label']->other_item_tags = array('successor_item');
@@ -1677,7 +1679,7 @@ function versioncontrol_fetch_successor_items($repository, &$items) {
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->item_revision_id,
     );
-    $item['selected_label'] = new StdClass();
+    $item['selected_label'] = new stdClass();
     $item['selected_label']->get_from = 'other_item';
     $item['selected_label']->other_item = &$items[$source_key];
     $item['selected_label']->other_item_tags = array('source_item');
@@ -2543,7 +2545,7 @@ function versioncontrol_get_item($repository, $path, $revision = NULL) {
     return NULL;
   }
   $item = $info['item'];
-  $item['selected_label'] = new StdClass();
+  $item['selected_label'] = new stdClass();
   $item['selected_label']->label = is_null($info['selected_label'])
                                     ? FALSE : $info['selected_label'];
   return $item;
@@ -2568,33 +2570,39 @@ function versioncontrol_get_item($repository, $path, $revision = NULL) {
  *   If the given directory path does not correspond to a parent item,
  *   NULL is returned.
  */
-function versioncontrol_get_parent_item($repository, &$item, $parent_path = NULL) {
-  if (versioncontrol_backend_implements($repository['vcs'], 'get_parent_item')) {
-    $parent_item = _versioncontrol_call_backend(
-      $repository['vcs'], 'get_parent_item', array($repository, $item, $parent_path)
-    );
+function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL) {
+  $parent_item = array(
+    'type' => VERSIONCONTROL_ITEM_DIRECTORY,
+  );
+
+  if (!isset($parent_path)) {
+    $parent_item['path'] = dirname($item['path']);
+  }
+  else if ($item['path'] == $parent_path) {
+    return $item;
+  }
+  else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
+    $parent_item['path'] = $parent_path;
   }
   else {
-    // Backend doesn't provide that function, use the default implementation.
-    $parent_item = array(
-      'type' => $item['type'],
-      'revision' => $item['revision'],
-    );
-    $parent_item['selected_label']->get_from = 'other_item';
-    $parent_item['selected_label']->other_item = &$item;
-    $parent_item['selected_label']->other_item_tags = array('same_revision');
-
-    if (!isset($parent_path)) {
-      $parent_item['path'] = dirname($item['path']);
-    }
-    else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
-      $parent_item['path'] = $parent_path;
-    }
-    else {
-      return NULL;
-    }
+    return NULL;
   }
-  return isset($parent_item) ? $parent_item : NULL;
+
+  $backend = versioncontrol_get_backend($repository);
+
+  if (in_array(VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS, $backend['capabilities'])) {
+    $parent_item['revision'] = $item['revision'];
+  }
+  else {
+    $parent_item['revision'] = '';
+  }
+
+  $parent_item['selected_label'] = new stdClass();
+  $parent_item['selected_label']->get_from = 'other_item';
+  $parent_item['selected_label']->other_item = &$item;
+  $parent_item['selected_label']->other_item_tags = array('same_revision');
+
+  return $parent_item;
 }
 
 /**
@@ -2654,7 +2662,7 @@ function versioncontrol_get_parallel_items($repository, $item, $label_type = NUL
 
   foreach ($results as $key => $result) {
     $items[$key] = $result['item'];
-    $items[$key]['selected_label'] = new StdClass();
+    $items[$key]['selected_label'] = new stdClass();
     $items[$key]['selected_label']->label = is_null($result['selected_label'])
                                             ? NULL
                                             : $result['selected_label'];
@@ -2736,7 +2744,7 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
 
   foreach ($contents as $path => $content) {
     $items[$path] = $content['item'];
-    $items[$path]['selected_label'] = new StdClass();
+    $items[$path]['selected_label'] = new stdClass();
     $items[$path]['selected_label']->label = is_null($content['selected_label'])
                                               ? NULL
                                               : $content['selected_label'];
