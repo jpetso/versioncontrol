@@ -570,8 +570,7 @@ function theme_commitlog_operation_location($operation, $operation_items, $direc
   if (!isset($directory_item)) {
     $directory_item = _commitlog_affected_directory_item($operation, $operation_items);
   }
-  $location = theme('commitlog_item', $operation['repository'], $directory_item, NULL, $format);
-  return $location;
+  return theme('commitlog_item', $operation['repository'], $directory_item, NULL, $format);
 }
 
 function theme_commitlog_commit_identifier($operation, $format = 'html') {
