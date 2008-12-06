@@ -826,8 +826,13 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
   $item_header = t('in !location:', array('!location' => $location));
 
   if ($format == 'html') {
-    $output = '<div class="location">'. $item_header .'</div>'."\n";
-    $output .= '<div class="items">'. theme('item_list', $lines) ."</div>\n";
+    if (count($lines) > 1) {
+      $output = '<div class="location">'. $item_header .'</div>'."\n";
+      $output .= '<div class="items">'. theme('item_list', $lines) ."</div>\n";
+    }
+    else {
+      $output .= '<div class="items">'. $item_header .' '. reset($lines) ."</div>\n";
+    }
     return $output;
   }
   // else: plaintext
