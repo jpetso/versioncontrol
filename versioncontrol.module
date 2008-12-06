@@ -2581,7 +2581,7 @@ function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL)
   else if ($item['path'] == $parent_path) {
     return $item;
   }
-  else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
+  else if ($parent_path == '/' || strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
     $parent_item['path'] = $parent_path;
   }
   else {
