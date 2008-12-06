@@ -9,16 +9,17 @@
   word-wrap: break-word;       /* Internet Explorer 5.5+ */
 }
 
+.commitlog .operation {
+  margin-top:    0.4em;
+  margin-bottom: 0.4em;
+}
+
 .commitlog .items {
   line-height: 1.4em;
 }
 
-.commitlog > ul {
-  margin-bottom: 0;
-}
-
-.commitlog > ul > li {
-  margin-bottom: 0.5em;
+.commitlog .commitlog-messages {
+  margin-bottom: 2em;
 }
 
 .commitlog h3 {
