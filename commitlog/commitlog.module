@@ -19,14 +19,14 @@ function commitlog_menu($may_cache) {
     $access = user_access('access commit messages');
     $items[] = array(
       'path' => 'commitlog',
-      'title' => t('Commit Log'),
+      'title' => t('Commit messages'),
       'callback' => 'commitlog_operations_page',
       'access' => $access,
       'type' => MENU_SUGGESTED_ITEM,
     );
     $items[] = array(
       'path' => 'commitlog/feed',
-      'title' => t('Commit Log'),
+      'title' => t('Commit messages'),
       'callback' => 'commitlog_operations_rss',
       'access' => $access,
       'type' => MENU_CALLBACK,
@@ -87,7 +87,7 @@ function commitlog_form_alter($form_id, &$form) {
 
     $form['commitlog'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Commit Log'),
+      '#title' => t('Commit messages'),
       '#collapsible' => TRUE,
       '#collapsed' => TRUE,
       '#weight' => 3,
@@ -101,7 +101,7 @@ function commitlog_form_alter($form_id, &$form) {
     $form['commitlog']['commitlog_pager'] = array(
       '#type' => 'textfield',
       '#title' => t('Number of commits per page'),
-      '#description' => t('Controls how many commits can be shown on a single page of the !commitlog. Paging is used when there are more commits to show than specified by this value.', array('!commitlog' => l(t('Commit Log'), 'commitlog'))),
+      '#description' => t('Controls how many commits can be shown on a single page of the !commitlog. Paging is used when there are more commits to show than specified by this value.', array('!commitlog' => l(t('commit message log'), 'commitlog'))),
       '#default_value' => variable_get('commitlog_pager', 10),
     );
   }
@@ -143,44 +143,26 @@ function commitlog_versioncontrol_operation($op, $operation, $operation_items) {
  * Send out a notification mail to the given mail address.
  */
 function commitlog_send_notification_mail($mailto, $operation, $operation_items) {
-  $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
   $username = theme('versioncontrol_account_username',
     $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
   );
+  $variables = array();
+  $variables['operation'] = $operation;
+  $variables['operation_items'] = $operation_items;
 
-  $from = "$username <$admin_mail>";
-  $subject = theme('commitlog_operation_email_subject',
-    $operation, $operation_items, $username
-  );
+  $subject = theme('commitlog_operation_subject', $variables, array('format' => 'plaintext'));
+
   $message = commitlog_operation($operation, $operation_items, array(
     'format' => 'plaintext',
     'username' => $username,
   ));
+  $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
+  $from = "$username <$admin_mail>";
 
   drupal_mail(
     'commitlog_notification_email', $mailto,
     $subject, $message, $from, array('X-Mailer' => 'Drupal')
   );
-}
-
-function theme_commitlog_operation_email_subject($operation, $operation_items, $username) {
-  // TODO: see if we can unify the two original versions.
-  // Previous version for commits.
-  $location = theme('commitlog_operation_location', $operation, $operation_items, NULL, 'plaintext');
-
-  // TODO (other than unify): port to the new API
-  $params = array(
-    '!type' => ($type == 'branch') ? t('Branch') : t('Tag'),
-    '!name' => ($type == 'branch') ? $operation['branch_name'] : $operation['tag_name'],
-    '!directory' => $operation['directory'],
-  );
-
-  // If the branch or tag has been assigned for the whole repository,
-  // it doesn't make sense to mention the directory.
-  if (empty($items)) {
-    return t('!type !name', $params);
-  }
-  return t('!type !name in !directory', $params);
 }
 
 
@@ -404,12 +386,15 @@ function theme_commitlog_rss($constraints) {
   foreach ($operations as $operation) {
     $operation_items = versioncontrol_get_operation_items($operation);
 
-    $location = theme('commitlog_operation_location', $operation, $operation_items, NULL, 'plaintext');
+    $variables = array();
+    $variables['operation'] = $operation;
+    $variables['operation_items'] = $operation_items;
+    $title = theme('commitlog_operation_subject', $variables, array('format' => 'plaintext'));
+
     $plain_username = theme('versioncontrol_account_username',
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
     );
 
-    $title = $location;
     $link = url('commitlog', 'id='. $operation['vc_op_id'], NULL, TRUE);
     $extra = array(
       array('key' => 'pubDate', 'value' => gmdate('r', $operation['date'])),
@@ -692,6 +677,75 @@ function theme_commitlog_operation_caption($variables, $options = array()) {
     '!repo' => $variables['repository_name'],
     '!time' => $variables['time'],
   ));
+}
+
+/**
+ * A one-liner subject for notification mails and RSS item titles,
+ * where author and date are already visible in other fields.
+ */
+function theme_commitlog_operation_subject($variables, $options = array()) {
+  $options = _commitlog_options($options);
+  $repo_name = theme('commitlog_repository', $variables['operation']['repository'], $options['format']);
+
+  // This stuff is not quite as accurate as theme('commitlog_operation_caption'),
+  // but there's also less space in a single line of RSS/mail subject if you
+  // also want to include the directory ("location").
+  // So instead of handling everything by labels only (most accurate, but also
+  // most flexible == less assumptions == less space optimization),
+  // we distinguish operations by their native operation type and don't do more
+  // than one label. That should be just fine for about 99.7% of all cases.
+
+  if ($variables['operation']['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
+    $replacements = array(
+      '!id' => theme('commitlog_commit_identifier', $variables['operation'], $options['format']),
+      '!repo' => $repo_name,
+      '!location' => theme('commitlog_operation_location',
+        $variables['operation'], $variables['operation_items'], NULL, $options['format']
+      ),
+    );
+
+    $labels = array();
+    foreach ($variables['operation']['labels'] as $label) {
+      $labels[] = theme('commitlog_label', $label, $options);
+    }
+    if (empty($labels)) {
+      return t('!id: !location (!repo)', $replacements);
+    }
+    $replacements['!labels'] = implode(', ', $labels);
+    return t('!id on !labels: !location (!repo)', $replacements);
+  }
+  else { // it's a branch or tag
+    $first_label = reset($variables['operation']['labels']);
+    $label_string = theme('commitlog_label', $first_label, $options);
+    $replacements = array('!label' => $label_string, '!repo' => $repo_name);
+
+    if ($first_label['action'] == VERSIONCONTROL_ACTION_ADDED) {
+      $action_string = ($first_label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+        ? t('Created branch !label', $replacements)
+        : t('Created tag !label', $replacements);
+    }
+    else if ($first_label['action'] == VERSIONCONTROL_ACTION_DELETED) {
+      $action_string = ($first_label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+        ? t('Created branch !label', $replacements)
+        : t('Created tag !label', $replacements);
+    }
+
+    // CVS and SVN label a set of items instead of the whole repository,
+    // let's include the operation directory for those.
+    if (!empty($variables['operation_items'])) {
+      $action_string = t('!action: !location', array(
+        '!action' => $action_string,
+        '!location' => theme('commitlog_operation_location',
+          $variables['operation'], $variables['operation_items'], NULL, $options['format']
+        ),
+      ));
+    }
+
+    return t('!action (!repo)', array(
+      '!action' => $action_string,
+      '!repo' => $repo_name,
+    ));
+  }
 }
 
 function theme_commitlog_label($label, $options = array()) {
