@@ -884,11 +884,20 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *   an empty array is returned.
  */
 function versioncontrol_get_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+  // Interim measure until we allow altering the database query itself:
+  // Let modules alter the query by transforming custom constraints into
+  // stuff that Version Control API can understand.
+  // TODO: let modules alter the SQL query - say, versioncontrol_project should
+  //       be able to introduce a constraint for project node ids and filter
+  //       by joining with {versioncontrol_project_operations}.
+  //       Also see issue http://drupal.org/node/216373
+  foreach (module_implements('alter_operation_constraints') as $module) {
+    $function = $module .'_alter_operation_constraints';
+    $function($constraints);
+  }
+
   list($and_constraints, $params, $joins) =
     _versioncontrol_construct_operation_constraints($constraints);
-  // TODO: let modules alter the query - say, versioncontrol_project should be
-  //       able to introduce a new constraint for project node ids and filter
-  //       by it. Also see issue http://drupal.org/node/216373
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
