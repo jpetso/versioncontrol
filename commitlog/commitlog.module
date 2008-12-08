@@ -191,12 +191,16 @@ function commitlog_operations_page() {
   if ($error_message = _commitlog_check_request()) {
     return $error_message;
   }
+  $constraints = _commitlog_get_constraints();
+  return commitlog_operations($constraints);
+}
 
-  list($constraints, $attributes) = _commitlog_get_constraints();
-  $operations = commitlog_get_paged_operations($constraints);
-
+/**
+ * Return a (paged) log of version control operations rendered to HTML.
+ */
+function commitlog_operations($constraints) {
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_operations_page', $operations, $attributes);
+  return theme('commitlog_operations_page', $constraints);
 }
 
 /**
@@ -208,15 +212,13 @@ function commitlog_account_tracker($uid) {
     drupal_not_found();
     exit();
   }
-  $_REQUEST['uids'] = (string) $uid;
   drupal_set_title($user->name);
 
-  list($constraints, $attributes) = _commitlog_get_constraints();
-  $operations = commitlog_get_paged_operations($constraints);
-  unset($_REQUEST['uids']);
+  $constraints = _commitlog_get_constraints();
+  $constraints['uids'] = array($uid);
 
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_operations_page', $operations, $attributes);
+  return theme('commitlog_operations_page', $constraints);
 }
 
 /**
@@ -226,14 +228,28 @@ function commitlog_operations_rss() {
   if ($error_message = _commitlog_check_request()) {
     exit();
   }
-
-  list($constraints, $attributes) = _commitlog_get_constraints();
-  $limit = variable_get('feed_default_items', 10);
-  $operations = commitlog_get_paged_operations($constraints, $limit);
+  $constraints = _commitlog_get_constraints();
 
   drupal_set_header('Content-Type: application/rss+xml; charset=utf-8');
-  print theme('commitlog_rss', $operations);
+  print theme('commitlog_rss', $constraints);
   exit();
+}
+
+/**
+ * Check the $_REQUEST variable if it contains elements that can't be processed
+ * in the current Drupal configuration.
+ *
+ * @return
+ *   A string containing the appropriate error message, or NULL if everything
+ *   can proceed as planned.
+ */
+function _commitlog_check_request() {
+  if (isset($_REQUEST['nids']) || isset($_REQUEST['maintainers'])) {
+    if (!module_exists('versioncontrol_project')) {
+      return '<p>'. t('The given commit constraints can\'t be applied as the Version Control / Project Node Integration module is not enabled. In order to use the "nids" or "maintainer_uids" constraints, please enable this module.') .'</p>';
+    }
+  }
+  return NULL;
 }
 
 
@@ -250,56 +266,58 @@ function commitlog_operations_rss() {
 function _commitlog_get_constraints() {
   $constraints = array();
   $attributes = array();
-
-  $constraint_request_map = array(
-    'vc_op_ids' => array('single' => 'id', 'multiple' => 'ids'),
-    'usernames' => array('single' => 'username', 'multiple' => 'usernames'),
-    'uids'      => array('single' => 'uid', 'multiple' => 'uids'),
-    'vcs'       => array('multiple' => 'vcs'), // 'vcses' just looks too horrible
-    'repo_ids'  => array('single' => 'repo', 'multiple' => 'repos'),
-    'branches'  => array('single' => 'branch', 'multiple' => 'branches'),
-    'tags'      => array('single' => 'tag', 'multiple' => 'tags'),
-    'labels'    => array('single' => 'label', 'multiple' => 'labels'),
-    'paths'     => array('single' => 'path', 'multiple' => 'paths'),
-    // TODO: 'types' constraint
-  );
+  $constraint_request_map = module_invoke_all('commitlog_constraints');
 
   // Transform query string into commit constraints. We use $_REQUEST because
   // we need to support both GET and POST requests.
   foreach ($constraint_request_map as $constraint => $request) {
     if (isset($request['multiple']) && isset($_REQUEST[$request['multiple']])) {
       $constraints[$constraint] = explode(',', $_REQUEST[$request['multiple']]);
-      $attributes[$request['multiple']] = $_REQUEST[$request['multiple']];
     }
     if (isset($request['single']) && isset($_REQUEST[$request['single']])) {
-      if (!isset($constraints[$constraint])) {
-        $constraints[$constraint] = array();
-      }
       $constraints[$constraint][] = $_REQUEST[$request['single']];
-      $attributes[$request['single']] = $_REQUEST[$request['single']];
     }
   }
+  return $constraints;
+}
 
-  if (module_exists('versioncontrol_project')) {
-    $project_constraints = array();
-    if (isset($_REQUEST['nids'])) {
-      $project_constraints['nids'] = explode(',', $_REQUEST['nids']);
-      $attributes['nids'] = $_REQUEST['nids'];
-    }
-    if (isset($_REQUEST['maintainers'])) {
-      $project_constraints['maintainer_uids'] = explode(',', $_REQUEST['maintainers']);
-      $attributes['maintainers'] = $_REQUEST['maintainers'];
-    }
-    if (!empty($project_constraints)) {
-      // TODO: will get renamed in versioncontrol_project, or wholly deleted
-      //       in the first place (in favor of an altered get_operations()).
-      $constraints = versioncontrol_project_get_commit_constraints(
-        $constraints, $project_constraints
-      );
+/**
+ * Implementation of hook_commitlog_constraints():
+ * Provide a list of supported constraints and corresponding request attributes.
+ */
+function commitlog_commitlog_constraints() {
+  return array(
+    'vc_op_ids' => array('single' => 'id',       'multiple' => 'ids'),
+    'usernames' => array('single' => 'username', 'multiple' => 'usernames'),
+    'uids'      => array('single' => 'uid',      'multiple' => 'uids'),
+    'vcs'       => array('multiple' => 'vcs'), // for both single and multiple
+    'repo_ids'  => array('single' => 'repo',     'multiple' => 'repos'),
+    'branches'  => array('single' => 'branch',   'multiple' => 'branches'),
+    'tags'      => array('single' => 'tag',      'multiple' => 'tags'),
+    'labels'    => array('single' => 'label',    'multiple' => 'labels'),
+    'paths'     => array('single' => 'path',     'multiple' => 'paths'),
+    // TODO: 'types' constraint
+  );
+}
+
+function _commitlog_query_attributes($constraints) {
+  $query_items = array();
+  $constraint_request_map = module_invoke_all('commitlog_constraints');
+
+  foreach ($constraints as $key => $values) {
+    if (isset($constraint_request_map[$key])) {
+      if (!is_array($values)) {
+        $values = array($values);
+      }
+      if (isset($constraint_request_map[$key]['single']) && count($values) == 1) {
+        $query_items[] = $constraint_request_map[$key]['single'] .'='. (string) reset($values);
+      }
+      else {
+        $query_items[] = $constraint_request_map[$key]['multiple'] .'='. implode(',', $values);
+      }
     }
   }
-
-  return array($constraints, $attributes);
+  return $query_items;
 }
 
 /**
@@ -325,23 +343,6 @@ function commitlog_get_paged_operations($constraints, $limit = NULL, $element = 
   return $operations;
 }
 
-/**
- * Check the $_REQUEST variable if it contains elements that can't be processed
- * in the current Drupal configuration.
- *
- * @return
- *   A string containing the appropriate error message, or NULL if everything
- *   can proceed as planned.
- */
-function _commitlog_check_request() {
-  if (isset($_REQUEST['nids']) || isset($_REQUEST['maintainers'])) {
-    if (!module_exists('versioncontrol_project')) {
-      return '<p>'. t('The given commit constraints can\'t be applied as the Version Control / Project Node Integration module is not enabled. In order to use the "nids" or "maintainer_uids" constraints, please enable this module.') .'</p>';
-    }
-  }
-  return NULL;
-}
-
 
 /**
  * Return a formatted date string for the creation date of the given operation.
@@ -354,7 +355,9 @@ function commitlog_operation_date($operation) {
 /**
  * Return formatted output for displaying the given operations on an HTML page.
  */
-function theme_commitlog_operations_page($operations, $attributes) {
+function theme_commitlog_operations_page($constraints) {
+  $operations = commitlog_get_paged_operations($constraints);
+
   if (empty($operations)) {
     return '<div class="commitlog"><p>'. t('No log messages found.') .'</p></div>';
   }
@@ -382,20 +385,21 @@ function theme_commitlog_operations_page($operations, $attributes) {
   }
   $output .= '</div>';
 
-  $query_items = array();
-  foreach ($attributes as $key => $value) {
-    $query_items[] = $key .'='. $value;
-  }
+  // The feed icon, with reconstructed query attributes.
+  $query_items = _commitlog_query_attributes($constraints);
   $query = empty($query_items) ? NULL : implode('&', $query_items);
   $output .= theme('feed_icon', url('commitlog/feed', $query));
 
   return $output;
 }
 
-function theme_commitlog_rss($operations) {
+function theme_commitlog_rss($constraints) {
   global $base_url, $locale;
-  $items = '';
+
+  $limit = variable_get('feed_default_items', 10);
+  $operations = versioncontrol_get_operations($constraints, $result_count, 0, $limit);
   $namespaces = array('xmlns:dc="http://purl.org/dc/elements/1.1/"');
+  $items = '';
 
   foreach ($operations as $operation) {
     $operation_items = versioncontrol_get_operation_items($operation);
@@ -421,10 +425,38 @@ function theme_commitlog_rss($operations) {
 
   $site_name = variable_get('site_name', 'Drupal');
 
+  unset($title);
+
+  if (isset($constraints['nids'])) {
+    // TODO: ideally, versioncontrol_project should be able to do this by itself
+    $params = array();
+    $placeholders = array();
+
+    foreach ($constraints['nids'] as $nid) {
+      $params[] = $nid;
+      $placeholders[] = 'proj.nid = %d';
+    }
+    $result = db_query("SELECT node.title
+                        FROM {versioncontrol_project_projects} proj
+                          INNER JOIN {node} node ON proj.nid = node.nid
+                        WHERE ". implode(' OR ', $placeholders), $params);
+    $project_names = array();
+    while ($project = db_fetch_object($result)) {
+      $project_names[] = $project->title;
+    }
+    $title = t('@project commits', array('@project' => implode(', ', $project_names)));
+  }
+  if (!isset($title)) {
+    $title = t('@site commits', array('@site' => $site_name));
+  }
+
+  $query_items = _commitlog_query_attributes($constraints);
+  $query = empty($query_items) ? NULL : implode('&', $query_items);
+
   $channel = array(
     'version'     => '2.0',
-    'title'       => t('@site commits', array('@site' => $site_name)),
-    'link'        => url('commitlog', NULL, NULL, TRUE),
+    'title'       => $title,
+    'link'        => url('commitlog', $query, NULL, TRUE),
     'description' => t('Commit messages for @site', array('@site' => $site_name)),
     'language'    => $locale,
   );
@@ -523,13 +555,13 @@ function theme_commitlog_operation_plaintext($variables) {
  */
 function commitlog_account_url($repository, $username) {
   return l($username, 'commitlog', NULL,
-    'usernames='. drupal_urlencode($username) .'&repos='. $repository['repo_id']
+    'username='. drupal_urlencode($username) .'&repo='. $repository['repo_id']
   );
 }
 
 function theme_commitlog_repository($repository, $format = 'html') {
   if ($format == 'html') {
-    return l($repository['name'], 'commitlog', NULL, 'repos='. $repository['repo_id']);
+    return l($repository['name'], 'commitlog', NULL, 'repo='. $repository['repo_id']);
   }
   return check_plain($repository['name']);
 }
