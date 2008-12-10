@@ -2483,8 +2483,8 @@ function _versioncontrol_get_repository_urls($repository) {
 
 /**
  * Get the user-visible version of a commit identifier a.k.a. 'revision',
- * as plaintext. By default, this function returns $operation['revision']
- * if that property exists, or $operation['vc_op_id'] as fallback.
+ * as plaintext. By default, this function returns the operation's revision
+ * if that property exists, or its vc_op_id identifier as fallback.
  *
  * Version control backends can, however, choose to implement their own version
  * of this function, which for example makes it possible to cut the SHA-1 hash
@@ -2497,14 +2497,14 @@ function _versioncontrol_get_repository_urls($repository) {
  *   If the commit identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_format_commit_identifier($operation, $format = 'short') {
+function versioncontrol_format_revision_identifier($operation, $format = 'full') {
   if (empty($operation['revision'])) {
-    return $operation['vc_op_id'];
+    return '#'. $operation['vc_op_id'];
   }
   $vcs = $operation['repository']['vcs'];
-  if ($format == 'short' && versioncontrol_backend_implements($vcs, 'format_short_revision_identifier')) {
+  if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
     return _versioncontrol_call_backend(
-      $vcs, 'format_short_revision_identifier', array($operation['revision'])
+      $vcs, 'format_revision_identifier', array($operation, $format)
     );
   }
   return $operation['revision'];

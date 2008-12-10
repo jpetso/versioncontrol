@@ -495,7 +495,7 @@ function commitlog_operation($operation, $operation_items, $options = array()) {
   }
   $variables['operation'] = $operation;
   $variables['operation_items'] = $operation_items;
-  $variables['id'] = theme('commitlog_commit_identifier', $operation, $format);
+  $variables['id'] = theme('commitlog_revision_identifier', $operation, $format);
   $variables['repository_name'] = theme('commitlog_repository', $operation['repository'], $format);
   $variables['time'] = format_date($operation['date'], 'custom', 'H:i');
 
@@ -590,8 +590,8 @@ function theme_commitlog_operation_location($operation, $operation_items, $direc
   return theme('commitlog_item', $operation['repository'], $directory_item, NULL, $format);
 }
 
-function theme_commitlog_commit_identifier($operation, $format = 'html') {
-  $id = versioncontrol_format_commit_identifier($operation);
+function theme_commitlog_revision_identifier($operation, $format = 'html') {
+  $id = versioncontrol_format_revision_identifier($operation, 'short');
 
   if ($format == 'html') {
     if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
@@ -697,7 +697,7 @@ function theme_commitlog_operation_subject($variables, $options = array()) {
 
   if ($variables['operation']['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
     $replacements = array(
-      '!id' => theme('commitlog_commit_identifier', $variables['operation'], $options['format']),
+      '!id' => theme('commitlog_revision_identifier', $variables['operation'], $options['format']),
       '!repo' => $repo_name,
       '!location' => theme('commitlog_operation_location',
         $variables['operation'], $variables['operation_items'], NULL, $options['format']
