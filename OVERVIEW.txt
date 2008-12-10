@@ -65,24 +65,24 @@ In essence, the API is built around various types of arrays
     information about its path, type (file or directory) and (file-level)
     revision, if applicable.
 
+- Labels: The combined representation of branches and tags, including
+    the label type (branch or tag) and name (e.g. "trunk" or "DRUPAL-6--1-0").
+
 - Accounts: Not represented as an array but rather as a combination of
     Drupal uid, VCS username and repository.
 
 - Operations (commits, branch operations, tag operations): Those provide
-    information about the author, repository, containing directory,
-    and date/time of the operation. Commits additionally include the
-    repository-wide revision (if applicable) and the commit message.
+    information about the author, repository, containing directory, and
+    date/time of the operation. Where applicable, operations also include
+    the repository-wide revision and the log message. Operations are also
+    associated to the set of labels ("operation labels") and items
+    ("operation items") that they modify/affect. When referenced from an
+    operation, both labels and items feature a couple more properties, like
+    the action that was performed on it in that operation.
 
-- Commit actions: A set of modifications that happened during a commit,
-    including information about the type of the action (added, modified, moved,
-    copied, merged or deleted), the new/current version of the affected item,
-    and its predecessor(s).
-
-Repositories, accounts and operations are managed by the API module itself,
-and can be amended by backends and other modules by implementing the
-appropriate hooks (hook_versioncontrol_*(), where * is one of 'repository',
-'account', 'commit', 'branch_operation' and 'tag_operation').
-Items and commit actions are managed by the backends.
+Repositories and accounts can be extended by backends and other modules by
+implementing the appropriate hooks (hook_versioncontrol_*(), where * is one of
+'repository', 'account', and 'operation').
 
 Each of those objects may contain additional VCS specific information -
 for example, the CVS backend adds passwords to accounts, modules and
@@ -93,13 +93,13 @@ A backend does not need to implement all functions that the Version Control API
 defines. The idea is that functionality for retrieving fundamental
 log information - that is, items and actions that correspond to commits and
 branch/tag operations - is mandatory and likely to be stored in the database,
-whereas more advanced functionality like item history, directory/file contents,
+whereas more advanced functionality like directory/file contents,
 file annotations, and listing all branches and tags of an item, is optional
 for backends. That's because it's likely to directly interface to the VCS
 instead of querying the database, and this functionality is both harder
 to implement and potentially slower than the log retrieval functions.
 
-If a module makes use of an optional function then it has to check
+If a user of the API makes use of an optional function then it has to check
 for its availability before calling it.
 
 
