@@ -244,9 +244,6 @@ function _commit_restrictions_load($repo_id) {
  *   write access callbacks say.
  */
 function commit_restrictions_versioncontrol_write_access($operation, $operation_items) {
-  if (empty($operation_items)) {
-    return array(); // no idea if this is ever going to happen, but let's be prepared
-  }
   // Allow the committer to delete branches and labels (also invalid ones),
   // provided that nothing else is done in this operation.
   if (_commit_restrictions_contains_only_delete_labels($operation)) {
@@ -291,6 +288,9 @@ function _commit_restrictions_contains_only_delete_labels($operation) {
  *   with error messages if at least one item may not be committed.
  */
 function _commit_restrictions_commit_item_access($operation_items, $restrictions) {
+  if (empty($operation_items)) {
+    return array(); // no idea if this is ever going to happen, but let's be prepared
+  }
   $error_messages = array();
 
   // Paths where it is always allowed to commit.
@@ -420,6 +420,15 @@ function _commit_restrictions_label_access($operation, $restrictions) {
 //        multiple labels) but we don't know which items belong to which label.
 //        That would need an adaptation of the operation/items format. Bummer.
 function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
+  if (empty($items)) {
+    // Tagging the whole repository (== empty $items array) should be caught
+    // by general branch/tag restrictions (_commit_restrictions_label_access())
+    // rather than with the item path restrictions in here. So let's pass
+    // operations without items through here. Consequently, the regexps for
+    // allowed branch/tag paths won't work in version control systems like
+    // Git or Mercurial that tend to always tag the whole repository.
+    return array();
+  }
   $error_messages = array();
 
   if (!empty($restrictions['valid_branch_tag_paths'])) {
@@ -444,8 +453,7 @@ function _commit_restrictions_item_error_message($item, $message_type) {
   $itemtype = versioncontrol_is_file_item($item) ? t('file') : t('directory');
   $params = array('!itemtype' => $itemtype, '!path' => $item['path']);
 
-  switch($message_type) {
-
+  switch ($message_type) {
     case 'commit':
       return t(
 '** Access denied: committing to this !itemtype is not allowed:
