@@ -795,59 +795,135 @@ function versioncontrol_fakevcs_get_file_annotation($repository, $file_item) {
 
 
 /**
- * Implementation of [versioncontrol_backend]_commit():
- * Manage (insert or delete) additional commit data in the database.
+ * Implementation of [versioncontrol_backend]_operation():
+ * Act on database changes when commit, tag or branch operations are inserted
+ * or deleted. Note that this hook is not necessarily called at the time
+ * when the operation actually happens - operations can also be inserted
+ * by a cron script when the actual commit/branch/tag has been accomplished
+ * for quite a while already.
  *
  * This function is optional for backend modules to implement. If you don't
- * need custom repository data (or you let the Version Control API manage it),
- * just don't implement it.
+ * need custom operation data, just don't implement it.
  *
  * @param $op
- *   Either 'insert' when the commit is in the process of being created,
- *   or 'delete' if it will be deleted after this function has been called.
- * @param $commit
- *   A single commit array, like the ones returned
- *   by versioncontrol_get_commits().
- * @param $commit_actions
- *   A structured array containing the exact details of what happened to
- *   each item in this commit. The structure of this array is the same as
- *   the return value of versioncontrol_get_commit_actions().
+ *   'insert' when the operation has just been recorded and inserted into the
+ *   database, or 'delete' if it will be deleted right after this hook
+ *   has been called.
+ *
+ * @param $operation
+ *   An operation array containing basic information about the commit, branch
+ *   or tag operation. It consists of the following elements:
+ *
+ *   - 'vc_op_id': The Drupal-specific operation identifier (a simple integer)
+ *        which is unique among all operations (commits, branch ops, tag ops)
+ *        in all repositories.
+ *   - 'type': The type of the operation - one of the
+ *        VERSIONCONTROL_OPERATION_{COMMIT,BRANCH,TAG} constants.
+ *        Note that if you pass branch or tag constraints, this function might
+ *        nevertheless return commit operations too - that happens for version
+ *        control systems without native branches or tags (like Subversion)
+ *        when a branch or tag is affected by the commit.
+ *   - 'repository': The repository where this operation occurred.
+ *        This is a structured "repository array", like is returned
+ *        by versioncontrol_get_repository().
+ *   - 'date': The time when the operation was performed, given as
+ *        Unix timestamp. (For commits, this is the time when the revision
+ *        was committed, whereas for branch/tag operations it is the time
+ *        when the files were branched or tagged.)
+ *   - 'uid': The Drupal user id of the operation author, or 0 if no
+ *        Drupal user could be associated to the author.
+ *   - 'username': The system specific VCS username of the author.
+ *   - 'message': The log message for the commit, tag or branch operation.
+ *        If a version control system doesn't support messages for any of them,
+ *        this element contains an empty string.
+ *   - 'revision': The VCS specific repository-wide revision identifier,
+ *        like '' in CVS, '27491' in Subversion or some SHA-1 key in various
+ *        distributed version control systems. If there is no such revision
+ *        (which may be the case for version control systems that don't support
+ *        atomic commits) then the 'revision' element is an empty string.
+ *        For branch and tag operations, this element indicates the
+ *        (repository-wide) revision of the files that were branched or tagged.
+ *
+ *   - 'labels': An array of branches or tags that were affected by this
+ *        operation. Branch and tag operations are known to only affect one
+ *        branch or tag, so for these there will be only one element (with 0
+ *        as key) in 'labels'. Commits might affect any number of branches,
+ *        including none. Commits that emulate branches and/or tags (like
+ *        in Subversion, where they're not a native concept) can also include
+ *        add/delete/move operations for labels, as detailed below.
+ *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
+ *        or 'master' - is also considered a branch. Each element in 'labels'
+ *        is a structured array with the following keys:
+ *
+ *        - 'id': The label identifier (a simple integer), used for unique
+ *             identification of branches and tags in the database.
+ *        - 'name': The branch or tag name (a string).
+ *        - 'action': Specifies what happened to this label in this operation.
+ *             For plain commits, this is always VERSIONCONTROL_ACTION_MODIFIED.
+ *             For branch or tag operations (or commits that emulate those),
+ *             it can be either VERSIONCONTROL_ACTION_ADDED or
+ *             VERSIONCONTROL_ACTION_DELETED.
+ *
+ * @param $operation_items
+ *   A structured array containing all items that were affected by the above
+ *   operation. Array keys are the current/new paths, even if the item doesn't
+ *   exist anymore (as is the case with delete actions in commits).
+ *   The associated array elements are structured item arrays and consist of
+ *   the following elements:
+ *
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for items
+ *        that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED respectively
+ *        VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items that have been
+ *        removed (by a commit's delete action).
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The (file-level) revision when the item was changed.
+ *        If there is no such revision (which may be the case for
+ *        directory items) then the 'revision' element is an empty string.
+ *   - 'item_revision_id': Identifier of this item revision in the database.
+ *        Note that you can only rely on this element to exist for
+ *        operation items - functions that interface directly with the VCS
+ *        (such as versioncontrol_get_directory_contents() or
+ *        versioncontrol_get_parallel_items()) might not include
+ *        this identifier, for obvious reasons.
+ *
+ *   For commit operations, additional information about the origin of
+ *   the items is also available. The following elements will be set
+ *   for each item in addition to the ones listed above:
+ *
+ *   - 'action': Specifies how the item was changed.
+ *        One of the predefined VERSIONCONTROL_ACTION_* values.
+ *   - 'source_items': An array with the previous state(s) of the affected item.
+ *        Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *   - 'replaced_item': The previous but technically unrelated item at the
+ *        same location as the current item. Only exists if this previous item
+ *        was deleted and replaced by a different one that was just moved
+ *        or copied to this location.
  */
-// TODO: port to the 2.x function signature and to an example that still makes sense.
-function versioncontrol_fakevcs_commit($op, $commit, $commit_actions) {
-  // If nothing has to be stored in addition to the commit info that
-  // versioncontrol_insert_commit() stores by itself, this function
-  // doesn't have to be implemented by the backend.
-  // If you've got stuff like file tables or whatever, it may come in handy.
+function versioncontrol_fakevcs_operation($op, $operation, $operation_items) {
+  // Mmkay, with Version Control API not being able to extend operations
+  // anymore like in 5.x-1.x, I'm running out of good examples for this hook.
+  // But let's say we want to store the original branch for a commit, so that
+  // we can improve commit visualizations (should Version Control API
+  // respectively Commit Log support that sometime in the future).
+  if ($operation['type'] != VERSIONCONTROL_OPERATION_COMMIT) {
+    return; // Not interested in branch and tag operations.
+  }
+
   switch ($op) {
     case 'insert':
-      foreach ($commit_actions as $path => $action) {
-        $revision = '';
-        $source_revision = '';
-
-        // If available, get item type and revision from the contained items.
-        if (isset($action['current item'])) {
-          $type = $action['current item']['type'];
-          $revision = $action['current item']['revision'];
-        }
-        else {
-          $type = $action['source items'][0]['type'];
-          $source_revision = $action['source items'][0]['revision'];
-        }
-
+      foreach ($operation['labels'] as $label) {
         db_query(
-          "INSERT INTO {versioncontrol_fakevcs_item_revisions}
-          (vc_op_id, type, path, revision, action, source_revision)
-          VALUES (%d, %d, '%s', '%s', %d, %d)",
-          $commit['vc_op_id'], $type, $path, $revision, $action['action'],
-          $source_revision
+          "INSERT INTO {versioncontrol_fakevcs_original_commit_branches}
+          (vc_op_id, label_id) VALUES (%d, %d)",
+          $operation['vc_op_id'], $label['label_id']
         );
       }
       break;
 
     case 'delete':
-      db_query('DELETE FROM {versioncontrol_fakevcs_item_revisions}
-                WHERE vc_op_id = %d', $commit['vc_op_id']);
+      db_query('DELETE FROM {versioncontrol_fakevcs_original_commit_branches}
+                WHERE vc_op_id = %d', $operation['vc_op_id']);
       break;
   }
 }
