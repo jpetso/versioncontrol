@@ -191,7 +191,7 @@ function commitlog_account_tracker($uid) {
   $constraints = _commitlog_get_constraints();
   $constraints['uids'] = array($uid);
 
-  return commitlog_operations_page($constraints);
+  return commitlog_operations($constraints);
 }
 
 /**
