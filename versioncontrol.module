@@ -791,6 +791,9 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *          ).
  *        If given, only operations affecting one of these items
  *        (or its children, in case the item is a directory) will be returned.
+ *   - 'message': A string, or an array of strings (which will be combined with
+ *        an "OR" operator). If given, only operations containing the string(s)
+ *        in their log message will be returned.
  *   - 'item_revision_ids': An array of item revision ids. If given, only
  *        operations affecting one of the items with that id will be returned.
  *   - 'item_revisions': An array of strings, each containing a VCS-specific
@@ -1102,6 +1105,25 @@ function _versioncontrol_construct_operation_constraints($constraints, $operatio
       }
       $and_constraints[] = $operations_table_alias .'.username
                            IN ('. implode(',', $placeholders) .')';
+    }
+  }
+
+  // Filter by log message.
+  if (isset($constraints['message'])) {
+    if (empty($constraints['message']) && !is_string($constraints['message'])) {
+      return _versioncontrol_false_constraint();
+    }
+    else {
+      // Allow both array and string formats, for convenience and compatibility.
+      if (!is_array($constraints['message'])) {
+        $constraints['message'] = array($constraints['message']);
+      }
+      $or_constraints = array();
+      foreach ($constraints['message'] as $message_part) {
+        $or_constraints[] = $operations_table_alias .".message LIKE '%s'";
+        $params[] = '%'. $message_part .'%';
+      }
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
     }
   }
 

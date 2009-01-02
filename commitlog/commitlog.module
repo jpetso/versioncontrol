@@ -178,14 +178,6 @@ function commitlog_operations_page() {
 }
 
 /**
- * Return a (paged) log of version control operations rendered to HTML.
- */
-function commitlog_operations($constraints) {
-  drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_operations_page', $constraints);
-}
-
-/**
  * Page callback for the 'track code' tab on the user page.
  */
 function commitlog_account_tracker($uid) {
@@ -199,6 +191,13 @@ function commitlog_account_tracker($uid) {
   $constraints = _commitlog_get_constraints();
   $constraints['uids'] = array($uid);
 
+  return commitlog_operations_page($constraints);
+}
+
+/**
+ * Return a (paged) log of version control operations rendered to HTML.
+ */
+function commitlog_operations($constraints) {
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
   return theme('commitlog_operations_page', $constraints);
 }
@@ -278,6 +277,7 @@ function commitlog_commitlog_constraints() {
     'tags'      => array('single' => 'tag',      'multiple' => 'tags'),
     'labels'    => array('single' => 'label',    'multiple' => 'labels'),
     'paths'     => array('single' => 'path',     'multiple' => 'paths'),
+    'message'   => array('single' => 'message',  'multiple' => 'messages'),
     // TODO: 'types' constraint
   );
 }
