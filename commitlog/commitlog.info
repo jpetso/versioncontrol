@@ -1,5 +1,6 @@
 ; $Id$
 name = "Commit Log"
 description = "Display a history of commits, branches and tags, optionally filtered by a set of constraint arguments."
-dependencies = versioncontrol
+dependencies[] = versioncontrol
 package = Version Control
+core = 6.x

@@ -33,10 +33,6 @@ Have a look at the OVERVIEW.txt file for a basic introduction into concepts,
 forms and API of this module.
 
 
-CAVEATS
-------
-This module is not compatible with PHP versions less than PHP 5.
-
 AUTHOR
 ------
 Jakob Petsovits <jpetso at gmx DOT at>
