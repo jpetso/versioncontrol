@@ -2749,6 +2749,9 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
     $repository['vcs'], 'get_directory_contents',
     array($repository, $directory_item, $recursive)
   );
+  if (!isset($contents)) {
+    return NULL;
+  }
   $items = array();
 
   foreach ($contents as $path => $content) {
