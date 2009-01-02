@@ -62,8 +62,9 @@
  *   A structured array containing the exact details of what is about to happen
  *   to each item in this commit. The structure of this array is the same as
  *   the return value of versioncontrol_get_operation_items() - that is,
- *   elements for 'type', 'path' and 'revision' - but doesn't include
- *   the 'item_revision_id' element as there's no relation to the database yet.
+ *   elements for 'type', 'path', 'revision', 'action', 'source_items' and
+ *   'replaced_item' - but doesn't include the 'item_revision_id' element as
+ *   there's no relation to the database yet.
  *
  *   The 'action', 'source_items', 'replaced_item' and 'revision' elements
  *   of each item are optional and may be left unset.
@@ -225,8 +226,8 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *             VERSIONCONTROL_ACTION_DELETED.
  *
  * @param $operation_items
- *   A structured array containing the exact details of what is about to happen
- *   to each item in this commit. The structure of this array is the same as
+ *   A structured array containing the exact details of happened to each
+ *   item in this operation. The structure of this array is the same as
  *   the return value of versioncontrol_get_operation_items() - that is,
  *   elements for 'type', 'path' and 'revision' - but doesn't include the
  *   'item_revision_id' element, that one will be filled in by this function.
@@ -234,6 +235,8 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   For commit operations, you also have to fill in the 'action' and
  *   'source_items' elements (and optionally 'replaced_item') that are also
  *   described in the versioncontrol_get_operation_items() API documentation.
+ *   The 'line_changes' element, as in versioncontrol_get_operation_items(),
+ *   is optional to provide.
  *
  *   This parameter is passed by reference as the insert operation will
  *   check the validity of a few item properties and will also assign an
@@ -245,6 +248,8 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *   The finalized operation array, with all of the 'vc_op_id', 'repository'
  *   and 'uid' properties filled in, and 'repo_id' removed if it existed before.
  *   Labels are now equipped with an additional 'label_id' property.
+ *   (For more info on these labels, see the API documentation for
+ *   versioncontrol_get_operations() and versioncontrol_get_operation_items().)
  *   In case of an error, NULL is returned instead of the operation array.
  */
 function versioncontrol_insert_operation($operation, &$operation_items) {
@@ -273,7 +278,11 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
     $operation['labels'][$key] = $label; // because it now has a 'label_id'
   }
 
+  $vcs = $operation['repository']['vcs'];
+
   // So much for the operation itself, now the more verbose part: items.
+  ksort($operation_items); // similar paths should be next to each other
+
   foreach ($operation_items as $path => $item) {
     $item = _versioncontrol_sanitize_item($operation['repository'], $item);
     $item = _versioncontrol_ensure_item_revision(
@@ -282,6 +291,9 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
     _versioncontrol_insert_operation_item(
       $operation, $item, VERSIONCONTROL_OPERATION_MEMBER_ITEM
     );
+    $item['selected_label'] = new stdClass();
+    $item['selected_label']->get_from = 'operation';
+    $item['selected_label']->successor_item = &$operation;
 
     // If we've got source items (which is the case for commit operations),
     // add them to the item revisions and source revisions tables as well.
@@ -305,7 +317,18 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
         default: // No additional caching for added, modified or deleted items.
           break;
       }
+
+      $source_item['selected_label'] = new stdClass();
+      $source_item['selected_label']->get_from = 'other_item';
+      $source_item['selected_label']->other_item = &$item;
+      $source_item['selected_label']->other_item_tags = array('successor_item');
+
       $item['source_items'][$key] = $source_item;
+    }
+    // Plus a special case for the "added" action, as it needs an entry in the
+    // source items table but contains no items in the 'source_items' property.
+    if ($item['action'] == VERSIONCONTROL_ACTION_ADDED) {
+      _versioncontrol_insert_source_revision($item, 0, $item['action']);
     }
 
     // If we've got a replaced item (might happen for copy/move commits),
@@ -317,11 +340,13 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
       _versioncontrol_insert_source_revision(
         $item, $item['replaced_item'], VERSIONCONTROL_ACTION_REPLACED
       );
+      $item['replaced_item']['selected_label'] = new stdClass();
+      $item['replaced_item']['selected_label']->get_from = 'other_item';
+      $item['replaced_item']['selected_label']->other_item = &$item;
+      $item['replaced_item']['selected_label']->other_item_tags = array('successor_item');
     }
     $operation_items[$path] = $item;
   }
-
-  $vcs = $operation['repository']['vcs'];
 
   // Notify the backend first.
   if (versioncontrol_backend_implements($vcs, 'operation')) {
@@ -331,49 +356,16 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
   // Everything's done, let the world know about it!
   module_invoke_all('versioncontrol_operation',
                     'insert', $operation, $operation_items);
+
+  // Rules integration, because we like to enable people to be flexible.
+  if (module_exists('workflow_ng')) {
+    workflow_ng_invoke_event('versioncontrol_operation_insert', array(
+      'operation' => $operation,
+      'items' => $operation_items,
+    ));
+  }
+
   return $operation;
-}
-
-/**
- * Insert a label entry into the {versioncontrol_labels} table,
- * or retrieve the same one that's already there.
- *
- * @return
- *   The @p $label variable, enhanced with the newly added property 'label_id'
- *   specifying the database identifier for that label. There may be labels
- *   with a similar 'name' but different 'type' properties, those are considered
- *   to be different and will both go into the database side by side.
- */
-function _versioncontrol_ensure_label($repository, $label) {
-  $result = db_query(
-    "SELECT label_id, repo_id, name, type FROM {versioncontrol_labels}
-      WHERE repo_id = %d AND name = '%s' AND type = %d",
-    $repository['repo_id'], $label['name'], $label['type']
-  );
-  while ($row = db_fetch_object($result)) {
-    // Replace / fill in properties that were not in the WHERE condition.
-    $label['label_id'] = $row->label_id;
-    return $label;
-  }
-  // The item doesn't yet exist in the database, so create it.
-  return _versioncontrol_insert_label($repository, $label);
-}
-
-function _versioncontrol_insert_label($repository, $label) {
-  if (isset($label['label_id'])) {
-    db_query("DELETE FROM {versioncontrol_labels}
-              WHERE label_id = %d", $label['label_id']);
-  }
-  else {
-    $label['label_id'] = db_next_id('{versioncontrol_labels}_label_id');
-  }
-  db_query(
-    "INSERT INTO {versioncontrol_labels}
-      (label_id, repo_id, name, type)
-      VALUES (%d, %d, '%s', %d)",
-    $label['label_id'], $repository['repo_id'], $label['name'], $label['type']
-  );
-  return $label;
 }
 
 /**
@@ -515,18 +507,27 @@ function _versioncontrol_insert_operation_item($operation, $item, $type) {
 /**
  * Insert an item entry into the {versioncontrol_source_items} table.
  * Both target and source items are expected to have an 'item_revision_id'
- * property already.
+ * property already. For "added" actions, it's also possible to pass 0 as the
+ * @p $source_item parameter instead of a full item array.
  */
 function _versioncontrol_insert_source_revision($item, $source_item, $action) {
+  if ($action == VERSIONCONTROL_ACTION_ADDED && $source_item === 0) {
+    $source_item = array('item_revision_id' => 0);
+  }
   // Before inserting that item entry, make sure it doesn't exist already.
   db_query("DELETE FROM {versioncontrol_source_items}
             WHERE item_revision_id = %d AND source_item_revision_id = %d",
             $item['item_revision_id'], $source_item['item_revision_id']);
 
+  $line_changes = !empty($item['line_changes']);
   db_query("INSERT INTO {versioncontrol_source_items}
-            (item_revision_id, source_item_revision_id, action)
-            VALUES (%d, %d, %d)",
-            $item['item_revision_id'], $source_item['item_revision_id'], $action);
+            (item_revision_id, source_item_revision_id, action,
+             line_changes_recorded, line_changes_added, line_changes_removed)
+            VALUES (%d, %d, %d, %d, %d, %d)",
+            $item['item_revision_id'], $source_item['item_revision_id'],
+            $action, ($line_changes ? 1 : 0),
+            ($line_changes ? $item['line_changes']['added'] : 0),
+            ($line_changes ? $item['line_changes']['removed'] : 0));
 }
 
 /**
@@ -950,14 +951,16 @@ function versioncontrol_delete_repository($repository) {
     $item_ids[] = $item_revision->item_revision_id;
     $placeholders[] = '%d';
   }
-  $placeholders = '('. implode(',', $placeholders) .')';
+  if (!empty($item_ids)) {
+    $placeholders = '('. implode(',', $placeholders) .')';
 
-  db_query('DELETE FROM {versioncontrol_source_items}
-            WHERE item_revision_id IN '. $placeholders, $item_ids);
-  db_query('DELETE FROM {versioncontrol_source_items}
-            WHERE source_item_revision_id IN '. $placeholders, $item_ids);
-  db_query('DELETE FROM {versioncontrol_item_revisions}
-            WHERE repo_id = %d', $repository['repo_id']);
+    db_query('DELETE FROM {versioncontrol_source_items}
+              WHERE item_revision_id IN '. $placeholders, $item_ids);
+    db_query('DELETE FROM {versioncontrol_source_items}
+              WHERE source_item_revision_id IN '. $placeholders, $item_ids);
+    db_query('DELETE FROM {versioncontrol_item_revisions}
+              WHERE repo_id = %d', $repository['repo_id']);
+  }
   unset($item_ids); // conserve memory, this might get quite large
   unset($placeholders); // ...likewise
 
@@ -1006,85 +1009,6 @@ function versioncontrol_delete_repository($repository) {
             l('view', 'admin/project/versioncontrol-repositories'));
 }
 
-
-/**
- * Retrieve the branch name and repository for a given branch id.
- *
- * @return
- *   A structured array consisting of the 'branch_id, 'repo_id' and
- *   'branch_name' elements, or NULL if there is no branch for this branch id.
- */
-function versioncontrol_get_branch($branch_id) {
-  static $branch_cache = array();
-
-  if (isset($branch_cache[$branch_id])) {
-    if ($branch_cache[$branch_id] === FALSE) {
-      return NULL; // there's no branch for this id
-    }
-    return $branch_cache[$branch_id]; // return the cached branch array
-  }
-
-  $result = db_query('SELECT branch_id, repo_id, branch_name
-                      FROM {versioncontrol_branches}
-                      WHERE branch_id = %d', $branch_id);
-
-  while ($branch = db_fetch_array($result)) {
-    $branch_cache[$branch_id] = $branch;
-    return $branch;
-  }
-  $branch_cache[$branch_id] = FALSE;
-  return NULL;
-}
-
-/**
- * Retrieve the branch id for a given branch name from a specific repository.
- *
- * @return
- *   The branch id of the requested branch, or NULL if there is no branch
- *   for this name and repository.
- */
-function versioncontrol_get_branch_id($branch_name, $repo_id, $clear_cache = FALSE) {
-  static $branch_cache = array();
-
-  if ($clear_cache == TRUE) {
-    $branch_cache = array();
-  }
-  if (isset($branch_cache[$repo_id][$branch_name])) {
-    if ($branch_cache[$repo_id][$branch_name] === FALSE) {
-      return NULL; // there's no branch for this name and repository
-    }
-    return $branch_cache[$repo_id][$branch_name]; // return the cached branch id
-  }
-
-  $result = db_query("SELECT branch_id
-                      FROM {versioncontrol_branches}
-                      WHERE repo_id = %d AND branch_name = '%s'",
-                      $repo_id, $branch_name);
-
-  while ($branch = db_fetch_object($result)) {
-    $branch_cache[$repo_id][$branch_name] = $branch->branch_id;
-    return $branch->branch_id;
-  }
-  $branch_cache[$repo_id][$branch_name] = FALSE;
-  return NULL;
-}
-
-/**
- * Retrieve the branch id for a given branch name from a specific repository,
- * and create a new branch entry if no such branch exists yet.
- *
- * @return
- *   The branch id of the requested branch.
- */
-function versioncontrol_ensure_branch($branch_name, $repo_id) {
-  $branch_id = versioncontrol_get_branch_id($branch_name, $repo_id, TRUE);
-  if (!isset($branch_id)) {
-    $branch_id = db_next_id('{versioncontrol_branches}_branch_id');
-    db_query("INSERT INTO {versioncontrol_branches} (branch_id, repo_id, branch_name)
-              VALUES (%d, %d, '%s')", $branch_id, $repo_id, $branch_name);
-  }
-  return $branch_id;
-}
 
 /**
  * Export a repository's authenticated accounts to the version control system's

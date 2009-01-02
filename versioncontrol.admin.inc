@@ -184,14 +184,13 @@ function versioncontrol_admin_account_list_page() {
       if (!isset($repositories[$repo_id])) { // happens if the backend isn't loaded
         continue;
       }
+      $username = theme('versioncontrol_account_username',
+        $uid, $username, $repositories[$repo_id], FALSE
+      );
       if (module_exists('commitlog')) {
-        $username = commitlog_account_username(
-          $uid, $username, $repositories[$repo_id], FALSE
-        );
         $repo_name = theme('commitlog_repository', $repositories[$repo_id]);
       }
       else {
-        $username = check_plain($username);
         $repo_name = check_plain($repositories[$repo_id]['name']);
       }
 

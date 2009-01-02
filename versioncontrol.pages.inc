@@ -211,7 +211,7 @@ function versioncontrol_account_register_form_submit($form_id, $form_values) {
 
 /**
  * Retrieve the message that shows up on the repository edit form when a
- * new user registers an account.
+ * new user wants to register an account.
  *
  * Only call this function from within a form_alter() that modifies the
  * account edit form.
@@ -219,7 +219,7 @@ function versioncontrol_account_register_form_submit($form_id, $form_values) {
  * Note: I'm not really satisfied with this being a public function,
  * but the Account Status module needs to display this message also for
  * reapplications, which is not included in the original form.
- * But it seems to be a better solution than exposing the
+ * At least, it seems to be a better solution than exposing the
  * {versioncontrol_repository_metadata} table or even adding the message
  * to the {versioncontrol_repository} table. For now, at least.
  *

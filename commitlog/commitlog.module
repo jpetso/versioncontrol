@@ -19,14 +19,14 @@ function commitlog_menu($may_cache) {
     $access = user_access('access commit messages');
     $items[] = array(
       'path' => 'commitlog',
-      'title' => t('Commit Log'),
+      'title' => t('Commit messages'),
       'callback' => 'commitlog_operations_page',
       'access' => $access,
       'type' => MENU_SUGGESTED_ITEM,
     );
     $items[] = array(
       'path' => 'commitlog/feed',
-      'title' => t('Commit Log'),
+      'title' => t('Commit messages'),
       'callback' => 'commitlog_operations_rss',
       'access' => $access,
       'type' => MENU_CALLBACK,
@@ -87,7 +87,7 @@ function commitlog_form_alter($form_id, &$form) {
 
     $form['commitlog'] = array(
       '#type' => 'fieldset',
-      '#title' => t('Commit Log'),
+      '#title' => t('Commit messages'),
       '#collapsible' => TRUE,
       '#collapsed' => TRUE,
       '#weight' => 3,
@@ -101,7 +101,7 @@ function commitlog_form_alter($form_id, &$form) {
     $form['commitlog']['commitlog_pager'] = array(
       '#type' => 'textfield',
       '#title' => t('Number of commits per page'),
-      '#description' => t('Controls how many commits can be shown on a single page of the !commitlog. Paging is used when there are more commits to show than specified by this value.', array('!commitlog' => l(t('Commit Log'), 'commitlog'))),
+      '#description' => t('Controls how many commits can be shown on a single page of the !commitlog. Paging is used when there are more commits to show than specified by this value.', array('!commitlog' => l(t('commit message log'), 'commitlog'))),
       '#default_value' => variable_get('commitlog_pager', 10),
     );
   }
@@ -143,41 +143,26 @@ function commitlog_versioncontrol_operation($op, $operation, $operation_items) {
  * Send out a notification mail to the given mail address.
  */
 function commitlog_send_notification_mail($mailto, $operation, $operation_items) {
-  $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-  $username = commitlog_account_username(
+  $username = theme('versioncontrol_account_username',
     $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
   );
+  $variables = array();
+  $variables['operation'] = $operation;
+  $variables['operation_items'] = $operation_items;
 
+  $subject = theme('commitlog_operation_subject', $variables, array('format' => 'plaintext'));
+
+  $message = commitlog_operation($operation, $operation_items, array(
+    'format' => 'plaintext',
+    'username' => $username,
+  ));
+  $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
   $from = "$username <$admin_mail>";
-  $subject = theme('commitlog_operation_email_subject',
-    $operation, $operation_items, $username
-  );
-  $message = commitlog_operation($operation, $operation_items, $username, 'plaintext');
 
   drupal_mail(
     'commitlog_notification_email', $mailto,
     $subject, $message, $from, array('X-Mailer' => 'Drupal')
   );
-}
-
-function theme_commitlog_operation_email_subject($operation, $operation_items, $username) {
-  // TODO: see if we can unify the two original versions.
-  // Previous version for commits.
-  $location = theme('commitlog_operation_location', $operation, NULL, 'plaintext');
-
-  // TODO (other than unify): port to the new API
-  $params = array(
-    '!type' => ($type == 'branch') ? t('Branch') : t('Tag'),
-    '!name' => ($type == 'branch') ? $operation['branch_name'] : $operation['tag_name'],
-    '!directory' => $operation['directory'],
-  );
-
-  // If the branch or tag has been assigned for the whole repository,
-  // it doesn't make sense to mention the directory.
-  if (empty($items)) {
-    return t('!type !name', $params);
-  }
-  return t('!type !name in !directory', $params);
 }
 
 
@@ -188,12 +173,8 @@ function commitlog_operations_page() {
   if ($error_message = _commitlog_check_request()) {
     return $error_message;
   }
-
-  list($constraints, $attributes) = _commitlog_get_constraints();
-  $operations = commitlog_get_paged_operations($constraints);
-
-  drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_operations_page', $operations, $attributes);
+  $constraints = _commitlog_get_constraints();
+  return commitlog_operations($constraints);
 }
 
 /**
@@ -205,15 +186,20 @@ function commitlog_account_tracker($uid) {
     drupal_not_found();
     exit();
   }
-  $_REQUEST['uids'] = (string) $uid;
   drupal_set_title($user->name);
 
-  list($constraints, $attributes) = _commitlog_get_constraints();
-  $operations = commitlog_get_paged_operations($constraints);
-  unset($_REQUEST['uids']);
+  $constraints = _commitlog_get_constraints();
+  $constraints['uids'] = array($uid);
 
+  return commitlog_operations($constraints);
+}
+
+/**
+ * Return a (paged) log of version control operations rendered to HTML.
+ */
+function commitlog_operations($constraints) {
   drupal_add_css(drupal_get_path('module', 'commitlog') .'/commitlog.css');
-  return theme('commitlog_operations_page', $operations, $attributes);
+  return theme('commitlog_operations_page', $constraints);
 }
 
 /**
@@ -223,101 +209,11 @@ function commitlog_operations_rss() {
   if ($error_message = _commitlog_check_request()) {
     exit();
   }
-
-  list($constraints, $attributes) = _commitlog_get_constraints();
-  $limit = variable_get('feed_default_items', 10);
-  $operations = commitlog_get_paged_operations($constraints, $limit);
+  $constraints = _commitlog_get_constraints();
 
   drupal_set_header('Content-Type: application/rss+xml; charset=utf-8');
-  print theme('commitlog_rss', $operations);
+  print theme('commitlog_rss', $constraints);
   exit();
-}
-
-
-/**
- * Retrieve the commit constraints for the page display by dissecting
- * the $_REQUEST variable.
- *
- * @return
- *   An array($constraints, $attributes) where $constraints is an array of
- *   commit constraints supposed to be passed to versioncontrol_get_operations(),
- *   and $attributes is an associative array of the processed arguments
- *   from $_REQUEST.
- */
-function _commitlog_get_constraints() {
-  $constraints = array();
-  $attributes = array();
-
-  $constraint_request_map = array(
-    'vc_op_ids' => array('single' => 'id', 'multiple' => 'ids'),
-    'usernames' => array('single' => 'username', 'multiple' => 'usernames'),
-    'uids'      => array('single' => 'uid', 'multiple' => 'uids'),
-    'vcs'       => array('multiple' => 'vcs'), // 'vcses' just looks too horrible
-    'repo_ids'  => array('single' => 'repo', 'multiple' => 'repos'),
-    'branches'  => array('single' => 'branch', 'multiple' => 'branches'),
-    'tags'      => array('single' => 'tag', 'multiple' => 'tags'),
-    'labels'    => array('single' => 'label', 'multiple' => 'labels'),
-    'paths'     => array('single' => 'path', 'multiple' => 'paths'),
-    // TODO: 'types' constraint
-  );
-
-  // Transform query string into query string. We use $_REQUEST because we
-  // need to support both GET and POST requests.
-  foreach ($constraint_request_map as $constraint => $request) {
-    if (isset($request['multiple']) && isset($_REQUEST[$request['multiple']])) {
-      $constraints[$constraint] = explode(',', $_REQUEST[$request['multiple']]);
-      $attributes[$request['multiple']] = $_REQUEST[$request['multiple']];
-    }
-    if (isset($request['single']) && isset($_REQUEST[$request['single']])) {
-      if (!isset($constraints[$constraint])) {
-        $constraints[$constraint] = array();
-      }
-      $constraints[$constraint][] = $_REQUEST[$request['single']];
-      $attributes[$request['single']] = $_REQUEST[$request['single']];
-    }
-  }
-
-  if (module_exists('versioncontrol_project')) {
-    $project_constraints = array();
-    if (isset($_REQUEST['nids'])) {
-      $project_constraints['nids'] = explode(',', $_REQUEST['nids']);
-      $attributes['nids'] = $_REQUEST['nids'];
-    }
-    if (isset($_REQUEST['maintainers'])) {
-      $project_constraints['maintainer_uids'] = explode(',', $_REQUEST['maintainers']);
-      $attributes['maintainers'] = $_REQUEST['maintainers'];
-    }
-    if (!empty($project_constraints)) {
-      $constraints = versioncontrol_project_get_commit_constraints(
-        $constraints, $project_constraints
-      );
-    }
-  }
-
-  return array($constraints, $attributes);
-}
-
-/**
- * Return an array of operations retrieved by versioncontrol_get_operations().
- * Paging is also used by emulating pager_query().
- */
-function commitlog_get_paged_operations($constraints, $limit = NULL, $element = 0) {
-  global $pager_page_array, $pager_total, $pager_total_items;
-  $page = isset($_GET['page']) ? $_GET['page'] : '';
-  $pager_page_array = explode(',', $page);
-  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
-
-  if (!isset($limit)) {
-    $limit = variable_get('commitlog_pager', 10);
-  }
-  $operations = versioncontrol_get_commits($constraints, $result_count, $page, $limit);
-
-  // Emulate pager_query() in order to get a proper theme('pager').
-  $pager_total_items[$element] = $result_count;
-  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
-  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
-
-  return $operations;
 }
 
 /**
@@ -339,80 +235,167 @@ function _commitlog_check_request() {
 
 
 /**
- * Return a formatted date string if the given timestamp is on a different day
- * than the one that was passed previous call to this function, or NULL if the
- * previous call's timestamp argument is on the same day as this one.
+ * Retrieve the operation constraints for the page display by dissecting the
+ * $_REQUEST variable.
+ *
+ * @return
+ *   An array($constraints, $attributes) where $constraints is an array of
+ *   commit constraints supposed to be passed to versioncontrol_get_operations(),
+ *   and $attributes is an associative array of the processed arguments
+ *   from $_REQUEST.
  */
-function _commitlog_date($timestamp) {
-  static $last;
-  $date = format_date($timestamp, 'custom', 'F j, Y');
-  if ($date != $last) {
-    $last = $date;
-    return $date;
+function _commitlog_get_constraints() {
+  $constraints = array();
+  $attributes = array();
+  $constraint_request_map = module_invoke_all('commitlog_constraints');
+
+  // Transform query string into commit constraints. We use $_REQUEST because
+  // we need to support both GET and POST requests.
+  foreach ($constraint_request_map as $constraint => $request) {
+    if (isset($request['multiple']) && isset($_REQUEST[$request['multiple']])) {
+      $constraints[$constraint] = explode(',', $_REQUEST[$request['multiple']]);
+    }
+    if (isset($request['single']) && isset($_REQUEST[$request['single']])) {
+      $constraints[$constraint][] = $_REQUEST[$request['single']];
+    }
   }
-  return NULL;
+  return $constraints;
+}
+
+/**
+ * Implementation of hook_commitlog_constraints():
+ * Provide a list of supported constraints and corresponding request attributes.
+ */
+function commitlog_commitlog_constraints() {
+  return array(
+    'vc_op_ids' => array('single' => 'id',       'multiple' => 'ids'),
+    'usernames' => array('single' => 'username', 'multiple' => 'usernames'),
+    'uids'      => array('single' => 'uid',      'multiple' => 'uids'),
+    'vcs'       => array('multiple' => 'vcs'), // for both single and multiple
+    'repo_ids'  => array('single' => 'repo',     'multiple' => 'repos'),
+    'branches'  => array('single' => 'branch',   'multiple' => 'branches'),
+    'tags'      => array('single' => 'tag',      'multiple' => 'tags'),
+    'labels'    => array('single' => 'label',    'multiple' => 'labels'),
+    'paths'     => array('single' => 'path',     'multiple' => 'paths'),
+    'message'   => array('single' => 'message',  'multiple' => 'messages'),
+    // TODO: 'types' constraint
+  );
+}
+
+function _commitlog_query_attributes($constraints) {
+  $query_items = array();
+  $constraint_request_map = module_invoke_all('commitlog_constraints');
+
+  foreach ($constraints as $key => $values) {
+    if (isset($constraint_request_map[$key])) {
+      if (!is_array($values)) {
+        $values = array($values);
+      }
+      if (isset($constraint_request_map[$key]['single']) && count($values) == 1) {
+        $query_items[] = $constraint_request_map[$key]['single'] .'='. (string) reset($values);
+      }
+      else {
+        $query_items[] = $constraint_request_map[$key]['multiple'] .'='. implode(',', $values);
+      }
+    }
+  }
+  return $query_items;
+}
+
+/**
+ * Return an array of operations retrieved by versioncontrol_get_operations().
+ * Paging is also used by emulating pager_query().
+ */
+function commitlog_get_paged_operations($constraints, $limit = NULL, $element = 0) {
+  global $pager_page_array, $pager_total, $pager_total_items;
+  $page = isset($_GET['page']) ? $_GET['page'] : '';
+  $pager_page_array = explode(',', $page);
+  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
+
+  if (!isset($limit)) {
+    $limit = variable_get('commitlog_pager', 10);
+  }
+  $operations = versioncontrol_get_operations($constraints, $result_count, $page, $limit);
+
+  // Emulate pager_query() in order to get a proper theme('pager').
+  $pager_total_items[$element] = $result_count;
+  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
+  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
+
+  return $operations;
+}
+
+
+/**
+ * Return a formatted date string for the creation date of the given operation.
+ * (This will also be used for grouping log messages.)
+ */
+function commitlog_operation_date($operation) {
+  return format_date($operation['date'], 'custom', 'F j, Y');
 }
 
 /**
  * Return formatted output for displaying the given operations on an HTML page.
  */
-function theme_commitlog_operations_page($operations, $attributes) {
+function theme_commitlog_operations_page($constraints) {
+  $operations = commitlog_get_paged_operations($constraints);
+
   if (empty($operations)) {
-    return '<div id="commitlog"><p>'. t('No log messages found.') .'</p></div>';
+    return '<div class="commitlog"><p>'. t('No log messages found.') .'</p></div>';
   }
 
-  $output = '<div id="commitlog">';
-  $initial = TRUE;
+  $output = '<div class="commitlog">';
+  $operation_descriptions = array();
 
   foreach ($operations as $operation) {
     $operation_items = versioncontrol_get_operation_items($operation);
+    $date = commitlog_operation_date($operation);
 
-    $date = _commitlog_date($operation['date']);
-    if (isset($date)) { // begin a new list for each day
-      if (!$initial) {
-        $output .= '</ul>';
-      }
-      $initial = FALSE;
-      $output .= "<h3>$date</h3>";
-      $output .= '<ul>';
-    }
-    $output .= '<li>'. commitlog_operation($operation, $operation_items, NULL, 'html') .'</li>';
+    $operation_descriptions[$date][] = array(
+      commitlog_operation($operation, $operation_items, array('format' => 'html')),
+    );
   }
-  $output .= '</ul>';
+
+  $header = array();
+  foreach ($operation_descriptions as $date => $rows) {
+    $output .= '<h3>'. $date .'</h3>
+      <div class="commitlog-messages">'. theme('table', $header, $rows) .'</div>';
+  }
 
   if ($pager = theme('pager', NULL, variable_get('commitlog_pager', 10), 0, $attributes)) {
     $output .= $pager;
   }
   $output .= '</div>';
 
-  $query_items = array();
-  foreach ($attributes as $key => $value) {
-    $query_items[] = $key .'='. $value;
-  }
+  // The feed icon, with reconstructed query attributes.
+  $query_items = _commitlog_query_attributes($constraints);
   $query = empty($query_items) ? NULL : implode('&', $query_items);
   $output .= theme('feed_icon', url('commitlog/feed', $query));
 
   return $output;
 }
 
-function theme_commitlog_rss($commits) {
+function theme_commitlog_rss($constraints) {
   global $base_url, $locale;
-  $items = '';
+
+  $limit = variable_get('feed_default_items', 10);
+  $operations = versioncontrol_get_operations($constraints, $result_count, 0, $limit);
   $namespaces = array('xmlns:dc="http://purl.org/dc/elements/1.1/"');
+  $items = '';
 
   foreach ($operations as $operation) {
     $operation_items = versioncontrol_get_operation_items($operation);
 
-    $location = theme('commitlog_operation_location', $operation);
-    $html_username = commitlog_account_username(
-      $operation['uid'], $operation['username'], $operation['repository']
-    );
-    $plain_username = commitlog_account_username(
+    $variables = array();
+    $variables['operation'] = $operation;
+    $variables['operation_items'] = $operation_items;
+    $title = theme('commitlog_operation_subject', $variables, array('format' => 'plaintext'));
+
+    $plain_username = theme('versioncontrol_account_username',
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
     );
 
-    $title = t('!location by @username', array('!location' => $location, '@username' => $html_username));
-    $link = url('commitlog', 'ids='. $commit['vc_op_id'], NULL, TRUE);
+    $link = url('commitlog', 'id='. $operation['vc_op_id'], NULL, TRUE);
     $extra = array(
       array('key' => 'pubDate', 'value' => gmdate('r', $operation['date'])),
       array('key' => 'dc:creator', 'value' => $plain_username),
@@ -421,16 +404,44 @@ function theme_commitlog_rss($commits) {
         'attributes' => array('isPermaLink' => 'false'),
       ),
     );
-    $text = commitlog_operation($operation, $operation_items, $html_username, 'html');
+    $text = commitlog_operation($operation, $operation_items, array('format' => 'html'));
     $items .= format_rss_item($title, $link, $text, $extra);
   }
 
   $site_name = variable_get('site_name', 'Drupal');
 
+  unset($title);
+
+  if (isset($constraints['nids'])) {
+    // TODO: ideally, versioncontrol_project should be able to do this by itself
+    $params = array();
+    $placeholders = array();
+
+    foreach ($constraints['nids'] as $nid) {
+      $params[] = $nid;
+      $placeholders[] = 'proj.nid = %d';
+    }
+    $result = db_query("SELECT node.title
+                        FROM {versioncontrol_project_projects} proj
+                          INNER JOIN {node} node ON proj.nid = node.nid
+                        WHERE ". implode(' OR ', $placeholders), $params);
+    $project_names = array();
+    while ($project = db_fetch_object($result)) {
+      $project_names[] = $project->title;
+    }
+    $title = t('@project commits', array('@project' => implode(', ', $project_names)));
+  }
+  if (!isset($title)) {
+    $title = t('@site commits', array('@site' => $site_name));
+  }
+
+  $query_items = _commitlog_query_attributes($constraints);
+  $query = empty($query_items) ? NULL : implode('&', $query_items);
+
   $channel = array(
     'version'     => '2.0',
-    'title'       => t('@site commits', array('@site' => $site_name)),
-    'link'        => url('commitlog', NULL, NULL, TRUE),
+    'title'       => $title,
+    'link'        => url('commitlog', $query, NULL, TRUE),
     'description' => t('Commit messages for @site', array('@site' => $site_name)),
     'language'    => $locale,
   );
@@ -442,31 +453,56 @@ function theme_commitlog_rss($commits) {
   return $output;
 }
 
-function commitlog_operation($operation, $operation_items, $username = NULL, $format = 'html') {
+/**
+ * Add a set of default options to a given options array. By default, only the
+ * built-in 'format' option is added, more defaults can optionally be specified
+ * with the @p $custom_default_options parameter.
+ */
+function _commitlog_options($options, $custom_default_options = array()) {
+  $default_options = array('format' => 'html');
+  return array_merge($default_options, $custom_default_options, $options);
+}
+
+/**
+ * Return an operation formatted as HTML (or another supported format).
+ *
+ * @param $operation
+ *   The operation to format.
+ * @param $operation_items
+ *   The items belonging to this operation.
+ * @param $options
+ *   An array of options for customizing the output. Supported properties:
+ *
+ *     - 'format': Either 'html' (used by default if unset) or 'plaintext'.
+ *     - 'username': If set, this value will be used instead of the standard
+ *          VCS username that would be retrieved otherwise. Might make sense
+ *          if you want to use the output in special circumstances, or as
+ *          slight performance improvement if the username has already
+ *          been fetched.
+ */
+function commitlog_operation($operation, $operation_items, $options = array()) {
+  $options = _commitlog_options($options);
+  $format = $options['format']; // TODO: push down the stack, and remove
   $variables = array();
 
-  if (isset($username)) {
-    $variables['username'] = $username;
+  if (isset($options['username'])) {
+    $variables['username'] = $options['username'];
   }
   else {
-    $variables['username'] = commitlog_account_username(
+    $variables['username'] = theme('versioncontrol_account_username',
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, $format
     );
   }
-  // TODO: adapt for tags and branches
-  $variables['id'] = theme('commitlog_commit_identifier', $operation, $format);
+  $variables['operation'] = $operation;
+  $variables['operation_items'] = $operation_items;
+  $variables['id'] = theme('commitlog_revision_identifier', $operation, $format);
   $variables['repository_name'] = theme('commitlog_repository', $operation['repository'], $format);
   $variables['time'] = format_date($operation['date'], 'custom', 'H:i');
 
-  $variables['actions'] = theme('commitlog_operation_items', $operation, $operation_items, $format);
+  $variables['items'] = theme('commitlog_operation_items', $operation, $operation_items, $format);
   $variables['message'] = theme('commitlog_operation_message', $operation, $format);
-  $variables['branches'] = theme('commitlog_operation_branches', $operation, $format);
 
-  if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT
-      && versioncontrol_backend_implements($operation['repository']['vcs'], 'get_commit_statistics')) {
-    $statistics = versioncontrol_get_commit_statistics($operation, $operation_items);
-    $variables['statistics'] = theme('commitlog_commit_statistics', $operation, $statistics, $format);
-  }
+  $variables['caption'] = theme('commitlog_operation_caption', $variables, $options);
 
   if ($format == 'html') {
     return theme('commitlog_operation_html', $variables);
@@ -476,109 +512,86 @@ function commitlog_operation($operation, $operation_items, $username = NULL, $fo
 
 function theme_commitlog_operation_html($variables) {
   $output = '<div class="operation">';
-
-  // TODO: we want a better title, now that operations can also be tags and branches.
-  $output .= '<div class="title">';
-  $output .= t('Commit !id by !name at !time in !repo:', array(
-    '!id'   => $variables['id'],
-    '!repo' => $variables['repository_name'],
-    '!name' => $variables['username'],
-    '!time' => $variables['time'],
-  ));
-  if (isset($variables['statistics'])) {
-    $output .= ' ('. $variables['statistics'] .')';
-  }
-  $output .= "</div>\n"; // class "title"
-
-  $output .= '<div class="actions">'. $variables['actions'] .'</div>'."\n";
+  $output .= '<div class="title">'. $variables['caption'] ."</div>\n";
 
   if (!empty($variables['message'])) {
     $output .= '<div class="description"><pre>'. $variables['message'] .'</pre></div>'."\n";
   }
+
+  $output .= '<div class="actions">'. $variables['items'] .'</div>'."\n";
 
   $output .= "</div>\n"; // class "commit"
   return $output;
 }
 
 function theme_commitlog_operation_plaintext($variables) {
-  $output = t('Commit !id by !name at !time in !repo:', array(
-    '!id'   => $variables['id'],
-    '!repo' => $variables['repository_name'],
-    '!name' => $variables['username'],
-    '!time' => $variables['time'],
-  )) ."\n\n";
+  $output = $variables['caption'] ."\n\n";
 
   if (!empty($variables['message'])) {
     $output .= $variables['message'] ."\n\n";
   }
-  $output .= $variables['actions'] ."\n";
+  $output .= $variables['items'] ."\n";
 
   return $output;
 }
 
-
 /**
- * Return a the username of a VCS account.
- *
- * @param $uid
- *   The Drupal user id of the user. If this is 0, the corresponding
- *   Drupal user naturally can't be retrieved, with all implications for
- *   displaying the username.
- * @param $username
- *   The VCS username for the account.
- * @param $repository
- *   The repository where this account is registered.
- * @param $replace_with_drupal_username
- *   If TRUE (which is the default), this function tries to get the
- *   corresponding Drupal user for the supplied uid and returns the "real"
- *   username rather than the given one.
- *   If FALSE, the given VCS username is always returned.
- * @param $format
- *   If 'html', the username will be linked to the user page (if possible)
- *   or to the commit log page containing the user's commits.
- *   If 'plaintext', the username will be returned without markup.
+ * Return the commitlog URL for the log history of a given account.
  */
-function commitlog_account_username($uid, $username, $repository, $replace_with_drupal_username = TRUE, $format = 'html') {
-  if ($uid && $replace_with_drupal_username) {
-    $user = user_load(array('uid' => $uid));
-
-    if ($user) {
-      return ($format == 'html') ? theme('username', $user) : $user->name;
-    }
-  }
-
-  if ($format == 'html') {
-    return l($username, 'commitlog', NULL,
-             'usernames='. drupal_urlencode($username) .'&repos='. $repository['repo_id']);
-  }
-  return $username;
+function commitlog_account_url($repository, $username) {
+  return l($username, 'commitlog', NULL,
+    'username='. drupal_urlencode($username) .'&repo='. $repository['repo_id']
+  );
 }
 
 function theme_commitlog_repository($repository, $format = 'html') {
   if ($format == 'html') {
-    return l($repository['name'], 'commitlog', NULL, 'repos='. $repository['repo_id']);
+    return l($repository['name'], 'commitlog', NULL, 'repo='. $repository['repo_id']);
   }
   return check_plain($repository['name']);
 }
 
 
-function theme_commitlog_operation_location($operation, $directory_item = NULL, $format = 'html') {
-  $item = isset($directory_item)
-          ? $directory_item
-          : versioncontrol_get_directory_item($operation);
-  $location = theme('commitlog_item', $operation['repository'], $item, $directory_item['path'], $format);
-  $branches = theme('commitlog_operation_branches', $operation, $format);
-  if (!empty($branches)) {
-    $location = t('!branches: !directory', array(
-      '!directory' => $location,
-      '!branches' => $branches,
-    ));
+/**
+ * Retrieve the common directory item for all items that have been affected
+ * by the given operation. (Affected items include operation items and
+ * source items in a move or merge operation. Copied or replacement sources
+ * don't affect the original item, so those are not included.)
+ */
+function _commitlog_affected_directory_item($operation, $operation_items) {
+  $affected_items = $operation_items;
+  $relevant_actions = array(VERSIONCONTROL_ACTION_MOVED, VERSIONCONTROL_ACTION_MERGED);
+
+  foreach ($operation_items as $path => $item) {
+    if (!isset($item['action']) || !in_array($item['action'], $relevant_actions)) {
+      continue;
+    }
+    foreach ($item['source_items'] as $source_path => $source_item) {
+      // If the source item 
+      if ($path != $source_path) {
+        $affected_items[$source_path] = $source_item;
+      }
+    }
   }
-  return $location;
+  $common_directory_path = versioncontrol_get_common_directory_path($affected_items);
+
+  // In order to retrieve the directory item, we ascend from any (...the first)
+  // of the operation items so that revision, label and whatnot are preserved.
+  // That should work just fine in most (if not all) cases.
+  return versioncontrol_get_parent_item(
+    $operation['repository'], reset($affected_items), $common_directory_path
+  );
 }
 
-function theme_commitlog_commit_identifier($operation, $format = 'html') {
-  $id = versioncontrol_format_commit_identifier($operation);
+function theme_commitlog_operation_location($operation, $operation_items, $directory_item = NULL, $format = 'html') {
+  if (!isset($directory_item)) {
+    $directory_item = _commitlog_affected_directory_item($operation, $operation_items);
+  }
+  return theme('commitlog_item', $operation['repository'], $directory_item, NULL, $format);
+}
+
+function theme_commitlog_revision_identifier($operation, $format = 'html') {
+  $id = versioncontrol_format_revision_identifier($operation, 'short');
 
   if ($format == 'html') {
     if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
@@ -617,32 +630,133 @@ function theme_commitlog_operation_message($operation, $format = 'html') {
   );
 }
 
-function theme_commitlog_operation_branches($operation, $format = 'html') {
-  return '';
-  // TODO: adapt to use $operation['labels'] (including tags),
-  // or rethink this function altogether.
-  $branches = versioncontrol_get_commit_branches($operation); // function doesn't exist anymore
+function theme_commitlog_operation_caption($variables, $options = array()) {
+  $options = _commitlog_options($options);
+  $action_strings = array();
 
-  if (empty($branches)) {
-    return '';
+  if (empty($variables['operation']['labels'])) {
+    $action_strings[] = t('committed !id', array('!id' => $variables['id']));
   }
-  if ($format == 'html') {
-    $branch_links = array();
-    foreach ($branches as $branch) {
-      $branch_links[] = l($branch, 'commitlog', NULL, 'branch='. $branch);
+  else {
+    $labels_by_type = array();
+
+    foreach ($variables['operation']['labels'] as $label) {
+      $labels_by_type[$label['type']][$label['action']][] = theme('commitlog_label', $label, $options);
     }
-    return implode(', ', $branch_links);
+    ksort($labels_by_type); // first commits, then branches, then tags
+
+    foreach ($labels_by_type as $type => $labels_by_action) {
+      foreach ($labels_by_action as $action => $labels) {
+        $replacements = array(
+          '!id' => $variables['id'],
+          '!labels' => implode(', ', $labels),
+        );
+
+        if ($action == VERSIONCONTROL_ACTION_MODIFIED) {
+          $action_strings[] = t('committed !id to !labels', $replacements);
+        }
+        else if ($action == VERSIONCONTROL_ACTION_ADDED) {
+          $action_string = ($type == VERSIONCONTROL_OPERATION_BRANCH)
+            ? format_plural(count($labels), 'created branch !labels', 'created branches !labels')
+            : format_plural(count($labels), 'created tag !labels', 'created tags !labels');
+          $action_strings[] = strtr($action_string, $replacements);
+        }
+        else if ($action == VERSIONCONTROL_ACTION_DELETED) {
+          $action_string = ($type == VERSIONCONTROL_OPERATION_BRANCH)
+            ? format_plural(count($labels), 'deleted branch !labels', 'deleted branches !labels')
+            : format_plural(count($labels), 'deleted tag !labels', 'deleted tags !labels');
+          $action_strings[] = strtr($action_string, $replacements);
+        }
+      }
+    }
   }
-  return implode(', ', $branches);
+
+  return t('!name !actions in !repo at !time:', array(
+    '!name' => $variables['username'],
+    '!actions' => implode(', ', $action_strings),
+    '!repo' => $variables['repository_name'],
+    '!time' => $variables['time'],
+  ));
 }
 
-function theme_commitlog_commit_statistics($operation, $commit_statistics, $format = 'html') {
-  $lines = array();
+/**
+ * A one-liner subject for notification mails and RSS item titles,
+ * where author and date are already visible in other fields.
+ */
+function theme_commitlog_operation_subject($variables, $options = array()) {
+  $options = _commitlog_options($options);
+  $repo_name = theme('commitlog_repository', $variables['operation']['repository'], $options['format']);
 
-  $lines[] = t('@line_count added', array('@line_count' => format_plural($commit_statistics['lines_added'], '1 line', '@count lines')));
-  $lines[] = t('@line_count removed', array('@line_count' => format_plural($commit_statistics['lines_removed'], '1 line', '@count lines')));
+  // This stuff is not quite as accurate as theme('commitlog_operation_caption'),
+  // but there's also less space in a single line of RSS/mail subject if you
+  // also want to include the directory ("location").
+  // So instead of handling everything by labels only (most accurate, but also
+  // most flexible == less assumptions == less space optimization),
+  // we distinguish operations by their native operation type and don't do more
+  // than one label. That should be just fine for about 99.7% of all cases.
 
-  return implode(", ", $lines);
+  if ($variables['operation']['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
+    $replacements = array(
+      '!id' => theme('commitlog_revision_identifier', $variables['operation'], $options['format']),
+      '!repo' => $repo_name,
+      '!location' => theme('commitlog_operation_location',
+        $variables['operation'], $variables['operation_items'], NULL, $options['format']
+      ),
+    );
+
+    $labels = array();
+    foreach ($variables['operation']['labels'] as $label) {
+      $labels[] = theme('commitlog_label', $label, $options);
+    }
+    if (empty($labels)) {
+      return t('!id: !location (!repo)', $replacements);
+    }
+    $replacements['!labels'] = implode(', ', $labels);
+    return t('!id on !labels: !location (!repo)', $replacements);
+  }
+  else { // it's a branch or tag
+    $first_label = reset($variables['operation']['labels']);
+    $label_string = theme('commitlog_label', $first_label, $options);
+    $replacements = array('!label' => $label_string, '!repo' => $repo_name);
+
+    if ($first_label['action'] == VERSIONCONTROL_ACTION_ADDED) {
+      $action_string = ($first_label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+        ? t('Created branch !label', $replacements)
+        : t('Created tag !label', $replacements);
+    }
+    else if ($first_label['action'] == VERSIONCONTROL_ACTION_DELETED) {
+      $action_string = ($first_label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+        ? t('Created branch !label', $replacements)
+        : t('Created tag !label', $replacements);
+    }
+
+    // CVS and SVN label a set of items instead of the whole repository,
+    // let's include the operation directory for those.
+    if (!empty($variables['operation_items'])) {
+      $action_string = t('!action: !location', array(
+        '!action' => $action_string,
+        '!location' => theme('commitlog_operation_location',
+          $variables['operation'], $variables['operation_items'], NULL, $options['format']
+        ),
+      ));
+    }
+
+    return t('!action (!repo)', array(
+      '!action' => $action_string,
+      '!repo' => $repo_name,
+    ));
+  }
+}
+
+function theme_commitlog_label($label, $options = array()) {
+  $options = _commitlog_options($options);
+
+  if ($options['format'] == 'html') {
+    $commitlog_filter = ($label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+                        ? 'branch' : 'tag';
+    return l($label['name'], 'commitlog', NULL, $commitlog_filter .'='. $label['name']);
+  }
+  return $label['name'];
 }
 
 function theme_commitlog_operation_items($operation, $operation_items, $format = 'html') {
@@ -650,33 +764,35 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     return '';
   }
 
-  $op_directory_item = versioncontrol_get_directory_item($operation);
+  $directory_item = _commitlog_affected_directory_item($operation, $operation_items);
 
   if (module_exists('versioncontrol_project')) {
-    $project = versioncontrol_project_get_project_for_item($operation['repository'], $op_directory_item['path']);
+    $project = versioncontrol_project_get_project_for_item($operation['repository'], $directory_item['path']);
     if (isset($project)) {
-      $project_item = versioncontrol_get_parent_item(
-        $operation['repository'], $op_directory_item, $project['directory']
+      $directory_item = versioncontrol_get_parent_item(
+        $operation['repository'], $directory_item, $project['directory']
       );
       $project_string = theme('commitlog_project', $operation['repository'], $project, $format);
     }
   }
-  $directory_item = isset($project_item) ? $project_item : $op_directory_item;
 
   $lines = array();
 
   foreach ($operation_items as $path => $item) {
     if (module_exists('versioncontrol_project')) {
+      // If all our items belong to the same project, don't try to find out
+      // the project for this specific item.
       if (isset($project)) {
-        $item_project = $project;
+        $item_project = NULL;
       }
       else {
         $item_project = versioncontrol_project_get_project_for_item(
-          $operation['repository'], $item['path']
+          $operation['repository'], $item
         );
       }
     }
 
+    // Determine how the item path should be displayed.
     $offset = ($directory_item['path'] == '/') ? 0 : 1;
     $item_path = substr($item['path'], strlen($directory_item['path']) + $offset);
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
@@ -684,9 +800,11 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     }
     $item_string = theme('commitlog_item', $operation['repository'], $item, $item_path, $format);
 
+    // See if there have been one or more previous versions of this item, and
+    // make a displayable string out of those.
     if (isset($item['source_items'])) {
       $oldrev_string = theme('commitlog_item_revision',
-        $operation['repository'], $item['source_items'][0], $format
+        $operation['repository'], reset($item['source_items']), $format
       );
 
       $olditems = array();
@@ -697,6 +815,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       $olditems_string = implode(', ', $olditems);
     }
 
+    // If there is a diff to the previous version, show the appropriate link too.
     $show_diff = FALSE;
     if ($format == 'html') {
       $diff_string = theme('commitlog_diff_link', $operation, $item);
@@ -705,45 +824,64 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       }
     }
 
-    switch ($item['action']) {
-      case VERSIONCONTROL_ACTION_ADDED:
-        $action_string = t('!item (added)');
-        break;
-      case VERSIONCONTROL_ACTION_MODIFIED:
-        $action_string = $show_diff
-                         ? t('!item (modified, previous: !oldrev, !diff)')
-                         : t('!item (modified, previous: !oldrev)');
-        break;
-      case VERSIONCONTROL_ACTION_MOVED:
-        $action_string = $show_diff
-                         ? t('!item (moved from !olditems, !diff)')
-                         : t('!item (moved from !olditems)');
-        break;
-      case VERSIONCONTROL_ACTION_COPIED:
-        $action_string = $show_diff
-                         ? t('!item (copied from !olditems, !diff)')
-                         : t('!item (copied from !olditems)');
-        break;
-      case VERSIONCONTROL_ACTION_MERGED:
-        $action_string = $show_diff
-                         ? t('!item (merged from !olditems, !diff)')
-                         : t('!item (merged from !olditems)');
-        break;
-      case VERSIONCONTROL_ACTION_DELETED:
-        $action_string = t('!path (deleted: !oldrev)');
-        break;
-      // case VERSIONCONTROL_ACTION_OTHER:
-      //   $action_string = ???;
-      //   break;
-      default:
-        return 'Error: action type enum value not known: '. $item['action'];
+    // Depending on what happened to the items, make a readable string out of
+    // the separate pieces of information that we've got by now.
+    if (!isset($item['action'])) {
+      $action_string = '!item';
+    }
+    else {
+      switch ($item['action']) {
+        case VERSIONCONTROL_ACTION_ADDED:
+          $action_string = t('!item (added)');
+          break;
+        case VERSIONCONTROL_ACTION_MODIFIED:
+          $action_string = $show_diff
+                          ? t('!item (modified, previous: !oldrev, !diff)')
+                          : t('!item (modified, previous: !oldrev)');
+          break;
+        case VERSIONCONTROL_ACTION_MOVED:
+          $action_string = $show_diff
+                          ? t('!item (moved from !olditems, !diff)')
+                          : t('!item (moved from !olditems)');
+          break;
+        case VERSIONCONTROL_ACTION_COPIED:
+          $action_string = $show_diff
+                          ? t('!item (copied from !olditems, !diff)')
+                          : t('!item (copied from !olditems)');
+          break;
+        case VERSIONCONTROL_ACTION_MERGED:
+          $action_string = $show_diff
+                          ? t('!item (merged from !olditems, !diff)')
+                          : t('!item (merged from !olditems)');
+          break;
+        case VERSIONCONTROL_ACTION_DELETED:
+          $action_string = t('!path (deleted: !oldrev)');
+          break;
+        // case VERSIONCONTROL_ACTION_OTHER:
+        //   $action_string = ???;
+        //   break;
+        default:
+          $lines[] = 'Error: action type enum value not known: '. $item['action'];
+          continue;
+      }
+
+      if (isset($item['line_changes'])) {
+        $action_string = t('!action, lines: +!added -!removed', array(
+          '!action'  => $action_string,
+          '!added'   => $item['line_changes']['added'],
+          '!removed' => $item['line_changes']['removed'],
+        ));
+      }
     }
 
     if ($format == 'html' && isset($item_project)) {
       $project_string = isset($project_string)
-                        ? $project_string
-                        : theme('commitlog_project', $operation['repository'], $item_project, $format);
-      $action_string = t('!project: !action', array('!action' => $action_string));
+        ? $project_string
+        : theme('commitlog_project', $operation['repository'], $item_project, $format);
+      $action_string = t('!project: !action', array(
+        '!project' => $project_string,
+        '!action' => $action_string,
+      ));
     }
 
     $lines[] = strtr($action_string, array(
@@ -756,11 +894,30 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     ));
   }
 
-  $location = theme('commitlog_operation_location', $operation, $directory_item, $format);
+  $location = theme('commitlog_operation_location', $operation, $operation_items, $directory_item, $format);
+
+  if (isset($project)) {
+    if ($format == 'html') {
+      $location = '<span title="'. check_plain($project['directory']) .'">'.
+                  $project_string .'</span>';
+    }
+    else {
+      $location = t('!location: (!project)', array(
+        '!project' => $project_string,
+        '!location' => $location,
+      ));
+    }
+  }
+  $item_header = t('in !location:', array('!location' => $location));
 
   if ($format == 'html') {
-    $output = '<div class="location">'. $location .'</div>'."\n";
-    $output .= '<div class="items">'. theme('item_list', $lines) ."</div>\n";
+    if (count($lines) > 1) {
+      $output = '<div class="location">'. $item_header .'</div>'."\n";
+      $output .= '<div class="items">'. theme('item_list', $lines) ."</div>\n";
+    }
+    else {
+      $output .= '<div class="items">'. $item_header .' '. reset($lines) ."</div>\n";
+    }
     return $output;
   }
   // else: plaintext
@@ -772,7 +929,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
   return $output;
 }
 
-function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html') {
+function theme_commitlog_item($repository, $item, $path_override = NULL, $format = 'html') {
   $backends = versioncontrol_get_backends();
 
   if (!isset($backends[$repository['vcs']])) {
@@ -785,16 +942,22 @@ function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html'
     $has_atomic_commits = TRUE;
   }
 
-  if (!isset($path)) {
-    $path = $item['path'];
-  }
+  $path = isset($path_override) ? $path_override : $item['path'];
 
   // For version control systems without atomic commits, display the revision
   // next to the path. For all other ones this doesn't make sense, as there is
   // only one global revision for all items, and that one is already displayed
   // in the commit title.
+  $output = $path;
+
+  if ($format == 'html') {
+    $log_url = versioncontrol_get_url_item_log_view($repository, $item);
+    if (!empty($log_url)) {
+      $output = l($path, $log_url);
+    }
+  }
+
   if (empty($item['revision']) || $has_atomic_commits) {
-    $output = $path;
     if ($format == 'html') {
       $view_url = versioncontrol_get_url_item_view($repository, $item);
       if (!empty($view_url)) {
@@ -804,13 +967,7 @@ function theme_commitlog_item($repository, $item, $path = NULL, $format = 'html'
     return $output;
   }
   else {
-    if ($format == 'html') {
-      $log_url = versioncontrol_get_url_item_log_view($repository, $item);
-      if (!empty($log_url)) {
-        $path = l($path, $log_url);
-      }
-    }
-    return $path .' '. theme('commitlog_item_revision', $repository, $item, $format);
+    return $output .' '. theme('commitlog_item_revision', $repository, $item, $format);
   }
 }
 
@@ -853,106 +1010,4 @@ function theme_commitlog_project($repository, $project, $format = 'html') {
     return check_plain($project_node->title);
   }
   return '';
-}
-
-
-
-function commitlog_branch_or_tag_operation($type, $op, $items, $username = NULL, $format = 'html') {
-  if (isset($username)) {
-    $variables['username'] = $username;
-  }
-  else {
-    $variables['username'] = commitlog_account_username(
-      $op['uid'], $op['username'], $op['repository'], TRUE, $format
-    );
-  }
-
-  if ($type == 'branch') {
-    $variables['name'] = l($op['branch_name'], 'commitlog', NULL, 'branches='. $op['branch_name']);
-  }
-  else {
-    $variables['name'] = $op['tag_name'];
-  }
-  $variables['repository_name'] = theme('commitlog_repository', $op['repository'], $format);
-  $variables['time'] = format_date($op['date'], 'custom', 'H:i');
-  $variables['action'] = $op['action'];
-  $variables['message'] = $op['message'];
-  $variables['items'] = $items;
-
-  $directory_item = versioncontrol_get_directory_item($op);
-  $variables['directory'] = theme('commitlog_item',
-    $op['repository'], $directory_item, $directory_item['path'], $format
-  );
-
-  if ($format == 'html') {
-    return theme('commitlog_branch_or_tag_html', $type, $variables);
-  }
-  return theme('commitlog_branch_or_tag_plaintext', $type, $variables);
-}
-
-function theme_commitlog_branch_or_tag_html($type, $variables) {
-  $action_text = theme('commitlog_branch_or_tag_action_message', $type, $variables, 'html');
-
-  $output = '<div class="commit">';
-  $output .= '<div class="title">';
-  $output .= t('In !repo, at !time:', array(
-    '!time' => $variables['time'],
-    '!repo' => $variables['repository_name'],
-  ));
-  $output .= '<br/>'. $action_text;
-  $output .= "</div>\n"; // class "title"
-
-  if (!empty($variables['message'])) { // only for tags and non-CVS version control systems
-    $output .= '<div class="description"><pre>'. $variables['message'] .'</pre></div>'."\n";
-  }
-
-  $output .= "</div>\n"; // class "commit"
-  return $output;
-}
-
-function theme_commitlog_branch_or_tag_plaintext($type, $variables) {
-  $action_text = theme('commitlog_branch_or_tag_action_message', $type, $variables, 'plaintext');
-
-  $output = t('In !repo, at !time:', array(
-    '!time' => $variables['time'],
-    '!repo' => $variables['repository_name'],
-  ));
-  $output .= "\n". $action_text ."\n";
-
-  if (!empty($variables['message'])) { // only for tags and non-CVS version control systems
-    $output .= "\n". $variables['message'] ."\n";
-  }
-
-  return $output;
-}
-
-function theme_commitlog_branch_or_tag_action_message($type, $variables, $format) {
-  $params = array(
-    '!username' => $variables['username'],
-    '!name' => $variables['name'],
-    '!directory' => $variables['directory'],
-    '!type' => ($type == 'branch') ? t('Branch') : t('Tag'),
-  );
-
-  // If the branch or tag has been assigned for the whole repository,
-  // it doesn't make sense to mention the directory.
-  if (empty($variables['items'])) {
-    switch ($variables['action']) {
-      case VERSIONCONTROL_ACTION_ADDED:
-        return t('!type !name created by !username.', $params);
-      case VERSIONCONTROL_ACTION_MOVED:
-        return t('!type renamed to !name by !username.', $params);
-      case VERSIONCONTROL_ACTION_DELETED:
-        return t('!type !name by !username.', $params);
-    }
-  }
-
-  switch ($variables['action']) {
-    case VERSIONCONTROL_ACTION_ADDED:
-      return t('!type !name created by !username in !directory.', $params);
-    case VERSIONCONTROL_ACTION_MOVED:
-      return t('!type renamed to !name by !username in !directory.', $params);
-    case VERSIONCONTROL_ACTION_DELETED:
-      return t('!type !name by !username in !directory.', $params);
-  }
 }

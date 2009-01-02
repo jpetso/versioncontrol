@@ -244,13 +244,10 @@ function _commit_restrictions_load($repo_id) {
  *   write access callbacks say.
  */
 function commit_restrictions_versioncontrol_write_access($operation, $operation_items) {
-  if (empty($operation_items)) {
-    return array(); // no idea if this is ever going to happen, but let's be prepared
-  }
   // Allow the committer to delete branches and labels (also invalid ones),
   // provided that nothing else is done in this operation.
   if (_commit_restrictions_contains_only_delete_labels($operation)) {
-    return array(); // even invalid labels should be allowed to be deleted
+    return array();
   }
 
   $restrictions = _commit_restrictions_load($operation['repository']['repo_id']);
@@ -291,6 +288,9 @@ function _commit_restrictions_contains_only_delete_labels($operation) {
  *   with error messages if at least one item may not be committed.
  */
 function _commit_restrictions_commit_item_access($operation_items, $restrictions) {
+  if (empty($operation_items)) {
+    return array(); // no idea if this is ever going to happen, but let's be prepared
+  }
   $error_messages = array();
 
   // Paths where it is always allowed to commit.
@@ -299,7 +299,7 @@ function _commit_restrictions_commit_item_access($operation_items, $restrictions
       $always_allow = FALSE;
 
       foreach ($restrictions['allowed_paths'] as $allowed_path_regexp) {
-        if (_commit_restrictions_preg_item_match($allowed_path_regexp, $item)) {
+        if (versioncontrol_preg_item_match($allowed_path_regexp, $item)) {
           $always_allow = TRUE;
           break; // ok, this item is fine, next one
         }
@@ -329,7 +329,7 @@ function _commit_restrictions_commit_item_access($operation_items, $restrictions
   if (!empty($restrictions['forbidden_paths'])) {
     foreach ($operation_items as $item) {
       foreach ($restrictions['forbidden_paths'] as $forbidden_path_regexp) {
-        if (!_commit_restrictions_preg_item_match($forbidden_path_regexp, $item)) {
+        if (!versioncontrol_preg_item_match($forbidden_path_regexp, $item)) {
           $error_messages[] = _commit_restrictions_item_error_message($item, 'commit');
         }
       }
@@ -398,7 +398,7 @@ function _commit_restrictions_label_access($operation, $restrictions) {
             }
           }
         }
-        $error_messages[] = $error_message;
+        $error_messages[] = $error;
       } // end of if (!$allowed)
     } // end of if (!empty($restrictions[$valid_restriction]))
   } // end of foreach ($operation['labels'])
@@ -416,7 +416,19 @@ function _commit_restrictions_label_access($operation, $restrictions) {
  *   valid path regexps (or if there are no regexps to be matched),
  *   or an array filled with error messages if at least one item doesn't.
  */
+// FIXME: ideally we should be doing this per label (if a commit operation has
+//        multiple labels) but we don't know which items belong to which label.
+//        That would need an adaptation of the operation/items format. Bummer.
 function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
+  if (empty($items)) {
+    // Tagging the whole repository (== empty $items array) should be caught
+    // by general branch/tag restrictions (_commit_restrictions_label_access())
+    // rather than with the item path restrictions in here. So let's pass
+    // operations without items through here. Consequently, the regexps for
+    // allowed branch/tag paths won't work in version control systems like
+    // Git or Mercurial that tend to always tag the whole repository.
+    return array();
+  }
   $error_messages = array();
 
   if (!empty($restrictions['valid_branch_tag_paths'])) {
@@ -424,7 +436,7 @@ function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
       $valid = FALSE;
 
       foreach ($restrictions['valid_branch_tag_paths'] as $valid_path_regexp) {
-        if (_commit_restrictions_preg_item_match($valid_path_regexp, $item)) {
+        if (versioncontrol_preg_item_match($valid_path_regexp, $item)) {
           $valid = TRUE;
           break;
         }
@@ -437,30 +449,11 @@ function _commit_restrictions_branch_tag_item_access($items, $restrictions) {
   return $error_messages;
 }
 
-/**
- * Check if the @p $path_regexp applies to the path of the given @p $item.
- *
- * @return
- *   The number of times @p $path_regexp matches. That will be either 0 times
- *   (no match) or 1 time because preg_match() (which is what this function
- *   uses internally) will stop searching after the first match.
- *   FALSE will be returned if an error occurred.
- */
-function _commit_restrictions_preg_item_match($path_regexp, $item) {
-  $path = $item['path'];
-
-  if (versioncontrol_is_directory_item($item) && $item['path'] != '/') {
-    $path = $item['path'] .'/';
-  }
-  return preg_match($path_regexp, $path);
-}
-
 function _commit_restrictions_item_error_message($item, $message_type) {
   $itemtype = versioncontrol_is_file_item($item) ? t('file') : t('directory');
   $params = array('!itemtype' => $itemtype, '!path' => $item['path']);
 
-  switch($message_type) {
-
+  switch ($message_type) {
     case 'commit':
       return t(
 '** Access denied: committing to this !itemtype is not allowed:

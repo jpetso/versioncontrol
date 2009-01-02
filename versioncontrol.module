@@ -18,41 +18,39 @@ define('VERSIONCONTROL_OPERATION_TAG',    3);
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          1);
 define('VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS',     2);
 define('VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS', 3);
+define('VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS',     4);
 
 // Flags that backends can set to specify if Version Control API
 // should do work for them.
 define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      1);
 
 // VCS item types.
-define('VERSIONCONTROL_ITEM_FILE',              0);
-define('VERSIONCONTROL_ITEM_DIRECTORY',         1);
+define('VERSIONCONTROL_ITEM_EMPTY',             0);
+define('VERSIONCONTROL_ITEM_FILE',              1);
+define('VERSIONCONTROL_ITEM_DIRECTORY',         2);
 // "Deleted" item types are only used for items that don't exist in the
 // repository (anymore), at least not in the given revision. That is mostly
 // the case with items that were deleted by a commit and are returned as result
 // by versioncontrol_get_operation_items(). A "deleted file" can also be
 // returned by directory listings for CVS, representing "dead files".
-define('VERSIONCONTROL_ITEM_FILE_DELETED',      2);
-define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 3);
-
-// VCS file types.
-define('VERSIONCONTROL_FILE_TEXT',            0);
-define('VERSIONCONTROL_FILE_BINARY',          1);
+define('VERSIONCONTROL_ITEM_FILE_DELETED',      3);
+define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 4);
 
 // VCS actions for a single item (file or directory) in a commit,
 // or for branches and tags.
-define('VERSIONCONTROL_ACTION_ADDED',         0);
-define('VERSIONCONTROL_ACTION_MODIFIED',      1);
-define('VERSIONCONTROL_ACTION_MOVED',         2); // == renamed
-define('VERSIONCONTROL_ACTION_COPIED',        3);
-define('VERSIONCONTROL_ACTION_MERGED',        4);
-define('VERSIONCONTROL_ACTION_DELETED',       5);
-define('VERSIONCONTROL_ACTION_REPLACED',      6);
-define('VERSIONCONTROL_ACTION_OTHER',         7); // for example, SVN revprop-only changes
+define('VERSIONCONTROL_ACTION_ADDED',    1);
+define('VERSIONCONTROL_ACTION_MODIFIED', 2);
+define('VERSIONCONTROL_ACTION_MOVED',    3); // == renamed
+define('VERSIONCONTROL_ACTION_COPIED',   4);
+define('VERSIONCONTROL_ACTION_MERGED',   5);
+define('VERSIONCONTROL_ACTION_DELETED',  6);
+define('VERSIONCONTROL_ACTION_REPLACED', 7);
+define('VERSIONCONTROL_ACTION_OTHER',    8); // for example, SVN revprop-only changes
 
 // The flag for operation item database entries, specifying whether an item
 // is actually a direct "member" item of that operation or just a cached
 // source item that speeds up operation queries. (Background: we want some
-// source items to be considered when the caller passes a 'path' constraint,
+// source items to be considered when the caller passes a 'paths' constraint,
 // but joining those is unnecessarily inefficient. Therefore, searched source
 // items get directly included in the {versioncontrol_operation_items} table.)
 // This is an implementation detail, the API user won't get to see this. Ever.
@@ -113,6 +111,10 @@ function versioncontrol_menu($may_cache) {
   $items = array();
   $admin_access = user_access('administer version control systems');
   $user_access = user_access('use version control systems') || $admin_access;
+
+  if (module_exists('workflow_ng') && !$may_cache) {
+    include_once(drupal_get_path('module', 'versioncontrol') .'/includes/versioncontrol.rules.inc');
+  }
 
   if ($may_cache) {
     // If Version Control API is used without the Project module,
@@ -339,6 +341,7 @@ function versioncontrol_perm() {
 }
 
 
+// API functions start here.
 
 /**
  * Get a list of all backends and more detailed information about each of them.
@@ -425,31 +428,6 @@ function versioncontrol_backend_implements($vcs, $function) {
  */
 function _versioncontrol_call_backend($vcs, $function, $args) {
   return call_user_func_array('versioncontrol_'. $vcs .'_'. $function, $args);
-}
-
-/**
- * Call a function from the desired VCS backend, return its result value,
- * and make sure that the @p $operations parameter (which is a reference)
- * can be altered by the backend.
- *
- * @param $vcs
- *   The unique string identifier of the version control system.
- * @param $function
- *   The function name without module prefix.
- * @param $operations
- *   A modifiable operation array that will be passed to the backend function.
- * @param $constraints
- *   An array of VCS specific filter constraints.
- *
- * @return
- *   Returns the result of the backend function. The result value of calls
- *   where the backend function has no implementation is undefined, as they
- *   are supposed to be checked with versioncontrol_backend_implements()
- *   before those functions are called.
- */
-function _versioncontrol_call_backend_alter($vcs, $function, &$operations, $constraints = array()) {
-  $function = 'versioncontrol_'. $vcs .'_'. $function;
-  return $function($operations, $constraints);
 }
 
 /**
@@ -724,9 +702,8 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
 
     // Provide an opportunity for the backend to add its own stuff.
     if (versioncontrol_backend_implements($vcs, 'alter_repositories')) {
-      _versioncontrol_call_backend_alter(
-        $vcs, 'alter_repositories', $vcs_repositories, $vcs_specific_constraints
-      );
+      $function = 'versioncontrol_'. $vcs .'_alter_repositories';
+      $function($vcs_repositories, $vcs_specific_constraints);
     }
     $repositories_by_backend[$vcs] = $vcs_repositories;
   }
@@ -740,7 +717,7 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  * (so only commits are returned). Parameters and result array are the same
  * as those from versioncontrol_get_operations().
  */
-function versioncontrol_get_commits($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+function versioncontrol_get_commit_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
   if (isset($constraints['types']) && !in_array(VERSIONCONTROL_OPERATION_COMMIT, $constraints['types'])) {
     return array(); // no commits in the original constraints, intersects to empty
   }
@@ -799,6 +776,13 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *   - 'tags': An array of strings, like array('DRUPAL-6-1', 'DRUPAL-6--1-0').
  *        If given, only tag operations with one of these tag names will be
  *        returned.
+ *   - 'revisions': An array of strings, each containing a VCS-specific
+ *        (global) revision, like '27491' for Subversion or some SHA-1 key in
+ *        various distributed version control systems. If given, only
+ *        operations with that revision identifier will be returned. Note that
+ *        this constraint only works for version control systems that support
+ *        global revision identifiers, so this will filter out all
+ *        CVS operations.
  *   - 'labels': A combination of the 'branches' and 'tags' constraints.
  *   - 'paths': An array of strings (item locations), like
  *          array(
@@ -807,12 +791,22 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *          ).
  *        If given, only operations affecting one of these items
  *        (or its children, in case the item is a directory) will be returned.
+ *   - 'message': A string, or an array of strings (which will be combined with
+ *        an "OR" operator). If given, only operations containing the string(s)
+ *        in their log message will be returned.
+ *   - 'item_revision_ids': An array of item revision ids. If given, only
+ *        operations affecting one of the items with that id will be returned.
+ *   - 'item_revisions': An array of strings, each containing a VCS-specific
+ *        file-level revision, like '1.15.2.3' for CVS, '27491' for Subversion,
+ *        or some SHA-1 key in various  distributed version control systems.
+ *        If given, only operations affecting one of the items with that
+ *        item revision will be returned.
  *   - 'vc_op_ids': An array of operation ids. If given, only operations
  *        matching those ids will be returned.
- *   - 'date_lower': A Unix timestamp. If given, the result set will not
- *        contain operations that were performed earlier than this lower bound.
- *   - 'date_upper': A Unix timestamp. If given, the result set will not
- *        contain operations that were performed later than this upper bound.
+ *   - 'date_lower': A Unix timestamp. If given, no operations will be
+ *        retrieved that were performed earlier than this lower bound.
+ *   - 'date_lower': A Unix timestamp. If given, no operations will be
+ *        retrieved that were performed later than this upper bound.
  *   - 'uids': An array of Drupal user ids. If given, the result set will only
  *        contain operations that were performed by any of the specified users.
  *   - 'usernames': An array of system-specific usernames (the ones that the
@@ -872,7 +866,7 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *        as key) in 'labels'. Commits might affect any number of branches,
  *        including none. Commits that emulate branches and/or tags (like
  *        in Subversion, where they're not a native concept) can also include
- *        add/delete/move operations for labels, as detailed below.
+ *        add or delete operations for labels, as detailed below.
  *        Mind that the main development branch - e.g. 'HEAD', 'trunk'
  *        or 'master' - is also considered a branch. Each element in 'labels'
  *        is a structured array with the following keys:
@@ -893,6 +887,18 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *   an empty array is returned.
  */
 function versioncontrol_get_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+  // Interim measure until we allow altering the database query itself:
+  // Let modules alter the query by transforming custom constraints into
+  // stuff that Version Control API can understand.
+  // TODO: let modules alter the SQL query - say, versioncontrol_project should
+  //       be able to introduce a constraint for project node ids and filter
+  //       by joining with {versioncontrol_project_operations}.
+  //       Also see issue http://drupal.org/node/216373
+  foreach (module_implements('alter_operation_constraints') as $module) {
+    $function = $module .'_alter_operation_constraints';
+    $function($constraints);
+  }
+
   list($and_constraints, $params, $joins) =
     _versioncontrol_construct_operation_constraints($constraints);
 
@@ -1029,6 +1035,22 @@ function _versioncontrol_construct_operation_constraints($constraints, $operatio
     }
   }
 
+  // Filter by revision identifiers.
+  if (isset($constraints['revisions'])) {
+    if (empty($constraints['revisions'])) {
+      return _versioncontrol_false_constraint();
+    }
+    else {
+      $placeholders = array();
+      foreach ($constraints['revisions'] as $revision) {
+        $placeholders[] = "'%s'";
+        $params[] = $revision;
+      }
+      $and_constraints[] = $operations_table_alias .'.revision
+                           IN ('. implode(',', $placeholders) .')';
+    }
+  }
+
   // Filter by repository ids.
   if (isset($constraints['repo_ids'])) {
     if (empty($constraints['repo_ids'])) {
@@ -1086,20 +1108,77 @@ function _versioncontrol_construct_operation_constraints($constraints, $operatio
     }
   }
 
+  // Filter by log message.
+  if (isset($constraints['message'])) {
+    if (empty($constraints['message']) && !is_string($constraints['message'])) {
+      return _versioncontrol_false_constraint();
+    }
+    else {
+      // Allow both array and string formats, for convenience and compatibility.
+      if (!is_array($constraints['message'])) {
+        $constraints['message'] = array($constraints['message']);
+      }
+      $or_constraints = array();
+      foreach ($constraints['message'] as $message_part) {
+        $or_constraints[] = $operations_table_alias .".message LIKE '%s'";
+        $params[] = '%'. $message_part .'%';
+      }
+      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    }
+  }
+
+  // Filter by item revision ids.
+  if (isset($constraints['item_revision_ids'])) {
+    if (empty($constraints['item_revision_ids'])) {
+      return _versioncontrol_false_constraint();
+    }
+    else {
+      _versioncontrol_add_item_joins($joins, FALSE);
+      $or_constraints = array();
+
+      $placeholders = array();
+      foreach ($constraints['item_revision_ids'] as $item_revision_id) {
+        $placeholders[] = '%d';
+        $params[] = $item_revision_id;
+      }
+      $and_constraints[] = 'opitem.item_revision_id
+                            IN ('. implode(',', $placeholders) .')';
+
+      // Exact search for target items, no fuzzy source item path results.
+      $params[] = VERSIONCONTROL_OPERATION_MEMBER_ITEM;
+      $and_constraints[] = 'opitem.type = %d';
+    }
+  }
+
+  // Filter by item revisions.
+  if (isset($constraints['item_revisions'])) {
+    if (empty($constraints['item_revisions'])) {
+      return _versioncontrol_false_constraint();
+    }
+    else {
+      _versioncontrol_add_item_joins($joins);
+      $or_constraints = array();
+
+      $placeholders = array();
+      foreach ($constraints['item_revisions'] as $revision) {
+        $placeholders[] = "'%s'";
+        $params[] = $revision;
+      }
+      $and_constraints[] = 'ir.revision IN ('. implode(',', $placeholders) .')';
+
+      // Exact search for target items, no fuzzy source item path results.
+      $params[] = VERSIONCONTROL_OPERATION_MEMBER_ITEM;
+      $and_constraints[] = 'opitem.type = %d';
+    }
+  }
+
   // Filter by item paths.
   if (isset($constraints['paths'])) {
     if (empty($constraints['paths'])) {
       return _versioncontrol_false_constraint();
     }
     else {
-      $joins['versioncontrol_operation_items'] = array(
-        'alias' => 'opitem',
-        'on' => 'op.vc_op_id = opitem.vc_op_id',
-      );
-      $joins['versioncontrol_item_revisions'] = array(
-        'alias' => 'ir',
-        'on' => 'opitem.item_revision_id = ir.item_revision_id',
-      );
+      _versioncontrol_add_item_joins($joins);
       $or_constraints = array();
 
       foreach ($constraints['paths'] as $path) {
@@ -1246,6 +1325,28 @@ function _versioncontrol_add_label_joins(&$joins) {
 }
 
 /**
+ * Take an existing $joins array and add the joins for
+ * {versioncontrol_operation_items} (alias 'opitem') and
+ * {versioncontrol_item_revisions} (alias 'ir'). The latter can be left out by
+ * passing FALSE for the @p $join_item_revision_table parameter. Only meant to
+ * be used within the _versioncontrol_construct_operation_constraints() function.
+ */
+function _versioncontrol_add_item_joins(&$joins, $join_item_revision_table = TRUE) {
+  if (!isset($joins['versioncontrol_operation_labels'])) {
+    $joins['versioncontrol_operation_items'] = array(
+      'alias' => 'opitem',
+      'on' => 'op.vc_op_id = opitem.vc_op_id',
+    );
+    if ($join_item_revision_table) {
+      $joins['versioncontrol_item_revisions'] = array(
+        'alias' => 'ir',
+        'on' => 'opitem.item_revision_id = ir.item_revision_id',
+      );
+    }
+  }
+}
+
+/**
  * Return a subset of the given operations according to the
  * $page and $limit values.
  */
@@ -1259,6 +1360,97 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
     ++$i;
   }
   return $paged_operations;
+}
+
+/**
+ * Retrieve the commit operation corresponding to each item in a list of items.
+ *
+ * @param $repository
+ *   The repository that the items are located in.
+ * @param $items
+ *   An array of item arrays, for example as returned by
+ *   versioncontrol_get_operation_items().
+ *
+ * @return
+ *   This function does not have a return value; instead, it alters the
+ *   given item arrays and adds additional information about their
+ *   corresponding commit operation in an 'commit_operation' property.
+ *   If no corresponding commit was found, this property will not be set.
+ */
+function versioncontrol_fetch_item_commit_operations($repository, &$items) {
+  $placeholders = array();
+  $ids = array();
+  $item_keys = array();
+
+  $fetch_by_revision_id = FALSE;
+
+  // If there are atomic commits and versioned directories (= SVN), we'll miss
+  // out on operations for directory items if those are not (always) captured
+  // in the {versioncontrol_operation_items} table.
+  // So fetch by revision id instead in that case.
+  $backend = versioncontrol_get_backend($repository);
+
+  if (in_array(VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS, $backend['capabilities'])) {
+    $fetch_by_revision_id = TRUE;
+  }
+
+  foreach ($items as $key => $item) {
+    if (!empty($item['commit_operation'])) {
+      continue; // No need to insert an operation if it's already there.
+    }
+    if ($fetch_by_revision_id && !empty($item['revision'])) {
+      $ids[$item['revision']] = TRUE; // automatic duplicate elimination
+    }
+    // If we don't yet know the item_revision_id (required for db queries), try
+    // to retrieve it. If we don't find it, we can't fetch this item's sources.
+    if (versioncontrol_fetch_item_revision_id($repository, $item)) {
+      $placeholders[] = '%d';
+      $ids[] = $item['item_revision_id'];
+      $item_keys[$item['item_revision_id']] = $key;
+    }
+  }
+  if (empty($ids)) {
+    return;
+  }
+
+  if ($fetch_by_revision_id) {
+    $commit_operations = versioncontrol_get_commit_operations(array(
+      'repo_ids' => array($repository['repo_id']),
+      'revisions' => array_keys($ids),
+    ));
+    // Associate the commit operations to the items.
+    foreach ($items as $key => $item) {
+      foreach ($commit_operations as $commit_operation) {
+        if ($item['revision'] == $commit_operation['revision']) {
+          $items[$key]['commit_operation'] = $commit_operation;
+        }
+      }
+    }
+  }
+  else { // fetch by operation/item association
+    $result = db_query(
+      'SELECT item_revision_id, vc_op_id
+      FROM {versioncontrol_operation_items}
+      WHERE item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
+
+    $operation_item_mapping = array();
+    while ($opitem = db_fetch_object($result)) {
+      $operation_item_mapping[$opitem->vc_op_id][] = $opitem->item_revision_id;
+    }
+    $commit_operations = versioncontrol_get_commit_operations(array(
+      'vc_op_ids' => array_keys($operation_item_mapping),
+    ));
+
+    // Associate the commit operations to the items.
+    foreach ($commit_operations as $commit_operation) {
+      $item_revision_ids = $operation_item_mapping[$commit_operation['vc_op_id']];
+
+      foreach ($item_revision_ids as $item_revision_id) {
+        $item_key = $item_keys[$item_revision_id];
+        $items[$item_key]['commit_operation'] = $commit_operation;
+      }
+    }
+  }
 }
 
 
@@ -1294,11 +1486,11 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  *        Note that you can only rely on this element to exist for
  *        operation items - functions that interface directly with the VCS
  *        (such as versioncontrol_get_directory_contents() or
- *        versioncontrol_get_all_item_branches()) might not include
+ *        versioncontrol_get_parallel_items()) might not include
  *        this identifier, for obvious reasons.
  *
  *   If the @p $fetch_source_items parameter is TRUE,
- *   versioncontrol_add_source_items() will be called on the list of items
+ *   versioncontrol_fetch_source_items() will be called on the list of items
  *   in order to retrieve additional information about their origin.
  *   The following elements will be set for each item in addition
  *   to the ones listed above:
@@ -1306,11 +1498,16 @@ function _versioncontrol_page_operations($operations, $page, $limit) {
  *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
  *   - 'source_items': An array with the previous revision(s) of the affected
- *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED. The key for
+ *        all items in this array is the respective item path.
  *   - 'replaced_item': The previous but technically unrelated item at the
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
  *        or copied to this location.
+ *   - 'line_changes': Only exists if line changes have been recorded for this
+ *        action - if so, this is an array containing the number of added lines
+ *        in an element with key 'added', and the number of removed lines in
+ *        the 'removed' key.
  */
 function versioncontrol_get_operation_items($operation, $fetch_source_items = NULL) {
   $items = array();
@@ -1328,7 +1525,15 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
       'revision' => $item_revision->revision,
       'type' => $item_revision->type,
       'item_revision_id' => $item_revision->item_revision_id,
+      'selected_label' => new stdClass(),
     );
+    $items[$item_revision->path]['selected_label'] = new stdClass();
+    $items[$item_revision->path]['selected_label']->get_from = 'operation';
+    $items[$item_revision->path]['selected_label']->operation = &$operation;
+
+    if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
+      $items[$item_revision->path]['commit_operation'] = $operation;
+    }
   }
 
   if (!isset($fetch_source_items)) {
@@ -1336,14 +1541,17 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
     $fetch_source_items = ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT);
   }
   if ($fetch_source_items) {
-    versioncontrol_add_source_items($items);
+    versioncontrol_fetch_source_items($operation['repository'], $items);
   }
+  ksort($items); // similar paths should be next to each other
   return $items;
 }
 
 /**
  * Retrieve additional information about the origin of a given set of items.
  *
+ * @param $repository
+ *   The repository that the items are located in.
  * @param $items
  *   An array of item arrays, for example as returned by
  *   versioncontrol_get_operation_items().
@@ -1357,24 +1565,129 @@ function versioncontrol_get_operation_items($operation, $fetch_source_items = NU
  *   - 'action': Specifies how the item was changed.
  *        One of the predefined VERSIONCONTROL_ACTION_* values.
  *   - 'source_items': An array with the previous revision(s) of the affected
- *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED.
+ *        item. Empty if 'action' is VERSIONCONTROL_ACTION_ADDED. The key for
+ *        all items in this array is the respective item path.
  *   - 'replaced_item': The previous but technically unrelated item at the
  *        same location as the current item. Only exists if this previous item
  *        was deleted and replaced by a different one that was just moved
  *        or copied to this location.
+ *   - 'line_changes': Only exists if line changes have been recorded for this
+ *        action - if so, this is an array containing the number of added lines
+ *        in an element with key 'added', and the number of removed lines in
+ *        the 'removed' key.
  */
-function versioncontrol_add_source_items(&$items) {
+function versioncontrol_fetch_source_items($repository, &$items) {
   if (empty($items)) {
-    return $items;
+    return;
   }
   $placeholders = array();
   $ids = array();
   $item_keys = array();
 
   foreach ($items as $key => $item) {
-    $placeholders[] = '%d';
-    $ids[] = $item['item_revision_id'];
-    $item_keys[$item['item_revision_id']] = $key;
+    // If we don't yet know the item_revision_id (required for db queries), try
+    // to retrieve it. If we don't find it, we can't fetch this item's sources.
+    if (versioncontrol_fetch_item_revision_id($repository, $item)) {
+      $placeholders[] = '%d';
+      $ids[] = $item['item_revision_id'];
+      $item_keys[$item['item_revision_id']] = $key;
+    }
+  }
+
+  $result = db_query(
+    'SELECT sit.item_revision_id, sit.source_item_revision_id, sit.action,
+            sit.line_changes_recorded, sit.line_changes_added,
+            sit.line_changes_removed, ir.path, ir.revision, ir.type
+     FROM {versioncontrol_source_items} sit
+      INNER JOIN {versioncontrol_item_revisions} ir
+       ON sit.source_item_revision_id = ir.item_revision_id
+     WHERE sit.item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
+
+  while ($item_revision = db_fetch_object($result)) {
+    $successor_key = $item_keys[$item_revision->item_revision_id];
+    if (!isset($items[$successor_key]['source_items'])) {
+      $items[$successor_key]['source_items'] = array();
+    }
+
+    $item = array(
+      'path' => $item_revision->path,
+      'revision' => $item_revision->revision,
+      'type' => $item_revision->type,
+      'item_revision_id' => $item_revision->source_item_revision_id,
+    );
+    $item['selected_label'] = new stdClass();
+    $item['selected_label']->get_from = 'other_item';
+    $item['selected_label']->other_item = &$items[$successor_key];
+    $item['selected_label']->other_item_tags = array('successor_item');
+
+    // Insert the item and its associated action into the successor item.
+    if ($item_revision->action == VERSIONCONTROL_ACTION_REPLACED) {
+      $items[$successor_key]['replaced_item'] = $item;
+    }
+    else if ($item_revision->action == VERSIONCONTROL_ACTION_ADDED) {
+      $items[$successor_key]['action'] = $item_revision->action;
+      // Added items only have the VERSIONCONTROL_ITEM_EMPTY item assigned,
+      // ignore that one instead of adding it to the source items.
+    }
+    else {
+      $items[$successor_key]['action'] = $item_revision->action;
+      $items[$successor_key]['source_items'][$item['path']] = $item;
+    }
+
+    // Add the lines-changed information if it has been recorded.
+    // Only a single source item entry should hold this information,
+    // so no emphasis is placed on merging it across multiple source items.
+    if ($item_revision->line_changes_recorded) {
+      $items[$successor_key]['line_changes'] = array(
+        'added' => $item_revision->line_changes_added,
+        'removed' => $item_revision->line_changes_removed,
+      );
+    }
+  }
+}
+
+/**
+ * Retrieve additional information about the successors of a given set
+ * of items.
+ *
+ * @param $repository
+ *   The repository that the items are located in.
+ * @param $items
+ *   An array of item arrays, for example as returned by
+ *   versioncontrol_get_operation_items().
+ *
+ * @return
+ *   This function does not have a return value; instead, it alters the
+ *   given item arrays and adds additional information about their successors.
+ *   The following elements will be set for all items whose successor items
+ *   could be retrieved.
+ *
+ *   - 'successor_items': An array with the previous revision(s) of the
+ *        affected item. The key for all items in this array is the respective
+ *        item path, and all of these items will have the 'actions' and
+ *        'source_items' properties (as documented by
+ *        versioncontrol_fetch_source_items()) filled in.
+ *   - 'replaced_by_item': The succeeding but technically unrelated item at the
+ *        same location as the current item. Only exists if the original item
+ *        was deleted and replaced by a the succeeding one that was just moved
+ *        or copied to this location.
+ */
+function versioncontrol_fetch_successor_items($repository, &$items) {
+  if (empty($items)) {
+    return;
+  }
+  $placeholders = array();
+  $ids = array();
+  $item_keys = array();
+
+  foreach ($items as $key => $item) {
+    // If we don't yet know the item_revision_id (required for db queries), try
+    // to retrieve it. If we don't find it, we can't fetch this item's sources.
+    if (versioncontrol_fetch_item_revision_id($repository, $item)) {
+      $placeholders[] = '%d';
+      $ids[] = $item['item_revision_id'];
+      $item_keys[$item['item_revision_id']] = $key;
+    }
   }
 
   $result = db_query(
@@ -1382,37 +1695,339 @@ function versioncontrol_add_source_items(&$items) {
             ir.path, ir.revision, ir.type
      FROM {versioncontrol_source_items} sit
       INNER JOIN {versioncontrol_item_revisions} ir
-       ON src.source_item_revision_id = ir.item_revision_id
-     WHERE item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
+       ON sit.item_revision_id = ir.item_revision_id
+     WHERE sit.source_item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
 
   while ($item_revision = db_fetch_object($result)) {
-    $key = $item_keys[$item_revision->item_revision_id];
-
-    if (!isset($items[$key]['source_items'])) {
-      $items[$key]['source_items'] = array();
+    $source_key = $item_keys[$item_revision->source_item_revision_id];
+    if (!isset($items[$source_key]['successor_items'])) {
+      $items[$source_key]['successor_items'] = array();
     }
+
     $item = array(
       'path' => $item_revision->path,
       'revision' => $item_revision->revision,
       'type' => $item_revision->type,
-      'item_revision_id' => $item_revision->source_item_revision_id,
+      'item_revision_id' => $item_revision->item_revision_id,
     );
+    $item['selected_label'] = new stdClass();
+    $item['selected_label']->get_from = 'other_item';
+    $item['selected_label']->other_item = &$items[$source_key];
+    $item['selected_label']->other_item_tags = array('source_item');
 
+    // Insert the item and its associated action into the source item.
     if ($item_revision->action == VERSIONCONTROL_ACTION_REPLACED) {
-      $items[$key]['replaced_item'] = $item;
-    }
-    else if ($item_revision->action == VERSIONCONTROL_ACTION_ADDED) {
-      $items[$key]['action'] = $item_revision->action;
-      // Added items only have an id == "0" source item, don't add that one.
+      $items[$source_key]['replaced_by_item'] = $item;
     }
     else {
-      $items[$key]['action'] = $item_revision->action;
-      $items[$key]['source_items'][$item_revision->path] = $item;
+      if ($item_revision->action == VERSIONCONTROL_ACTION_MERGED) {
+        // If we've got a merge action then there are multiple source items,
+        // the one that we know is not sufficient. (And of course, we won't
+        // return an item with an incomplete 'source_items' property.)
+        // So let's retrieve all of those source items.
+        $successor_items = array($item['path'] => $item);
+        versioncontrol_fetch_source_items($repository, $successor_items);
+        $item = $successor_items[$item['path']];
+      }
+      else { // No "merged" action: the original item is the only source item.
+        $item['action'] = $item_revision->action;
+        $item['source_items'] = array(
+          $items[$source_key]['path'] => $items[$source_key],
+        );
+      }
+      $items[$source_key]['successor_items'][$item['path']] = $item;
     }
-    ///TODO: added items don't have source items, make it work nevertheless
-    /// needs a "0" item revision that we can assign as source for added items
   }
 }
+
+/**
+ * Retrieve the revisions where the given item has been changed,
+ * in reverse chronological order.
+ *
+ * Only one direct source or successor of each item will be retrieved, which
+ * means that you won't get parallel history logs with a single function call.
+ * In order to retrieve the log for this item in a different branch, you need
+ * to switch the selected label of the item by retrieving a different version
+ * of it with a call of versioncontrol_get_parallel_items() (if the backend
+ * supports this function).
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose history should be retrieved.
+ *
+ * @return
+ *   An array containing a list of item arrays, each one specifying a revision
+ *   of the same item that was given as argument. The array is sorted in
+ *   reverse chronological order, so the newest revision comes first. Each
+ *   element has its (file-level) item revision as key, and a standard item
+ *   array (as the ones retrieved by versioncontrol_get_operation_items())
+ *   as value. All items except for the oldest one will also have the 'action'
+ *   and 'source_items' properties filled in, the oldest item might or
+ *   might not have them. (If they exist for the oldest item, 'action' will be
+ *   VERSIONCONTROL_ACTION_ADDED and 'source_items' an empty array.)
+ *
+ *   NULL is returned if the given item is not under version control,
+ *   or was not under version control at the time of the given revision,
+ *   or if no history could be retrieved for any other reason.
+ */
+function versioncontrol_get_item_history($repository, &$item, $successor_item_limit = NULL, $source_item_limit = NULL) {
+  // Items without revision have no history, don't even try to fetch it.
+  if (empty($item['revision'])) {
+    return NULL;
+  }
+  // If we don't yet know the item_revision_id (required for db queries), try
+  // to retrieve it. If we don't find it, we can't go on with this function.
+  if (!versioncontrol_fetch_item_revision_id($repository, $item)) {
+    return NULL;
+  }
+
+  // Make sure we don't run into infinite loops when passed bad arguments.
+  if (is_numeric($successor_item_limit) && $successor_item_limit < 0) {
+    $successor_item_limit = 0;
+  }
+  if (is_numeric($source_item_limit) && $source_item_limit < 0) {
+    $source_item_limit = 0;
+  }
+
+  // Naive implementation - can probably be improved by sticking to the same
+  // repo_id/path until an action other than "modified" or "other" appears.
+  // (With the drawback that code will probably need to be duplicated among
+  // this function and versioncontrol_fetch_{source,successor}_items().
+
+  // Find (recursively) all successor items within the successor item limit.
+  $history_successor_items = array();
+  $source_item = $item;
+  static $successor_action_priority = array(
+    VERSIONCONTROL_ACTION_MOVED => 10,
+    VERSIONCONTROL_ACTION_MODIFIED => 10,
+    VERSIONCONTROL_ACTION_COPIED => 8,
+    VERSIONCONTROL_ACTION_MERGED => 9,
+    VERSIONCONTROL_ACTION_OTHER => 1,
+    VERSIONCONTROL_ACTION_DELETED => 1,
+    VERSIONCONTROL_ACTION_ADDED => 0, // does not happen, guard nonetheless
+    VERSIONCONTROL_ACTION_REPLACED => 0, // does not happen, guard nonetheless
+  );
+
+  while ((!isset($successor_item_limit) || ($successor_item_limit > 0))) {
+    $source_items = array($source_item['path'] => $source_item);
+    versioncontrol_fetch_successor_items($repository, $source_items);
+    $source_item = $source_items[$source_item['path']];
+
+    // If there are no successor items, we are obviously at the end of the log.
+    if (empty($source_item['successor_items'])) {
+      break;
+    }
+    // There might be multiple successor items - in most cases, the first one is
+    // the only one so that's ok except for "merged" actions.
+    $successor_item = NULL;
+    $highest_priority_so_far = 0;
+    foreach ($source_item['successor_items'] as $path => $succ_item) {
+      if (!isset($successor_item)
+          || $successor_action_priority[$succ_item['action']] > $highest_priority_so_far) {
+        $successor_item = $succ_item;
+        $highest_priority_so_far = $successor_action_priority[$succ_item['action']];
+      }
+    }
+    $history_successor_items[$successor_item['revision']] = $successor_item;
+    $source_item = $successor_item;
+
+    // Decrement the counter until the item limit is reached.
+    if (isset($successor_item_limit)) {
+      --$successor_item_limit;
+    }
+  }
+  // We want the newest revisions first, so reverse the successor array.
+  $history_successor_items = array_reverse($history_successor_items, TRUE);
+
+  // Find (recursively) all source items within the source item limit.
+  $history_source_items = array();
+  $successor_item = $item;
+
+  while (!isset($source_item_limit) || ($source_item_limit > 0)) {
+    $successor_items = array($successor_item['path'] => $successor_item);
+    versioncontrol_fetch_source_items($repository, $successor_items);
+    $successor_item = $successor_items[$successor_item['path']];
+
+    // If there are no source items, we are obviously at the end of the log.
+    if (empty($successor_item['source_items'])) {
+      break;
+    }
+    // There might be multiple source items - in most cases, the first one is
+    // the only one so that's ok except for "merged" actions.
+    $source_item = NULL;
+    if ($successor_item['action'] == VERSIONCONTROL_ACTION_MERGED) {
+      if (isset($successor_item['source_items'][$successor_item['path']])) {
+        $source_item = $successor_item['source_items'][$successor_item['path']];
+      }
+    }
+    if (!isset($source_item)) {
+      $source_item = reset($successor_item['source_items']); // first item
+    }
+    $history_source_items[$source_item['revision']] = $source_item;
+    $successor_item = $source_item;
+
+    // Decrement the counter until the item limit is reached.
+    if (isset($source_item_limit)) {
+      --$source_item_limit;
+    }
+  }
+
+  return $history_successor_items + array($item['revision'] => $item) + $history_source_items;
+}
+
+/**
+ * Make sure that the 'item_revision_id' database identifier is among an item's
+ * properties, and if it's not then try to add it.
+ *
+ * @param $repository
+ *   The repository where the item is located.
+ * @param $item
+ *   The item revision for which the 'item_revision_id' property should
+ *   be retrieved.
+ *
+ * @return
+ *   TRUE if the 'item_revision_id' exists after calling this function,
+ *   FALSE if not.
+ */
+function versioncontrol_fetch_item_revision_id($repository, &$item) {
+  if (!empty($item['item_revision_id'])) {
+    return TRUE;
+  }
+  $id = db_result(db_query(
+    "SELECT item_revision_id FROM {versioncontrol_item_revisions}
+      WHERE repo_id = %d AND path = '%s' AND revision = '%s'",
+    $repository['repo_id'], $item['path'], $item['revision']
+  ));
+  if (empty($id)) {
+    return FALSE;
+  }
+  $item['item_revision_id'] = $id;
+  return TRUE;
+}
+
+/**
+ * Retrieve an item's selected label.
+ *
+ * When first retrieving an item, the selected label is initialized with a
+ * sensible value - for example, versioncontrol_get_operation_items() assigns
+ * the affected branch or tag of that operation to all the items. (This is
+ * especially important for version control systems like Subversion where there
+ * is a need to specify the label per item and not per operation, as a single
+ * commit can affect multiple branches or tags at once.)
+ *
+ * The selected label is also meant to help with branch/tag-based navigation,
+ * so item navigation functions will try to preserve it as good as possible, as
+ * far as it's accurate.
+ *
+ * @param $repository
+ *   The repository where the item is located.
+ * @param $item
+ *   The item revision for which the label should be retrieved.
+ *
+ * @return
+ *   In case no branch or tag applies to that item or could not be retrieved
+ *   for whatever reasons, the selected label can also be NULL. Otherwise, it's
+ *   a label array describing the selected label, with the following keys:
+ *
+ *   - 'label_id': The label identifier (a simple integer), used for unique
+ *        identification of branches and tags in the database.
+ *   - 'name': The branch or tag name (a string).
+ *   - 'type': Whether this label is a branch (indicated by the
+ *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *        (VERSIONCONTROL_OPERATION_TAG).
+ */
+function versioncontrol_get_item_selected_label($repository, &$item) {
+  // If the label is already retrieved, we can return it just that way.
+  if (isset($item['selected_label']->label)) {
+    return ($item['selected_label']->label === FALSE)
+            ? NULL : $item['selected_label']->label;
+  }
+  if (!isset($item['selected_label']->get_from)) {
+    $item['selected_label']->label = FALSE;
+    return NULL;
+  }
+  $function_prefix = 'versioncontrol_'. $repository['vcs'];
+
+  // Otherwise, determine how we might be able to retrieve the selected label.
+  switch($item['selected_label']->get_from) {
+    case 'operation':
+      $function = $function_prefix .'_get_selected_label_from_operation';
+      $selected_label = $function($item['selected_label']->operation, $item);
+      break;
+    case 'other_item':
+      $function = $function_prefix .'_get_selected_label_from_other_item';
+      $selected_label = $function($repository, $item, $item['selected_label']->other_item, $item['selected_label']->other_item_tags);
+      unset($item['selected_label']->other_item_tags);
+      break;
+  }
+
+  if (isset($selected_label)) {
+    // Just to make sure that we only pass applicable info:
+    // 'action' might make sense in an operation, but not in an item array.
+    if (isset($selected_label['action'])) {
+      unset($selected_label['action']);
+    }
+    $item['selected_label']->label = _versioncontrol_ensure_label($repository, $selected_label);
+  }
+  else {
+    $item['selected_label']->label = FALSE;
+  }
+
+  // Now that we've got the real label, we can get rid of the retrieval recipe.
+  if (isset($item['selected_label']->{$item['selected_label']->get_from})) {
+    unset($item['selected_label']->{$item['selected_label']->get_from});
+  }
+  unset($item['selected_label']->get_from);
+
+  return $item['selected_label']->label;
+}
+
+/**
+ * Insert a label entry into the {versioncontrol_labels} table,
+ * or retrieve the same one that's already there.
+ *
+ * @return
+ *   The @p $label variable, enhanced with the newly added property 'label_id'
+ *   specifying the database identifier for that label. There may be labels
+ *   with a similar 'name' but different 'type' properties, those are considered
+ *   to be different and will both go into the database side by side.
+ */
+function _versioncontrol_ensure_label($repository, $label) {
+  if (!empty($label['label_id'])) { // already in the database
+    return $label;
+  }
+  $result = db_query(
+    "SELECT label_id, repo_id, name, type FROM {versioncontrol_labels}
+      WHERE repo_id = %d AND name = '%s' AND type = %d",
+    $repository['repo_id'], $label['name'], $label['type']
+  );
+  while ($row = db_fetch_object($result)) {
+    // Replace / fill in properties that were not in the WHERE condition.
+    $label['label_id'] = $row->label_id;
+    return $label;
+  }
+  // The item doesn't yet exist in the database, so create it.
+  return _versioncontrol_insert_label($repository, $label);
+}
+
+function _versioncontrol_insert_label($repository, $label) {
+  if (isset($label['label_id'])) {
+    db_query("DELETE FROM {versioncontrol_labels}
+              WHERE label_id = %d", $label['label_id']);
+  }
+  else {
+    $label['label_id'] = db_next_id('{versioncontrol_labels}_label_id');
+  }
+  db_query(
+    "INSERT INTO {versioncontrol_labels}
+      (label_id, repo_id, name, type)
+      VALUES (%d, %d, '%s', %d)",
+    $label['label_id'], $repository['repo_id'], $label['name'], $label['type']
+  );
+  return $label;
+}
+
 
 /**
  * Return TRUE if the given item is an existing or an already deleted file,
@@ -1432,6 +2047,17 @@ function versioncontrol_is_file_item($item) {
  */
 function versioncontrol_is_directory_item($item) {
   if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY
+      || $item['type'] == VERSIONCONTROL_ITEM_DIRECTORY_DELETED) {
+    return TRUE;
+  }
+  return FALSE;
+}
+
+/**
+ * Return TRUE if the given item is marked as deleted, or FALSE if it exists.
+ */
+function versioncontrol_is_deleted_item($item) {
+  if ($item['type'] == VERSIONCONTROL_ITEM_FILE_DELETED
       || $item['type'] == VERSIONCONTROL_ITEM_DIRECTORY_DELETED) {
     return TRUE;
   }
@@ -1718,12 +2344,16 @@ function versioncontrol_get_url_commit_view($commit) {
  *   (and if not even Commit Log is enabled), or if the item cannot be viewed
  *   for any reason.
  */
-function versioncontrol_get_url_item_log_view($repository, $item) {
+function versioncontrol_get_url_item_log_view($repository, &$item) {
   $urls = _versioncontrol_get_repository_urls($repository);
-  $current_branch = versioncontrol_get_current_item_branch($repository, $item);
+  $label = versioncontrol_get_item_selected_label($repository, $item);
+
+  if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
+    $current_branch = $label['name'];
+  }
 
   if (!empty($urls['file_log_view'])) {
-    if ($item['type'] == VERSIONCONTROL_ITEM_FILE) {
+    if (versioncontrol_is_file_item($item)) {
       return strtr($urls['file_log_view'], array(
         '%path'     => $item['path'],
         '%revision' => $item['revision'],
@@ -1737,7 +2367,8 @@ function versioncontrol_get_url_item_log_view($repository, $item) {
     return url('commitlog',
       'repos='. $repository['repo_id']
       .'&paths='. drupal_urlencode($item['path'])
-      . (isset($current_branch) ? '&branches='. $current_branch : '')
+      . (isset($current_branch) ? '&branches='. $current_branch : ''),
+      NULL, TRUE /* return absolute URL */
     );
   }
   return ''; // in case we really can't retrieve any sensible URL
@@ -1757,18 +2388,22 @@ function versioncontrol_get_url_item_log_view($repository, $item) {
  *   An empty string is returned if no item view URL has been defined,
  *   or if the item cannot be viewed for any reason.
  */
-function versioncontrol_get_url_item_view($repository, $item) {
+function versioncontrol_get_url_item_view($repository, &$item) {
   $urls = _versioncontrol_get_repository_urls($repository);
-  $current_branch = versioncontrol_get_current_item_branch($repository, $item);
+  $label = versioncontrol_get_item_selected_label($repository, $item);
 
-  if ($item['type'] == VERSIONCONTROL_ITEM_FILE) {
+  if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
+    $current_branch = $label['name'];
+  }
+
+  if (versioncontrol_is_file_item($item)) {
     return strtr($urls['file_view'], array(
       '%path'     => $item['path'],
       '%revision' => $item['revision'],
       '%branch'   => isset($current_branch) ? $current_branch : '',
     ));
   }
-  else { // if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
+  else { // if (versioncontrol_is_directory_item($item)) {
     return strtr($urls['directory_view'], array(
       '%path'     => $item['path'],
       '%revision' => $item['revision'],
@@ -1793,9 +2428,13 @@ function versioncontrol_get_url_item_view($repository, $item) {
  *   An empty string is returned if no diff URL has been defined,
  *   or if the two items cannot be diffed for any reason.
  */
-function versioncontrol_get_url_diff($repository, $file_item_new, $file_item_old) {
+function versioncontrol_get_url_diff($repository, &$file_item_new, $file_item_old) {
   $urls = _versioncontrol_get_repository_urls($repository);
-  $current_branch = versioncontrol_get_current_item_branch($repository, $file_item_new);
+  $label = versioncontrol_get_item_selected_label($repository, $file_item_new);
+
+  if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
+    $current_branch = $label['name'];
+  }
   return strtr($urls['diff'], array(
     '%path'         => $file_item_new['path'],
     '%new-revision' => $file_item_new['revision'],
@@ -1866,8 +2505,8 @@ function _versioncontrol_get_repository_urls($repository) {
 
 /**
  * Get the user-visible version of a commit identifier a.k.a. 'revision',
- * as plaintext. By default, this function returns $operation['revision']
- * if that property exists, or $operation['vc_op_id'] as fallback.
+ * as plaintext. By default, this function returns the operation's revision
+ * if that property exists, or its vc_op_id identifier as fallback.
  *
  * Version control backends can, however, choose to implement their own version
  * of this function, which for example makes it possible to cut the SHA-1 hash
@@ -1880,213 +2519,67 @@ function _versioncontrol_get_repository_urls($repository) {
  *   If the commit identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_format_commit_identifier($operation, $format = 'short') {
+function versioncontrol_format_revision_identifier($operation, $format = 'full') {
   if (empty($operation['revision'])) {
-    return $operation['vc_op_id'];
+    return '#'. $operation['vc_op_id'];
   }
   $vcs = $operation['repository']['vcs'];
-  if ($format == 'short' && versioncontrol_backend_implements($vcs, 'format_short_revision_identifier')) {
+  if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
     return _versioncontrol_call_backend(
-      $vcs, 'format_short_revision_identifier', array($operation['revision'])
+      $vcs, 'format_revision_identifier', array($operation, $format)
     );
   }
   return $operation['revision'];
 }
 
+
 /**
- * Retrieve general statistics about what happened in a single commit. For more granular
- * details about what happened in a single commit, use versioncontrol_get_operation_items().
+ * Try to retrieve a given item in a repository.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_commit_statistics')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_item')
  * if the particular backend actually implements it.
  *
- * @param $operation
- *   The commit operation to retrieve statistics about.
- * @param $operation_items
- *   The set of items belonging to the above operation. Can be passed by
- *   the caller if the caller already has the items, or can be left absent
- *   and they will be automatically obtained.
- *
- * @return
- *   A structured array containing general statistics about this commit.
- *   The array will consist of elements with the following keys:
- *
- *   - 'lines_added': Total number of lines added during this commit.
- *   - 'lines_removed': Total number of lines removed during this commit.
- *   - 'number_items': Total number of items/actions in this commit.
- *   - 'per_item_statistics': An array containing statistics on individual
- *        items/actions. Array keys are the current/new paths (just as with
- *        versioncontrol_get_operation_items()).
- *
- *   The array values of the 'per_item_statistics' element are again
- *   structured arrays and consist of elements with the following keys:
- *
- *   - 'lines_added': Number of lines added to this item.
- *   - 'lines_removed': Number of lines removed to this item.
- *
- *   These values are designed so that statistics from several commits can be
- *   combined, hence why totals are given rather than averages. A real-life
- *   example of such a result array can be found in the FakeVCS example module.
- */
-// TODO: rethink - I'm not satisfied with the current API for this.
-function versioncontrol_get_commit_statistics($operation, $operation_items = NULL) {
-  return _versioncontrol_call_backend(
-    $operation['repository']['vcs'], 'get_commit_statistics', array($operation, $operation_items)
-  );
-}
-
-/**
- * Retrieve the item of the deepest-level directory in the repository that is
- * common to all the changed/branched/tagged items in a commit, branch or
- * tag operation.
- *
- * @param $operation
- *   The commit, branch or tag operation whose deepest-level
- *   changed/branched/tagged directory should be retrieved.
- *
- * @return
- *   The requested directory item. Item values are structured arrays and
- *   consist of elements with the following keys:
- *
- *   - 'type': Specifies the item type, which in this case can only be
- *        VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the directory.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier
- *        of the respective version control system.)
- */
-// TODO: keep or remove?
-function versioncontrol_get_directory_item($operation) {
-  return _versioncontrol_call_backend(
-    $operation['repository']['vcs'], 'get_directory_item', array($operation)
-  );
-}
-
-/**
- * Retrieve the set of items that were affected by a branch operation.
- *
- * @param $branch
- *   The branch operation whose items should be retrieved. This is an array
- *   like the one returned by versioncontrol_get_branch_operation().
- *
- * @return
- *   An array of all items that were affected by the branching operation.
- *   An empty result array means that the whole repository has been branched.
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - 'source branch': Optional, may be set by the backend if the
- *        source branch (the one that this one branched off) can be retrieved.
- *        If given, this is a string with the original branch name.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
- */
-// TODO: remove
-function versioncontrol_get_branched_items($branch) {
-  return _versioncontrol_call_backend(
-    $branch['repository']['vcs'], 'get_branched_items', array($branch)
-  );
-}
-
-/**
- * Retrieve the set of items that were affected by a tag operation.
- *
- * @param $tag
- *   The tag operation whose items should be retrieved. This is an array
- *   like the one returned by versioncontrol_get_tag_operation().
- *
- * @return
- *   An array of all items that were affected by the tagging operation.
- *   An empty result array means that the whole repository has been tagged.
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - 'source branch': Optional, may be set by the backend if the
- *        source branch (the one that this tag comes from) can be retrieved.
- *        If given, this is a string with the original tag name.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
- */
-// TODO: remove
-function versioncontrol_get_tagged_items($tag) {
-  return _versioncontrol_call_backend(
-    $tag['repository']['vcs'], 'get_tagged_items', array($tag)
-  );
-}
-
-
-/**
- * Retrieve the current branch that this item is in.
- *
- * If this item was part of the result of versioncontrol_get_operation_items(),
- * this will probably be the branch that this item was committed to.
- * The main branch ('HEAD', 'trunk', 'master' or however it is called
- * in the respective VCS) is also a valid branch and should be expected
- * as return value. The current item branch is also expected to propagate
- * through calls of versioncontrol_get_parent_item() and
- * versioncontrol_get_directory_contents(), if applicable.
- *
  * @param $repository
  *   The repository that the item is located in.
- * @param $item
- *   The item whose current branch should be retrieved.
+ * @param $path
+ *   The path of the requested item.
+ * @param $revision
+ *   A specific revision for the requested item (as interpreted by the
+ *   VCS backend), or NULL if any revision is good enough - preferably,
+ *   the most recent one.
  *
  * @return
- *   A string containing the name of the current item branch,
- *   or NULL if no tag is known or applicable.
+ *   If the item with the given path and revision cannot be retrieved, NULL is
+ *   returned. Otherwise the result is an item array, consisting of the
+ *   following elements:
+ *
+ *   - 'type': Specifies the item type, which is either
+ *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY for items
+ *        that still exist, or VERSIONCONTROL_ITEM_FILE_DELETED respectively
+ *        VERSIONCONTROL_ITEM_DIRECTORY_DELETED for items that have been
+ *        removed.
+ *   - 'path': The path of the item at the specific revision.
+ *   - 'revision': The currently selected (file-level) revision of the item.
+ *        If there is no such revision (which may be the case for directory
+ *        items) then the 'revision' element is an empty string.
+ *
+ *   If the returned item is already present in the database, the
+ *   'item_revision_id' database identifier might also be filled in
+ *   (optionally, depending on the VCS backend).
  */
-function versioncontrol_get_current_item_branch($repository, $item) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_current_item_branch', array($repository, $item)
+function versioncontrol_get_item($repository, $path, $revision = NULL) {
+  $info = _versioncontrol_call_backend(
+    $repository['vcs'], 'get_item', array($repository, $path, $revision)
   );
-}
-
-/**
- * Retrieve the current tag that has been applied to this item.
- *
- * If this item was retrieved by calling versioncontrol_get_operation_items()
- * or versioncontrol_get_all_item_tags() then this function will return the
- * name of that respective tag, e.g. 'DRUPAL-5--1-1'. The current item tag is
- * also expected to propagate through calls of versioncontrol_get_parent_item()
- * and versioncontrol_get_directory_contents(), if applicable.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose current tag should be retrieved.
- *
- * @return
- *   A string containing the name of the current item tag,
- *   or NULL if no tag is known or applicable.
- */
-function versioncontrol_get_current_item_tag($repository, $item) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_current_item_tag', array($repository, $item)
-  );
+  if (empty($info)) {
+    return NULL;
+  }
+  $item = $info['item'];
+  $item['selected_label'] = new stdClass();
+  $item['selected_label']->label = is_null($info['selected_label'])
+                                    ? FALSE : $info['selected_label'];
+  return $item;
 }
 
 /**
@@ -2109,116 +2602,103 @@ function versioncontrol_get_current_item_tag($repository, $item) {
  *   NULL is returned.
  */
 function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL) {
-  if (versioncontrol_backend_implements($repository['vcs'], 'get_parent_item')) {
-    return _versioncontrol_call_backend(
-      $repository['vcs'], 'get_parent_item', array($repository, $item, $parent_path)
-    );
-  }
-  // Backend doesn't provide that function, use the default implementation.
+  $parent_item = array(
+    'type' => VERSIONCONTROL_ITEM_DIRECTORY,
+  );
+
   if (!isset($parent_path)) {
-    $item['path'] = dirname($item['path']);
+    $parent_item['path'] = dirname($item['path']);
+  }
+  else if ($item['path'] == $parent_path) {
     return $item;
   }
-  else if (strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
-    $item['path'] = $parent_path;
-    return $item;
+  else if ($parent_path == '/' || strpos($item['path'] .'/', $parent_path .'/') !== FALSE) {
+    $parent_item['path'] = $parent_path;
   }
-  return NULL;
+  else {
+    return NULL;
+  }
+
+  $backend = versioncontrol_get_backend($repository);
+
+  if (in_array(VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS, $backend['capabilities'])) {
+    $parent_item['revision'] = $item['revision'];
+  }
+  else {
+    $parent_item['revision'] = '';
+  }
+
+  $parent_item['selected_label'] = new stdClass();
+  $parent_item['selected_label']->get_from = 'other_item';
+  $parent_item['selected_label']->other_item = &$item;
+  $parent_item['selected_label']->other_item_tags = array('same_revision');
+
+  return $parent_item;
 }
 
 /**
- * Retrieve all branches that exist for the given item, and how this item
- * is named there. The main branch ('HEAD', 'trunk', 'master' or however it is
- * called in the respective VCS) is also included in the result.
+ * Given an item in a repository, retrieve related versions of that item on all
+ * different branches and/or tags where the item exists.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_all_item_branches')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
  * if the particular backend actually implements it.
  *
  * @param $repository
  *   The repository that the item is located in.
  * @param $item
- *   The item whose set of branches should be retrieved.
+ *   The item whose parallel sibling should be retrieved.
+ * @param $label_type
+ *   If unset, siblings will be retrieved both on branches and tags.
+ *   If set to VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG,
+ *   results are limited to just that label type.
  *
  * @return
- *   A structured array that looks like
- *     array(
- *       $branch1_name => $branch1_item,
- *       $branch2_name => $branch2_item,
- *       ...
- *     ).
+ *   An item array of parallel items on all branches and tags, possibly
+ *   including the original item itself (if appropriate for the given
+ *   @p $label_type). Array keys do not convey any specific meaning, item
+ *   values are again structured arrays and consist of elements with the
+ *   following keys:
  *
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
+ *   - 'type': Specifies the item type, which should be the same as the type
+ *        of the given @p $item.
  *   - 'path': The path of the item at the specific revision.
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  *
- *   An empty array is returned if there are no branches for this item.
- *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision'.
+ *   Branch and tag names are implicitely stored and can be retrieved by
+ *   calling versioncontrol_get_item_selected_label() on each item in the
+ *   result array.
  *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
+ *   NULL is returned if the given item is not inside the repository,
+ *   or has not been inside the repository at the specified revision.
+ *   An empty array is returned if the item is valid, but no parallel sibling
+ *   items can be found for the given @p $label_type.
  */
-function versioncontrol_get_all_item_branches($repository, $item) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_all_item_branches', array($repository, $item)
+function versioncontrol_get_parallel_items($repository, $item, $label_type = NULL) {
+  if (is_array($label_type)) { // not documented, but just to make sure
+    $label_types = $label_type;
+  }
+  else {
+    $label_types = isset($label_types)
+      ? array($label_type)
+      : array(VERSIONCONTROL_OPERATION_BRANCH, VERSIONCONTROL_OPERATION_TAG);
+  }
+  $results = _versioncontrol_call_backend(
+    $repository['vcs'], 'get_parallel_items',
+    array($repository, $item, $label_types)
   );
-}
+  $items = array();
 
-/**
- * Retrieve all tags that exist for the given item $path, and how this item
- * is named there.
- *
- * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_all_item_tags')
- * if the particular backend actually implements it.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose history should be retrieved.
- *
- * @return
- *   A structured array that looks like
- *     array(
- *       $tag1_name => $tag1_item,
- *       $tag2_name => $tag2_item,
- *       ...
- *     ).
- *
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was last changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- *   An empty array is returned if there are no tags for this item.
- *   NULL is returned if the given item is not inside the repository at the
- *   time of 'revision'.
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
- */
-function versioncontrol_get_all_item_tags($repository, $item) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_all_item_tags', array($repository, $item)
-  );
+  foreach ($results as $key => $result) {
+    $items[$key] = $result['item'];
+    $items[$key]['selected_label'] = new stdClass();
+    $items[$key]['selected_label']->label = is_null($result['selected_label'])
+                                            ? NULL
+                                            : $result['selected_label'];
+  }
+  return $items;
 }
 
 /**
@@ -2247,66 +2727,10 @@ function versioncontrol_format_item_revision($repository, $item, $format = 'shor
   return $item['revision'];
 }
 
-/**
- * Retrieve the revisions where the given item has been changed,
- * in reverse chronological order.
- *
- * Only direct descendants or predecessors of this item will be retrieved.
- * That means that history of the same item in a different (parallel) branch
- * will not be returned, except if the given state of the item was moved/copied
- * from there or goes back there in a more recent revision. In short, you'll
- * not get "1.7" and "1.2.2.4" items side by side if it doesn't make sense.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose history should be retrieved.
- *
- * @return
- *   An array containing the exact details of all item changes. Each element
- *   of the array is a structured array consisting of elements with the
- *   following keys:
- *
- *   - 'action': Specifies how the item was modified.
- *        One of the predefined VERSIONCONTROL_ACTION_* values.
- *   - 'modified': Boolean value, specifies if a file was modified in addition
- *        to the other action in the 'action' element of the array.
- *        Only exists for the VERSIONCONTROL_ACTION_MOVED
- *        and VERSIONCONTROL_ACTION_COPIED actions.
- *   - 'current item': The updated state of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_DELETED.
- *   - 'source items': An array with the previous state(s) of the modified item.
- *        Exists for all actions except VERSIONCONTROL_ACTION_ADDED.
- *
- *   Item values are structured arrays and consist of elements
- *   with the following keys:
- *
- *   - 'type': Specifies the item type, which is either
- *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
- *   - 'path': The path of the item at the specific revision.
- *   - 'revision': The (file-level) revision when the item was changed.
- *        If there is no such revision (which may be the case for
- *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
- *
- *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision.
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
- */
-function versioncontrol_get_item_history($repository, $item) {
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_item_history', array($repository, $item)
-  );
-}
-
 
 /**
  * Retrieve the set of files and directories that exist at a specified revision
- * in the given directory inside the repository.
+ * inside the given directory in the repository.
  *
  * This function is optional for VCS backends to implement, be sure to check
  * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
@@ -2315,17 +2739,16 @@ function versioncontrol_get_item_history($repository, $item) {
  * @param $repository
  *   The repository that the directory item is located in.
  * @param $directory_item
- *   The parent item of the the items that should be listed.
+ *   The parent item of the items that should be listed.
  * @param $recursive
  *   If FALSE, only the direct children of $path will be retrieved.
  *   If TRUE, you'll get every single descendant of $path.
  *
  * @return
- *   A structured item array containing the exact details of which items have
- *   been inside the directory at the time of the commit, including the
- *   directory itself. Array keys are the current/new paths.
- *   The corresponding item values are again structured arrays
- *   and consist of elements with the following keys:
+ *   A structured item array of items that have been inside the directory in
+ *   its given state, including the directory item itself. Array keys are the
+ *   current/new paths. The corresponding item values are again structured
+ *   arrays and consist of elements with the following keys:
  *
  *   - 'type': Specifies the item type, which is either
  *        VERSIONCONTROL_ITEM_FILE or VERSIONCONTROL_ITEM_DIRECTORY.
@@ -2333,9 +2756,6 @@ function versioncontrol_get_item_history($repository, $item) {
  *   - 'revision': The (file-level) revision when the item was last changed.
  *        If there is no such revision (which may be the case for
  *        directory items) then the 'revision' element is an empty string.
- *   - '[xxx]_specific': May be set by the backend to remember additional
- *        item info. ("[xxx]" is the unique string identifier of the respective
- *        version control system.)
  *
  *   NULL is returned if the given item is not inside the repository,
  *   or if it is not a directory item at all.
@@ -2344,21 +2764,37 @@ function versioncontrol_get_item_history($repository, $item) {
  *   in the FakeVCS example module.
  */
 function versioncontrol_get_directory_contents($repository, $directory_item, $recursive = FALSE) {
-  if ($directory_item['type'] != VERSIONCONTROL_ITEM_DIRECTORY) {
+  if (!versioncontrol_is_directory_item($directory_item)) {
     return NULL;
   }
-  return _versioncontrol_call_backend(
+  $contents = _versioncontrol_call_backend(
     $repository['vcs'], 'get_directory_contents',
     array($repository, $directory_item, $recursive)
   );
+  if (!isset($contents)) {
+    return NULL;
+  }
+  $items = array();
+
+  foreach ($contents as $path => $content) {
+    $items[$path] = $content['item'];
+    $items[$path]['selected_label'] = new stdClass();
+    $items[$path]['selected_label']->label = is_null($content['selected_label'])
+                                              ? NULL
+                                              : $content['selected_label'];
+  }
+  return $items;
 }
 
-
 /**
- * Retrieve the text or binary data of the given file in the specified commit.
+ * Retrieve a copy of the contents of a given item in the repository.
+ * (You won't get the original because repositories can often be remote.)
+ * The caller should make sure to delete the file when it's not needed anymore.
+ * (That requirement might change in the future though, say, in Drupal 6 when
+ * temporary files are a lot easier to track.)
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_file_contents')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_file_copy')
  * if the particular backend actually implements it.
  *
  * @param $repository
@@ -2367,26 +2803,23 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
  *   The file item whose contents should be retrieved.
  *
  * @return
- *   A structured array that consists of elements with the following keys:
- *
- *   - 'file type': Specifies the file type, which is either
- *       VERSIONCONTROL_FILE_TEXT or VERSIONCONTROL_FILE_BINARY.
- *   - 'contents': The raw contents of the file.
- *
+ *   The local path of the created copy, if successful.
  *   NULL is returned if the given item is not under version control,
- *   or was not under version control at the time of the given revision,
- *   or if it is not a file item at all.
- *
- *   A real-life example of such a result array can be found
- *   in the FakeVCS example module.
+ *   or was not under version control at the time of the given revision.
  */
-function versioncontrol_get_file_contents($repository, $file_item) {
-  if ($file_item['type'] != VERSIONCONTROL_ITEM_FILE) {
+function versioncontrol_get_file_copy($repository, $file_item) {
+  if (!versioncontrol_is_file_item($file_item)) {
     return NULL;
   }
-  return _versioncontrol_call_backend(
-    $repository['vcs'], 'get_file_contents', array($repository, $file_item)
+  $filename = basename($file_item['path']);
+  $destination = file_directory_temp() .'/versioncontrol-'. mt_rand() .'-'. $filename;
+  $success = _versioncontrol_call_backend(
+    $repository['vcs'], 'get_file_copy', array($repository, $file_item, $destination)
   );
+  if ($success) {
+    return $destination;
+  }
+  return NULL;
 }
 
 /**
@@ -2420,7 +2853,7 @@ function versioncontrol_get_file_contents($repository, $file_item) {
  *   in the FakeVCS example module.
  */
 function versioncontrol_get_file_annotation($repository, $file_item) {
-  if ($file_item['type'] != VERSIONCONTROL_ITEM_FILE) {
+  if (!versioncontrol_is_file_item($file_item)) {
     return NULL;
   }
   return _versioncontrol_call_backend(
@@ -2481,6 +2914,64 @@ function _versioncontrol_get_item_paths($items) {
   return array_keys($paths);
 }
 
+/**
+ * Check if the @p $path_regexp applies to the path of the given @p $item.
+ * This function works just like preg_match(), with the single difference that
+ * it also accepts a trailing slash for item paths if the item is a directory.
+ *
+ * @return
+ *   The number of times @p $path_regexp matches. That will be either 0 times
+ *   (no match) or 1 time because preg_match() (which is what this function
+ *   uses internally) will stop searching after the first match.
+ *   FALSE will be returned if an error occurred.
+ */
+function versioncontrol_preg_item_match($path_regexp, $item) {
+  $path = $item['path'];
+
+  if (versioncontrol_is_directory_item($item) && $path != '/') {
+    $path .= '/';
+  }
+  return preg_match($path_regexp, $path);
+}
+
+
+/**
+ * Return a the username of a VCS account.
+ *
+ * @param $uid
+ *   The Drupal user id of the user. If this is 0, the corresponding
+ *   Drupal user naturally can't be retrieved, with all implications for
+ *   displaying the username.
+ * @param $username
+ *   The VCS username for the account.
+ * @param $repository
+ *   The repository where this account is registered.
+ * @param $prefer_drupal_username
+ *   If TRUE (which is the default), this function tries to get the
+ *   corresponding Drupal user for the supplied uid and returns the "real"
+ *   username rather than the given one.
+ *   If FALSE, the given VCS username is always returned.
+ * @param $format
+ *   If 'html', the username will be linked to the user page (if possible)
+ *   or to the commit log page containing the user's commits.
+ *   If 'plaintext', the username will be returned without markup.
+ */
+function theme_versioncontrol_account_username($uid, $username, $repository, $prefer_drupal_username = TRUE, $format = 'html') {
+  if ($uid && $prefer_drupal_username) {
+    $user = user_load(array('uid' => $uid));
+
+    if ($user && $prefer_drupal_username) {
+      return ($format == 'html') ? theme('username', $user) : $user->name;
+    }
+  }
+
+  if ($format == 'html') {
+    return module_exists('commitlog')
+            ? commitlog_account_url($repository, $username)
+            : check_plain($username);
+  }
+  return $username;
+}
 
 /**
  * Print a list of contributors for the specified project.

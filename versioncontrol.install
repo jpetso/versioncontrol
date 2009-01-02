@@ -17,15 +17,57 @@ function versioncontrol_install() {
   switch ($GLOBALS['db_type']) {
     case 'mysqli':
     case 'mysql':
+      // The combined table for commit, branch and tag operations.
       db_query("CREATE TABLE {versioncontrol_operations} (
+        /*
+         * Unique identifier for each operation in this table.
+         * Does not necessarily correspond to chronological order in any way.
+         */
         vc_op_id int unsigned NOT NULL default 0,
+        /*
+         * Operation type as specified by the backend: either of
+         * VERSIONCONTROL_OPERATION_COMMIT, VERSIONCONTROL_OPERATION_BRANCH
+         * or VERSIONCONTROL_OPERATION_TAG. (For version control systems like
+         * Subversion that need to emulate branches and tags, this will still
+         * be VERSIONCONTROL_OPERATION_COMMIT - the 'intended' meaning is
+         * stored as associated label action.)
+         */
         type tinyint unsigned NOT NULL default 0,
+        /*
+         * Foreign key for the repository that the operation affected.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * Date/time when the operation was executed, as Unix timestamp.
+         */
         date bigint NOT NULL default 0,
+        /*
+         * User id for the Drupal user corresponding to 'username', if such an
+         * association can be found. 0 otherwise.
+         */
         uid int unsigned NOT NULL default 0,
+        /*
+         * VCS specific username of the author that executed this operation.
+         * For distributed version control systems, this is the author, not
+         * the committer.
+         */
         username varchar(64) NOT NULL default '',
+        /*
+         * VCS specific global revision identifier, like '1234' for Subversion
+         * or some SHA-1 hash for various distributed version control systems.
+         * Empty string if the VCS does not support atomic commits / global
+         * revisions.
+         */
         revision varchar(255) NOT NULL default '',
+        /*
+         * Log message. Might be empty for branch and tag operations, depending
+         * on the version control system's capabilities. Should really not be
+         * empty for commit messages, except for the super-evil case when the
+         * commit author is sloppy enough not to enter one *and* the VCS allows
+         * that to happen.
+         */
         message text,
+
         PRIMARY KEY (vc_op_id),
         KEY type (type),
         KEY repo_id (repo_id),
@@ -35,61 +77,279 @@ function versioncontrol_install() {
         KEY revision (revision)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Table that contains information about which branches and/or tags
+      // (= labels, referred to by the label_id) have been affected by an
+      // operation (vc_op_id), and how they've been affected (action).
+      // Let's refer to that combination as "label action".
+      //
+      // Commit operations might not have any label associated, which happens
+      // e.g. for SVN commits outside of /trunk, /tags and /branches (or if
+      // labels are neither natively supported nor emulated.)
+      //
+      // Possible label actions are:
+      // - Commit: commit operation, label is a branch,
+      //     action == VERSIONCONTROL_ACTION_MODIFIED
+      // - Native branch/tag creation: branch or tag operation, label has the
+      //     same type as the operation, action = VERSIONCONTROL_ACTION_ADDED
+      // - Native branch/tag deletion: branch or tag operation, label has the
+      //     same type as the operation, action = VERSIONCONTROL_ACTION_DELETED
+      // - Emulated branch/tag creation or deletion (think of SVN branches and
+      //     tags): commit operation, any label type, action is the same as for
+      //     native creations/deletions.
       db_query("CREATE TABLE {versioncontrol_operation_labels} (
+        /*
+         * Foreign key for the operation that affected the given label(s).
+         */
         vc_op_id int unsigned NOT NULL default 0,
+        /*
+         * Foreign key for the affected label.
+         */
         label_id int unsigned NOT NULL default 0,
+        /*
+         * Specifies how the label was affected, see table documentation
+         * for details on the semantics. Possible values are
+         * VERSIONCONTROL_ACTION_MODIFIED, VERSIONCONTROL_ACTION_ADDED
+         * and VERSIONCONTROL_ACTION_DELETED.
+         */
         action tinyint unsigned NOT NULL default 0,
+
         PRIMARY KEY (vc_op_id, label_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Table storing information about branches and tags (= labels) in a
+      // repository. While there might be multiple operations involving the
+      // same branch/tag (see also {versioncontrol_operation_labels},
+      // e.g. "create DRUPAL-6--1-0 tag for Version Control API files",
+      // "create DRUPAL-6--1-0 tag for CVS backend", "delete DRUPAL-6--1-0 tag
+      // for CVS backend again"), there is only one row in this table
+      // that represents this label.
       db_query("CREATE TABLE {versioncontrol_labels} (
+        /*
+         * Unique identifier for a branch or tag in this label, equivalent to
+         * the (also unique) repo_id/name/type combination in the same row.
+         */
         label_id int unsigned NOT NULL default 0,
+        /*
+         * Foreign key for the repository that this label is located in.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * Name of the label, e.g. 'HEAD', 'master', 'DRUPAL-6--1' or '6.x-1.0'.
+         */
         name varchar(255) NOT NULL default '',
+        /*
+         * Whether this label is a branch or a tag. Consequently,
+         * this can be either VERSIONCONTROL_OPERATION_BRANCH or
+         * VERSIONCONTROL_OPERATION_TAG. (If we went for total correctness,
+         * it would have been VERSIONCONTROL_LABEL_{BRANCH,TAG} but I fear
+         * the confusion coming out of two similar constants. Therefore,
+         * reusing the operation constants.)
+         */
         type tinyint unsigned NOT NULL default 0,
+
         PRIMARY KEY (label_id),
         UNIQUE KEY (repo_id, name, type)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Table that relates an operation to the items (or more correctly, to
+      // the item revisions) that it affected. For example, an SVN commit with
+      // revision '1234' might modify an item that is now /trunk/file.txt at
+      // revision '1234', and move a directory from somewhere else that is now
+      // /trunk/dir at revision '1234'. Those items are recorded here along
+      // with the vc_op_id that denotes the operation.
+      //
+      // Branch/tag operations that affect the whole repository (like in
+      // Git or Mercurial) do not have items associated, whereas branch/tag
+      // operations that affect only a limited set of items (like in CVS or
+      // Subversion) link to the branched/tagged items with this table.
       db_query("CREATE TABLE {versioncontrol_operation_items} (
+        /*
+         * Foreign key for the operation that affected the given item(s),
+         * linking to the primary key in {versioncontrol_operations}.
+         */
         vc_op_id int unsigned NOT NULL default 0,
+        /*
+         * Foreign key for the affected item revision,
+         * linking to the primary key in {versioncontrol_item_revisions}.
+         */
         item_revision_id int unsigned NOT NULL default 0,
-        type tinyint unsigned NOT NULL default 0, /* real member or cached item */
+        /*
+         * Real member or cached item. This is an implementation detail of a
+         * performance optimization (for queries with a 'paths' constraint),
+         * and private to the API module. Other modules must not touch this.
+         * VERSIONCONTROL_OPERATION_MEMBER_ITEM is the standard value and makes
+         * up for most entries in here, whereas VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM
+         * is the optimization (denoting an item that is not part of a
+         * versioncontrol_get_operation_items() result).
+         */
+        type tinyint unsigned NOT NULL default 0,
+
         PRIMARY KEY (vc_op_id, item_revision_id),
         KEY (type)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Table that stores item history, i.e. relates an item to one or more
+      // direct predecessors (= source items). Likewise, a source item can
+      // also have multiple successors, for example if it's copied to one
+      // location and later (or at the same time) moved to another location.
       db_query("CREATE TABLE {versioncontrol_source_items} (
+        /*
+         * Foreign key for the successor item,
+         * linking to the primary key in {versioncontrol_item_revisions}.
+         * This one is more recent in revision history than the source item.
+         */
         item_revision_id int unsigned NOT NULL default 0,
+        /*
+         * Foreign key for the source item, linking to a primary key
+         * in {versioncontrol_item_revisions} (but a different one than
+         * the item_revision_id links to. Contains 0 if the action is
+         * VERSIONCONTROL_ACTION_ADDED.
+         */
         source_item_revision_id int unsigned NOT NULL default 0,
+        /*
+         * Action that was performed while transforming the source item into
+         * the successor item. Can be one of the VERSIONCONTROL_ACTION_* values
+         * listed at the top of versioncontrol.module.
+         *
+         * The VERSIONCONTROL_ACTION_DELETED and VERSIONCONTROL_ACTION_REPLACED
+         * actions are considered to be the end in the history of an item,
+         * no further successors than the current one should be retrieved.
+         * (For VERSIONCONTROL_ACTION_DELETED, item_revision_id links to a
+         * deleted item. For VERSIONCONTROL_ACTION_REPLACED, item_revision_id
+         * links to a different item at the same path that replaced the item
+         * specified by source_item_revision_id.
+         *
+         * Likewise, the VERSIONCONTROL_ACTION_ADDED action is considered the
+         * beginning, with source_item_revision_id being 0 in that case.
+         */
         action tinyint unsigned NOT NULL default 0,
+        /*
+         * Specifies whether line-change information is available (1 as value)
+         * or not (0 as value). Naturally, this should only apply to file
+         * items, not to directory items. VERSIONCONTROL_ACTION_DELETED and
+         * VERSIONCONTROL_ACTION_REPLACED actions are also not supposed to
+         * contain line-change information.
+         */
+        line_changes_recorded tinyint unsigned NOT NULL default 0,
+        /*
+         * If the line_changes_recorded column is 1 then this column contains
+         * the amount of lines that was added to the file compared to its
+         * source revision. (Equivalent to the 'plus' lines in a unified diff.)
+         */
+        line_changes_added int unsigned NOT NULL default 0,
+        /*
+         * If the line_changes_recorded column is 1 then this column contains
+         * the amount of lines that was removed from the file compared to its
+         * source revision. (Equivalent to the 'minus' lines in a unified diff.)
+         */
+        line_changes_removed int unsigned NOT NULL default 0,
+
         PRIMARY KEY (item_revision_id, source_item_revision_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Table containing all known different versions of a file or directory
+      // item. For version control systems using global revisions, only the
+      // revisions should be recorded in here when the item was actually
+      // changed, i.e. part of a commit operation. (Not every revision needs
+      // to have all associated items recorded in here, that would be insane.)
+      // Non-versioned items, such as directories in CVS or Git, should not be
+      // recorded in this table.
       db_query("CREATE TABLE {versioncontrol_item_revisions} (
+        /*
+         * Unique identifier for each item revision. The same item in a
+         * different revision gets a different item_revision_id. Equivalent to
+         * the (also unique) repo_id/path/revision combination in the same row.
+         */
         item_revision_id int unsigned NOT NULL default 0,
+        /*
+         * Foreign key for the repository that this item is located in.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * Path of the item, relative to the repository root.
+         * Does *not* start with a slash, and also does not end with one,
+         * not even if the item is a directory.
+         */
         path varchar(255) NOT NULL default '',
+        /*
+         * (File-level) revision of the item, such as '1.12.4.3' for CVS.
+         * If the version control system supports global revisions, this should
+         * contain the same revision as the 'revision' property of the
+         * associated commit operation.
+         */
         revision varchar(255) NOT NULL default '',
+        /*
+         * Specifies whether the item is a file or directory, and whether it
+         * exists or is deleted. Deleted items might exist for real, such as in
+         * CVS repositories (the 'Attic') or they might just be recorded as
+         * part of a commit operation where the item was deleted, even though
+         * the version control system does not know about this revision.
+         * In Version Control API, deleted items only exist for display
+         * purposes, backends are expected not to retrieve information about
+         * them other than item history. Possible values for the item type are
+         * VERSIONCONTROL_ITEM_FILE, VERSIONCONTROL_ITEM_FILE_DELETED,
+         * VERSIONCONTROL_ITEM_DIRECTORY and VERSIONCONTROL_ITEM_DIRECTORY_DELETED.
+         * Usually though, API users should only use the functions
+         * versioncontrol_is_file_item(), versioncontrol_is_directory_item()
+         * and versioncontrol_is_deleted_item() for testing these constants.
+         */
         type tinyint unsigned NOT NULL default 0,
+
         PRIMARY KEY (item_revision_id),
-        UNIQUE KEY (repo_id, path),
+        /* UNIQUE KEY (repo_id, path, revision) -- key too long */
+        KEY (repo_id, path),
         KEY revision (revision)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // The set of repositories known to the Version Control API.
       db_query("CREATE TABLE {versioncontrol_repositories} (
+        /*
+         * Unique identifier for the repository.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * User visible name of the repository, to be run through check_plain().
+         */
         name varchar(255) NOT NULL default '',
+        /*
+         * Unique string identifier of the backend, e.g. 'cvs', 'svn' or 'git'.
+         */
         vcs varchar(8) NOT NULL default '',
+        /*
+         * Root URL/path of the repository, to be interpreted by the
+         * VCS backend when it interfaces with the repository.
+         */
         root varchar(255) NOT NULL default '',
+        /*
+         * Unique string identifier of the authorization method.
+         * (For more information on authorization methods, see
+         * hook_versioncontrol.php for functions marked with
+         * '@ingroup Authorization'.)
+         */
         authorization_method varchar(64) NOT NULL default '',
+        /*
+         * Repository URL backend. Intended to be pluggable, but for now this
+         * is hardcoded to 'versioncontrol_default_urls' (which uses the values
+         * in the {versioncontrol_repository_urls} table).
+         */
         url_backend varchar(64) NOT NULL default '',
+
         PRIMARY KEY (repo_id),
         UNIQUE KEY name (name)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Repository URLs for repositories using the
+      // 'versioncontrol_default_urls' backend. (= all of them, currently)
       db_query("CREATE TABLE {versioncontrol_repository_urls} (
+        /*
+         * Foreign key to the repository that the URLs refer to,
+         * linking to the {versioncontrol_repositories} table.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * Various URLs with path/revision/issue-number placeholders, see the
+         * corresponding versioncontrol_get_url_*() functions for more info.
+         */
         commit_view varchar(255) NOT NULL default '',
         file_log_view varchar(255) NOT NULL default '',
         file_view varchar(255) NOT NULL default '',
@@ -99,17 +359,53 @@ function versioncontrol_install() {
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Repository settings that are just intended for internal use by
+      // the API module itself.
       db_query("CREATE TABLE {versioncontrol_repository_metadata} (
+        /*
+         * Foreign key to the corresponding repository,
+         * linking to the {versioncontrol_repositories} table.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * Hm... unused? I think I might have used this for sorting the
+         * repositories in lists, seems I dropped it again.
+         * Bad maintainer, jpetso, bad maintainer. Ts.
+         */
         weight smallint NOT NULL default 0,
+        /*
+         * The message that shows up on the repository edit form when a new
+         * user wants to register an account. Grep versioncontrol.module for
+         * 'versioncontrol_registration_message_repository' to have a look at
+         * the default value.
+         */
         registration_message text,
+
         PRIMARY KEY (repo_id)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
+      // Association table of VCS account usernames (in a specific repository)
+      // to Drupal user ids. A Drupal user can be associated to multiple
+      // VCS accounts. Ideally, multiple VCS accounts per repository should be
+      // possible too, but clumsy array data structures and assumptions in the
+      // admin interface (elsewhere, too? don't know) currently make it
+      // necessary to restrict the number of VCS accounts to a maximum
+      // of 1 per repository and Drupal user.
       db_query("CREATE TABLE {versioncontrol_accounts} (
+        /*
+         * Drupal user id, linking to the {users} table.
+         */
         uid int unsigned NOT NULL default 0,
+        /*
+         * Foreign key to the repository for the VCS account,
+         * linking to the {versioncontrol_repositories} table.
+         */
         repo_id int unsigned NOT NULL default 0,
+        /*
+         * VCS-specific username of the VCS account.
+         */
         username varchar(64) NOT NULL default '',
+
         PRIMARY KEY (uid, repo_id),
         UNIQUE KEY (repo_id, username)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
@@ -162,6 +458,9 @@ function versioncontrol_install() {
         item_revision_id int NOT NULL default 0,
         source_item_revision_id int NOT NULL default 0,
         action smallint NOT NULL default 0,
+        line_changes_recorded smallint NOT NULL default 0,
+        line_changes_added int NOT NULL default 0,
+        line_changes_removed int NOT NULL default 0,
         PRIMARY KEY (item_revision_id, source_item_revision_id)
       )");
 
@@ -172,8 +471,9 @@ function versioncontrol_install() {
         revision varchar(255) NOT NULL default '',
         type smallint NOT NULL default 0,
         PRIMARY KEY (item_revision_id),
-        UNIQUE (repo_id, path)
+        /* UNIQUE (repo_id, path) -- key too long */
       )");
+      db_query("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
       db_query("CREATE INDEX {versioncontrol_item_revisions}_revision_idx ON {versioncontrol_item_revisions} (revision)");
 
       db_query("CREATE TABLE {versioncontrol_repositories} (
@@ -214,6 +514,14 @@ function versioncontrol_install() {
       )");
       break;
   }
+
+  // Insert an empty "0" item for joining the {versioncontrol_operation_items}
+  // table with {versioncontrol_item_revisions} without omitting items.
+  // (Required for versioncontrol_fetch_source_items().)
+  db_query("INSERT INTO {versioncontrol_item_revisions}
+            (item_revision_id, repo_id, path, revision, type)
+            VALUES (%d, %d, '%s', '%s', %d)",
+            0, 0, '', '', 0 /* VERSIONCONTROL_ITEM_EMPTY */);
 }
 
 
@@ -693,5 +1001,73 @@ function versioncontrol_update_4() {
     $ret[] = update_sql("DELETE FROM {sequences} WHERE name = '{versioncontrol_branch_operations}_branch_op_id'");
   }
 
+  return $ret;
+}
+
+/**
+ * Update 5: Fix wrong unique key constraint.
+ */
+function versioncontrol_update_5() {
+  $ret = array();
+
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_item_revisions} DROP KEY repo_id");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_item_revisions} ADD KEY (repo_id, path)");
+      break;
+
+    case 'pgsql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_item_revisions} DROP CONSTRAINT {versioncontrol_item_revisions}_repo_id_key");
+      $ret[] = update_sql("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
+      break;
+  }
+  return $ret;
+}
+
+/**
+ * Update 6: Insert an empty "0" item for joining the
+ * {versioncontrol_operation_items} table with {versioncontrol_item_revisions}.
+ */
+function versioncontrol_update_6() {
+  $ret = array();
+  $ret[] = update_sql("INSERT INTO {versioncontrol_item_revisions}
+            (item_revision_id, repo_id, path, revision, type)
+            VALUES (0, 0, '', '', 0)");
+  return $ret;
+}
+
+/**
+ * Update 7: Add new columns for lines-changed information
+ * to the {versioncontrol_source_items} table.
+ */
+function versioncontrol_update_7() {
+  $ret = array();
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_source_items} ADD line_changes_recorded tinyint unsigned NOT NULL default 0");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_source_items} ADD line_changes_added int unsigned NOT NULL default 0");
+      $ret[] = update_sql("ALTER TABLE {versioncontrol_source_items} ADD line_changes_removed int unsigned NOT NULL default 0");
+      break;
+
+    case 'pgsql':
+      db_add_column($ret, 'versioncontrol_source_items', 'line_changes_recorded', 'smallint', array('not null' => TRUE, 'default' => 0));
+      db_add_column($ret, 'versioncontrol_source_items', 'line_changes_added', 'int', array('not null' => TRUE, 'default' => 0));
+      db_add_column($ret, 'versioncontrol_source_items', 'line_changes_removed', 'int', array('not null' => TRUE, 'default' => 0));
+      break;
+  }
+  return $ret;
+}
+
+/**
+ * Update 8: Forgot to increase the "action" column
+ *   in {versioncontrol_operation_labels} - seems the old constants were
+ *   used at least in one place after all.
+ */
+function versioncontrol_update_8() {
+  $ret = array();
+  $ret[] = update_sql('UPDATE {versioncontrol_operation_labels}
+                        SET action = action + 1');
   return $ret;
 }

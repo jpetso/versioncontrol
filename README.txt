@@ -20,6 +20,7 @@ example backend module in the versioncontrol_fakecvs directory.
 In subdirectories, you can find three modules that extend the basic
 administration functionality of Version Control API with additional
 functionality:
+
 - Commit Log displays a history of commits and sends out notification mails
   to the version control administrator.
 - Commit Restrictions grants or denies repository access
@@ -27,6 +28,10 @@ functionality:
 - Version Control Account Status requires users to submit motivation texts
   and meet approval of version control administrators before their VCS account
   is enabled.
+
+Have a look at the OVERVIEW.txt file for a basic introduction into concepts,
+forms and API of this module.
+
 
 CAVEATS
 ------

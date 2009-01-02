@@ -100,7 +100,7 @@
  *        Note that you can only rely on this element to exist for
  *        operation items - functions that interface directly with the VCS
  *        (such as versioncontrol_get_directory_contents() or
- *        versioncontrol_get_all_item_branches()) might not include
+ *        versioncontrol_get_parallel_items()) might not include
  *        this identifier, for obvious reasons.
  *
  *   For commit operations, additional information about the origin of
@@ -196,10 +196,6 @@ function hook_versioncontrol_operation($op, $operation, $operation_items) {
  * @ingroup Target audience: Commit access modules
  */
 function hook_versioncontrol_write_access($operation, $operation_items) {
-  if (empty($operation_items)) {
-    return array(); // no idea if this is ever going to happen, but let's be prepared
-  }
-
   // Only allow users with a registered Drupal user account to commit.
   if ($operation['uid'] != 0) {
     $user = user_load(array('uid' => $operation['uid']));
@@ -214,51 +210,52 @@ function hook_versioncontrol_write_access($operation, $operation_items) {
     );
     return array($error_message); // disallow the commit with an explanation
   }
-  return array(); // we're indifferent, allow if nobody else has objections
-}
 
-///TODO: port to hook_versioncontrol_write_access()
-function hook_versioncontrol_branch_access($branch, $branched_items) {
-  if ($branch['action'] == VERSIONCONTROL_ACTION_DELETED) {
-    return array(); // even invalid tags should be allowed to be deleted
+  // Mind that also commits normally have labels, except for stuff like
+  // Subversion when the user commits outside of the trunk/branches/tags
+  // directories. Let's say we want to prevent such commits.
+  if (empty($operation['labels'])) {
+    $error_message = t("** ERROR: It is not allowed to commit without a branch or tag!");
+    return array($error_message);
   }
 
-  // Make sure that the assigned branch name is allowed.
-  $valid_branches = array('@^HEAD$@', '@^DRUPAL-5(--[2-9])?$@', '@^DRUPAL-6--[1-9]$@');
+  // If an empty array is returned then that means we're indifferent:
+  // allow the operation if nobody else has objections.
+  $error_messages = array();
 
-  foreach ($valid_branches as $valid_branch_regexp) {
-    if (preg_match($valid_branch_regexp, $branch['branch_name'])) {
-      return array(); // we're indifferent, allow if nobody else has objections
+  // Restrict disallowed branches and tags.
+  $valid_labels = array(
+    VERSIONCONTROL_OPERATION_BRANCH => array('@^HEAD$@', '@^DRUPAL-5(--[2-9])?$@', '@^DRUPAL-6--[1-9]$@'),
+    VERSIONCONTROL_OPERATION_TAG => array('@^DRUPAL-[56]--(\d+)-(\d+)(-[A-Z0-9]+)?$@'),
+  );
+
+  foreach ($operation['labels'] as $label) {
+    if ($label['type'] == VERSIONCONTROL_OPERATION_TAG
+        && $label['action'] == VERSIONCONTROL_ACTION_DELETED) {
+      continue; // no restrictions, even invalid tags should be allowed to be deleted
+    }
+
+    // Make sure that the assigned branch or tag name is allowed.
+    $valid = FALSE;
+
+    foreach ($valid_labels[$label['type']] as $valid_label_regexp) {
+      if (preg_match($valid_label_regexp, $label['name'])) {
+        $valid = TRUE;
+        break;
+      }
+    }
+    if (!$valid) {
+      // No regexps match this label, so deny it.
+      $error_messages[] = t('** ERROR: the !name !labeltype is not allowed in this repository.', array(
+        '!name' => $label['name'],
+        '!labeltype' => ($label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+                        ? t('branch')
+                        : t('tag'),
+      ));
     }
   }
-  // No branch regexps match this branch, so deny it.
-  $error_message = t(
-    '** ERROR: the !name branch is not allowed in this repository.',
-    array('!name' => $branch['branch_name'])
-  );
-  return array($error_message); // disallow the commit with an explanation
-}
 
-///TODO: port to hook_versioncontrol_write_access()
-function hook_versioncontrol_tag_access($tag, $tagged_items) {
-  if ($tag['action'] == VERSIONCONTROL_ACTION_DELETED) {
-    return array(); // even invalid tags should be allowed to be deleted
-  }
-
-  // Make sure that the assigned tag name is allowed.
-  $valid_tags = array('@^DRUPAL-[56]--(\d+)-(\d+)(-[A-Z0-9]+)?$@');
-
-  foreach ($valid_tags as $valid_tag_regexp) {
-    if (preg_match($valid_tag_regexp, $tag['tag_name'])) {
-      return array(); // we're indifferent, allow if nobody else has objections
-    }
-  }
-  // No tag regexps match this tag, so deny it.
-  $error_message = t(
-    '** ERROR: the !name tag is not allowed in this repository.',
-    array('!name' => $tag['tag_name'])
-  );
-  return array($error_message); // disallow the commit with an explanation
+  return $error_messages;
 }
 
 
