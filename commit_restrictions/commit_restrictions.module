@@ -59,7 +59,7 @@ function commit_restrictions_form_alter($form_id, &$form) {
       $form['branch_tag_restrictions']['valid_branch_tag_paths'] = array(
         '#type' => 'textfield',
         '#title' => t('Allowed paths for branches and tags'),
-        '#description' => t('A space-separated list of PHP regular expressions for directories or files where it will be possible to create branches and tags. Example: "@^(/[^/]+)?/(modules|themes|theme-engines|docs|translations)/@"'),
+        '#description' => t('A space-separated list of PHP regular expressions for directories or files where it will be possible to create branches and tags. If empty, branches and tags may be created anywhere in the repository. Example: "@^(/[^/]+)?/(modules|themes|theme-engines|docs|translations)/@"'),
         '#default_value' => implode(' ', $restrictions['valid_branch_tag_paths']),
         '#size' => 60,
       );

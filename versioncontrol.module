@@ -2375,8 +2375,8 @@ function versioncontrol_get_url_item_log_view($repository, &$item) {
 }
 
 /**
- * Retrieve the URL of the repository viewer that displays the given item
- * in the corresponding repository.
+ * Retrieve the URL of the repository viewer that displays the contents of the
+ * given item in the corresponding repository.
  *
  * @param $repository
  *   The repository that the item is located in.
@@ -2441,7 +2441,7 @@ function versioncontrol_get_url_diff($repository, &$file_item_new, $file_item_ol
 /**
  * Retrieve the URL of the issue tracker that displays the issue/case/bug page
  * of an issue id which presumably has been mentioned in a commit message.
- * As issue tracker urls are specific to each repository, this also needs
+ * As issue tracker URLs are specific to each repository, this also needs
  * to be given as argument.
  *
  * @param $repository

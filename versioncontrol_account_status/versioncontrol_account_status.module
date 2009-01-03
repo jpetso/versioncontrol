@@ -454,7 +454,7 @@ function versioncontrol_account_status_form_alter_repository_settings($form_id, 
   $form['account_registration']['versioncontrol_account_status_application_form']['versioncontrol_account_status_motivation_description'] = array(
     '#type' => 'textarea',
     '#title' => t('Motivation message description'),
-    '#description' => t('Text to display below the motivation field of an application.'),
+    '#description' => t('Help text to display below the motivation text input field of an application.'),
     '#default_value' => $strings['motivation_description'],
   );
 
@@ -516,7 +516,7 @@ function versioncontrol_account_status_form_alter_repository_settings($form_id, 
   $form['account_registration']['versioncontrol_account_status_email']['versioncontrol_account_status_disabled_email'] = array(
     '#type' => 'textarea',
     '#title' => t('@vcs account disabled e-mail message', array('@vcs' => $vcs_name)),
-    '#description' => t('The message to send to users whose accounts have been disabled.'),
+    '#description' => t('The message to send to users whose (previously approved) accounts have been disabled.'),
     '#default_value' => $strings['disabled_email'],
   );
 }

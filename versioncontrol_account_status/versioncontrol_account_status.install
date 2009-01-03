@@ -6,70 +6,122 @@
  * and meet approval of version control administrators before their VCS account
  * is enabled.
  *
- * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
+
+/**
+ * Implementation of hook_schema().
+ */
+function versioncontrol_account_status_schema() {
+  $schema = array();
+
+  $schema['versioncontrol_account_status_users'] = array(
+    'description' => t('A table describing the approval status of a user account in an associated repository. The Version Control Account Status module maps the approval status to the the Version Control API\'s concept of "authorized accounts".'),
+    'fields' => array(
+      'uid' => array(
+        'description' => t('The Drupal user id of the applying user, referring to both {users}.uid and {versioncontrol_accounts}.uid.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'repo_id' => array(
+        'description' => t('The repository identifier of the repository where the user requested approval for a VCS account, referring to {versioncontrol_repositories}.repo_id.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'motivation' => array(
+        'description' => t('The motivation message entered by the applying user. This contains an explanation why the user thinks that (s)he should get a VCS account for this repository.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'status' => array(
+        'description' => t('The approval status of the applying user - one of the constants defined at the top of versioncontrol_account_status.module. If there is no entry for a user/repository combination, the module will assume the VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED constant when retrieving the status.'),
+        'type' => 'int',
+        'size' => 'tiny',
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+    ),
+    'primary key' => array('uid', 'repo_id'),
+  );
+
+  $schema['versioncontrol_account_status_strings'] = array(
+    'description' => t('A set of admin-definable UI strings that the user will be presented at some point of the application. Stored per repository, in order to enable different requirements, policies and whatnot. If no entry exists for a given repository, the Version Control Account Status module will use a set of default values instead (which might not be totally suited, as they lack specificity and contain example text).'),
+    'fields' => array(
+      'repo_id' => array(
+        'description' => t('The repository identifier of the repository that those UI strings apply to, referring to {versioncontrol_repositories}.repo_id.'),
+        'type' => 'int',
+        'unsigned' => TRUE,
+        'not null' => TRUE,
+        'default' => 0,
+      ),
+      'default_condition_description' => array(
+        'description' => t('Required pledge: a statement that the user needs to answer with "Yes" in order to proceed with the application. (If more of these statements are required, they can be can added with custom code.)'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'default_condition_error' => array(
+        'description' => t('The error text that is shown when the user doesn\'t select "Yes" for the statement in {versioncontrol_account_status_strings}.default_condition_description.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'motivation_description' => array(
+        'description' => t('Help text to display below the motivation text input field of an application.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'user_notification_email' => array(
+        'description' => t('The message to send to users whose application has been received.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'admin_notification_email' => array(
+        'description' => t('The message sent to the administrator when a user has submitted an application.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'approved_email' => array(
+        'description' => t('The message to send to users whose accounts have been approved.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'pending_email' => array(
+        'description' => t('The message to send to users whose accounts cannot be approved yet.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'declined_email' => array(
+        'description' => t('The message to send to users whose accounts have been declined.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+      'disabled_email' => array(
+        'description' => t('The message to send to users whose (previously approved) accounts have been disabled.'),
+        'type' => 'text',
+        'not null' => FALSE,
+      ),
+    ),
+    'primary key' => array('repo_id'),
+  );
+
+  return $schema;
+}
 
 /**
  * Implementation of hook_install().
  */
 function versioncontrol_account_status_install() {
-  switch ($GLOBALS['db_type']) {
-    case 'mysqli':
-    case 'mysql':
-      db_query("CREATE TABLE {versioncontrol_account_status_users} (
-        uid int unsigned NOT NULL default 0,
-        repo_id int unsigned NOT NULL default 0,
-        motivation text,
-        status tinyint NOT NULL default 0,
-        PRIMARY KEY (uid, repo_id)
-      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-
-      db_query("CREATE TABLE {versioncontrol_account_status_strings} (
-        repo_id int unsigned NOT NULL default 0,
-        default_condition_description text,
-        default_condition_error text,
-        motivation_description text,
-        user_notification_email text,
-        admin_notification_email text,
-        approved_email text,
-        pending_email text,
-        declined_email text,
-        disabled_email text,
-        PRIMARY KEY (repo_id)
-      ) /*!40100 DEFAULT CHARACTER SET utf8 */");
-      break;
-
-    case 'pgsql':
-      db_query("CREATE TABLE {versioncontrol_account_status_users} (
-        uid int NOT NULL default 0,
-        repo_id int NOT NULL default 0,
-        motivation text,
-        status smallint NOT NULL default 0,
-        PRIMARY KEY (uid, repo_id)
-      )");
-
-      db_query("CREATE TABLE {versioncontrol_account_status_strings} (
-        repo_id int NOT NULL default 0,
-        default_condition_description text,
-        default_condition_error text,
-        motivation_description text,
-        user_notification_email text,
-        admin_notification_email text,
-        approved_email text,
-        pending_email text,
-        declined_email text,
-        disabled_email text,
-        PRIMARY KEY (repo_id)
-      )");
-      break;
-  }
+  // Create tables.
+  drupal_install_schema('versioncontrol_account_status');
 }
-
 
 /**
  * Implementation of hook_uninstall().
  */
 function versioncontrol_account_status_uninstall() {
-  db_query('DROP TABLE {versioncontrol_account_status_users}');
-  db_query('DROP TABLE {versioncontrol_account_status_strings}');
+  // Remove tables.
+  drupal_uninstall_schema('versioncontrol_account_status');
 }

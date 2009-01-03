@@ -192,7 +192,9 @@ function _versioncontrol_access_errors($new_messages = NULL) {
  *        when the files were branched or tagged.)
  *   - 'uid': The Drupal user id of the committer. Passing this is optional -
  *        if it isn't set, this function will determine the uid.
- *   - 'username': The system specific VCS username of the committer.
+ *   - 'username': The system specific VCS username of the user who executed
+ *        this operation. For distributed version control systems, this should
+ *        be the author, not the committer.
  *   - 'message': The log message for the commit, tag or branch operation.
  *        If a version control system doesn't support messages for the current
  *        operation type, this element should be empty.
