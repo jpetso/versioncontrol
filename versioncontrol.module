@@ -2395,21 +2395,15 @@ function versioncontrol_get_url_item_view($repository, &$item) {
   if (isset($label['type']) && $label['type'] == VERSIONCONTROL_OPERATION_BRANCH) {
     $current_branch = $label['name'];
   }
+  $view_url = versioncontrol_is_file_item($item)
+              ? $urls['file_view']
+              : $urls['directory_view'];
 
-  if (versioncontrol_is_file_item($item)) {
-    return strtr($urls['file_view'], array(
-      '%path'     => $item['path'],
-      '%revision' => $item['revision'],
-      '%branch'   => isset($current_branch) ? $current_branch : '',
-    ));
-  }
-  else { // if (versioncontrol_is_directory_item($item)) {
-    return strtr($urls['directory_view'], array(
-      '%path'     => $item['path'],
-      '%revision' => $item['revision'],
-      '%branch'   => isset($current_branch) ? $current_branch : '',
-    ));
-  }
+  return strtr($view_url, array(
+    '%path'     => $item['path'],
+    '%revision' => $item['revision'],
+    '%branch'   => isset($current_branch) ? $current_branch : '',
+  ));
 }
 
 /**
