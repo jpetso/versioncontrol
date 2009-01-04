@@ -9,7 +9,7 @@
  * for accounts and repositories.
  *
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
- * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 /**
@@ -417,20 +417,11 @@ function versioncontrol_admin_account_import_form_submit($form_id, $form_values)
 
 
 /**
- * Callback for "admin/project/versioncontrol-accounts/export":
+ * Callback for 'admin/project/versioncontrol-accounts/export/%versioncontrol_repository':
  * Export a repository's authenticated accounts to the version control system's
  * password file format.
  */
-function versioncontrol_admin_account_export_page() {
-  $repo_id = arg(4);
-
-  if (is_numeric($repo_id)) {
-    $repository = versioncontrol_get_repository($repo_id);
-  }
-  if (!isset($repository)) {
-    // When the repository is not given, show the redirection page.
-    return drupal_get_form('versioncontrol_admin_account_export_form');
-  }
+function versioncontrol_admin_account_export_page($repository) {
   if (!versioncontrol_backend_implements($repository['vcs'], 'export_accounts')) {
     drupal_not_found();
     return;
@@ -520,7 +511,7 @@ function versioncontrol_admin_account_export_form_submit($form_id, $form_values)
 }
 
 /**
- * Form callback for "admin/project/versioncontrol-accounts/export/$repo_id":
+ * Form callback for 'admin/project/versioncontrol-accounts/export/%versioncontrol_repository':
  * Show the exported account data in a form as text area.
  *
  * @param $repository
@@ -624,35 +615,28 @@ function versioncontrol_admin_repository_list() {
 }
 
 /**
- * Form callback for "admin/project/versioncontrol-repositories/edit/$repo_id"
+ * Form callback for
+ * 'admin/project/versioncontrol-repositories/edit/%versioncontrol_repository'
  * and "admin/project/versioncontrol-repositories/add-$vcs":
  * Provide a form to edit or add a repository.
  *
- * @param $repo_id
- *   The repository id of the repository that is to be edited,
- *   or 0 if the repository doesn't exist yet and should be added.
+ * @param $repository
+ *   The repository that is to be edited, or VERSIONCONTROL_FORM_CREATE
+ *   if the repository doesn't exist yet and should be added.
  * @param $vcs
- *   If $repo_id is 0, this should be the unique identification string
+ *   If $repo_id is NULL, this should be the unique identification string
  *   of the backend for which the repository should be added.
- *   Otherwise, this needs to be NULL.
+ *   Otherwise, this value is ignored.
  */
-function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
+function versioncontrol_admin_repository_edit($repository, $vcs = NULL) {
   $backends = versioncontrol_get_backends();
+  $repository_exists = ($repository !== VERSIONCONTROL_FORM_CREATE);
 
-  if (!$repo_id) {
-    if (!isset($backends[$vcs])) {
-      drupal_goto('admin/project/versioncontrol-repositories');
-      return array();
-    }
+  if (!$repository_exists && !isset($backends[$vcs])) {
+    drupal_goto('admin/project/versioncontrol-repositories');
+    return array();
   }
-  else {
-    $repository = versioncontrol_get_repository($repo_id);
-    if (!isset($repository)) {
-      drupal_goto('admin/project/versioncontrol-repositories');
-      return array();
-    }
-  }
-  $vcs = isset($repository) ? $repository['vcs'] : $vcs;
+  $vcs = $repository_exists ? $repository['vcs'] : $vcs;
 
   $form = array();
   $form['#id'] = 'versioncontrol-repository-form';
@@ -661,11 +645,11 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
 
   $form['repo_id'] = array(
     '#type' => 'value',
-    '#value' => isset($repository) ? $repository['repo_id'] : 0,
+    '#value' => $repository_exists ? $repository['repo_id'] : 0,
   );
   $form['original_name'] = array(
     '#type' => 'value',
-    '#value' => isset($repository) ? check_plain($repository['name']) : 0,
+    '#value' => $repository_exists ? check_plain($repository['name']) : 0,
   );
   $form['vcs'] = array(
     '#type' => 'value',
@@ -683,7 +667,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#type' => 'textfield',
     '#title' => t('Repository name'),
     '#description' => t('A label for the repository that will be used in all user visible messages.'),
-    '#default_value' => isset($repository) ? check_plain($repository['name']) : '',
+    '#default_value' => $repository_exists ? check_plain($repository['name']) : '',
     '#required' => TRUE,
     '#weight' => 0,
     '#size' => 40,
@@ -693,7 +677,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#type' => 'textfield',
     '#title' => t('Repository root'),
     '#description' => t('The location of the repository\'s root directory.'),
-    '#default_value' => isset($repository) ? $repository['root'] : '',
+    '#default_value' => $repository_exists ? $repository['root'] : '',
     '#weight' => 5,
     '#size' => 60,
     '#maxlength' => 255,
@@ -722,7 +706,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#title' => t('Authorization method'),
     '#description' => t('Determines the way that users can register an account for this repository.'),
     '#options' => versioncontrol_get_authorization_methods(),
-    '#default_value' => isset($repository)
+    '#default_value' => $repository_exists
                         ? $repository['authorization_method']
                         : _versioncontrol_get_fallback_authorization_method(),
     '#weight' => 0,
@@ -742,7 +726,7 @@ function versioncontrol_admin_repository_edit($repo_id, $vcs = NULL) {
     '#default_value' => $current_registration_message,
   );
 
-  if (isset($repository)) {
+  if ($repository_exists) {
     $repo_urls = _versioncontrol_get_repository_urls($repository);
   }
 
@@ -889,17 +873,10 @@ function versioncontrol_admin_repository_edit_submit($form_id, $form_values) {
 
 
 /**
- * Form callback for "admin/project/versioncontrol-repositories/delete/$repo_id":
+ * Form callback for 'admin/project/versioncontrol-repositories/delete/%versioncontrol_repository':
  * Provide a form to confirm deletion of a repository.
  */
-function versioncontrol_admin_repository_delete_confirm($repo_id) {
-  $repository = versioncontrol_get_repository($repo_id);
-
-  if (!isset($repository)) {
-    drupal_goto('admin/project/versioncontrol-repositories');
-    return array();
-  }
-
+function versioncontrol_admin_repository_delete_confirm($repository) {
   $form = array();
   $form['repo_id'] = array('#type' => 'value', '#value' => $repo_id);
 

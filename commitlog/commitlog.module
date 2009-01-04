@@ -15,56 +15,57 @@
 function commitlog_menu($may_cache) {
   $items = array();
 
-  if ($may_cache) {
-    $access = user_access('access commit messages');
-    $items[] = array(
-      'path' => 'commitlog',
-      'title' => t('Commit messages'),
-      'callback' => 'commitlog_operations_page',
-      'access' => $access,
-      'type' => MENU_SUGGESTED_ITEM,
-    );
-    $items[] = array(
-      'path' => 'commitlog/feed',
-      'title' => t('Commit messages'),
-      'callback' => 'commitlog_operations_rss',
-      'access' => $access,
-      'type' => MENU_CALLBACK,
-    );
+  $view_access = 'access commit messages';
 
-    // Search pages:
+  $items['commitlog'] = array(
+    'title' => 'Commit messages',
+    'page callback' => 'commitlog_operations_page',
+    'access arguments' => array($view_access),
+    'type' => MENU_SUGGESTED_ITEM,
+  );
+  $items['commitlog/feed'] = array(
+    'title' => 'Commit messages',
+    'page callback' => 'commitlog_operations_rss',
+    'access arguments' => array($view_access),
+    'type' => MENU_CALLBACK,
+  );
+
+  // Search pages:
 /*
-    // until this works, no sense displaying this page
-    // see http://drupal.org/node/59659
-    $items[] = array(
-      'path' => 'search/commitlog',
-      'title' => t('Commit messages'),
-      'callback' => 'commitlog_operations_page_search',
-      'access' => $access,
-      'type' => MENU_LOCAL_TASK,
-      'weight' => 2,
-    );
+  // until this works, no sense displaying this page
+  // see http://drupal.org/node/59659
+  $items['search/commitlog'] = array(
+    'title' => 'Commit messages',
+    'page callback' => 'commitlog_operations_page_search',
+    'access arguments' => array($view_access),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 2,
+  );
 */
-  }
-  else {
-    if (arg(0) == 'user' && is_numeric(arg(1))) {
-      $uid = arg(1);
-      $accounts = versioncontrol_get_accounts(array('uids' => array($uid)));
-      if (!empty($accounts)) {
-        // If the user has a CVS account, add a 'track commit messages' tab to the tracker page.
-        $items[] = array(
-          'path' => 'user/'. $uid .'/track/code',
-          'title' => t('Track code'),
-          'callback' => 'commitlog_account_tracker',
-          'callback arguments' => array($uid),
-          'access' => user_access('access commit messages'),
-          'type' => MENU_LOCAL_TASK,
-          'weight' => 2,
-        );
-      }
-    }
-  }
+
+  // If the user has a VCS account, add a 'track commit messages' tab to the tracker page.
+  $items['user/%user/track/code'] = array(
+    'title' => 'Track code',
+    'page callback' => 'commitlog_account_tracker',
+    'page arguments' => array(1),
+    'access callback' => 'commitlog_account_tracker_access',
+    'access arguments' => array(1),
+    'type' => MENU_LOCAL_TASK,
+    'weight' => 2,
+  );
+
   return $items;
+}
+
+/**
+ * Custom access callback for the 'user/%user/track/code' page.
+ */
+function commitlog_account_tracker_access($account) {
+  if (!user_access('access commit messages')) {
+    return FALSE;
+  }
+  $vcs_accounts = versioncontrol_get_accounts(array('uids' => array($account->uid)));
+  return !empty($vcs_accounts);
 }
 
 /**
@@ -180,12 +181,7 @@ function commitlog_operations_page() {
 /**
  * Page callback for the 'track code' tab on the user page.
  */
-function commitlog_account_tracker($uid) {
-  $user = user_load(array('uid' => $uid));
-  if (!$user) {
-    drupal_not_found();
-    exit();
-  }
+function commitlog_account_tracker($user) {
   drupal_set_title($user->name);
 
   $constraints = _commitlog_get_constraints();

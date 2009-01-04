@@ -8,58 +8,63 @@
  * This file contains the user interface for non-admin tasks.
  *
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
- * Copyright 2007 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
+// The account registration form has a special demo mode to show the admin how
+// account registration will look like in the general case, mainly in order to
+// demonstrate how the various registration messages are being used.
+define('VERSIONCONTROL_REGISTER_DEMO', -1);
 
 /**
- * Form callback for "versioncontrol/register":
+ * Form callback for "versioncontrol/register[/$register_uid[/$register_at_repo_id]]":
  * Provide an indirection that leads to an account registration form.
  */
-function versioncontrol_account_register_page() {
+function versioncontrol_account_register_page($register_uid = FALSE, $register_at_repo_id = FALSE) {
   global $user;
-  $presets = _versioncontrol_get_string_presets();
-  $form = array();
 
-  if (arg(2) == 'demo') { // demo mode for showing the page to the admin
-    $uid = -1;
-  }
-  else {
-    $uid = is_numeric(arg(2)) ? arg(2) : $user->uid;
-  }
-  $admin_access = user_access('administer version control systems');
-  $user_access = user_access('use version control systems') || $admin_access;
+  if ($user->uid == 0 || !versioncontrol_user_access()) {
+    $presets = _versioncontrol_get_string_presets();
 
-  if (!$user_access || $user->uid == 0) {
     return variable_get(
       'versioncontrol_registration_message_unauthorized',
       $presets['versioncontrol_registration_message_unauthorized']
     );
   }
-  if (!$admin_access && $uid != $user->uid) {
+
+  if ($register_uid == 'demo') {
+    $register_uid = VERSIONCONTROL_REGISTER_DEMO;
+  }
+  else {
+    $register_uid = is_numeric($register_uid) ? $register_uid : $user->uid;
+  }
+
+  $admin_access = versioncontrol_admin_access();
+
+  if (!$admin_access && $register_uid != $user->uid) {
     drupal_access_denied();
     return;
   }
 
-  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), TRUE);
+  $accounts = versioncontrol_get_accounts(array('uids' => array($register_uid)), TRUE);
   $repositories = versioncontrol_get_repositories();
 
   // Construct the '#options' array.
-  $account_repo_ids = array();
+  $account_usernames = array();
   foreach ($accounts as $uid => $usernames_by_repository) {
     foreach ($usernames_by_repository as $repo_id => $username) {
-      $account_repo_ids[] = $repo_id;
+      $account_usernames[$repo_id][] = $username;
     }
   }
 
-  if (arg(2) == 'demo') { // demo mode for showing the page to the admin
-    $account_repo_ids = array();
+  if ($register_uid == VERSIONCONTROL_REGISTER_DEMO) {
+    $account_usernames = array();
   }
 
   $repository_names = array();
   foreach ($repositories as $repo_id => $repository) {
-    if (in_array($repo_id, $account_repo_ids)
-        && versioncontrol_is_account_authorized($uid, $repository)) {
+    if (isset($account_usernames[$repo_id])
+        && versioncontrol_is_account_authorized($register_uid, $repository)) {
       // We only want repositories in the list of repositories that are open
       // for registrations where no (authorized) account exists yet.
       continue;
@@ -70,8 +75,8 @@ function versioncontrol_account_register_page() {
     $repository_names[$repo_id] = check_plain($repository['name']);
   }
 
-  // Filter (and possible change the caption of) the list of repositories to select.
-  // The admin has all the permissions and gets the original selection.
+  // Filter (and possibly change the caption of) the list of repositories to
+  // select. The admin has all the permissions and gets the uncensored list.
   if (!$admin_access) {
     foreach (module_implements('versioncontrol_alter_repository_selection') as $module) {
       $function = $module .'_versioncontrol_alter_repository_selection';
@@ -84,30 +89,35 @@ function versioncontrol_account_register_page() {
     $only_repo_id = $first_repo_id;
   }
   else if (count($repositories) == 1) {
-    foreach ($repositories as $repo_id => $repository) {
-      $only_repo_id = $repo_id;
-    }
+    $only_repo_id = reset(array_keys($repositories));
   }
 
-  if (arg(2) == 'demo') { // demo mode for showing the page to the admin
+  if ($register_uid == VERSIONCONTROL_REGISTER_DEMO) {
     unset($only_repo_id);
   }
 
-  if (is_numeric(arg(3)) || isset($only_repo_id)) {
-    $repo_id = isset($only_repo_id) ? $only_repo_id : arg(3);
-    if (in_array($repo_id, $account_repo_ids)) {
+  if (is_numeric($register_at_repo_id) || isset($only_repo_id)) {
+    // If there is only one repository left to register, it doesn't matter
+    // whether or not the URL contains a repository (and which one), we always
+    // redirect to the remaining possible one. Otherwise, we try to register
+    // at the given repository.
+    $repo_id = isset($only_repo_id) ? $only_repo_id : $register_at_repo_id;
+
+    if (isset($account_usernames[$repo_id])) {
       drupal_set_message(t('You already have a registered account.'));
-      drupal_goto('user/'. $user->uid .'/edit/versioncontrol/'. $repo_id);
+      drupal_goto('user/'. $user->uid .'/edit/versioncontrol/'. $repo_id
+                  .'/'. reset($account_usernames[$repo_id]));
       return '';
     }
     else if (isset($repository_names[$repo_id])) {
       return drupal_get_form('versioncontrol_account_edit_form',
-                             $uid, '', $repositories[$repo_id]);
+        $register_uid, $repositories[$repo_id], VERSIONCONTROL_FORM_CREATE
+      );
     }
   }
 
   return drupal_get_form('versioncontrol_account_register_form',
-                         $uid, $repository_names, $first_repo_id);
+                         $register_uid, $repository_names, $first_repo_id);
 }
 
 /**
@@ -139,15 +149,17 @@ function versioncontrol_versioncontrol_alter_repository_selection(&$repository_n
 }
 
 /**
- * The actual form for "versioncontrol/register".
+ * The actual form for "versioncontrol/register[/$register_uid]".
  */
-function versioncontrol_account_register_form($uid, $repository_names, $first_repo_id) {
+function versioncontrol_account_register_form($register_uid, $repository_names, $first_repo_id) {
+  $form = array();
+
   if (empty($repository_names)) {
     drupal_set_title(t('No more registrations possible'));
     $form['no_registration'] = array(
       '#type' => 'markup',
       '#value' => t('You already have an account for all the repositories where you can register. Go to your !user-account-page to configure repository account settings.',
-        array('!user-account-page' => l(t('user account page'), 'user/'. $uid .'/edit'))
+        array('!user-account-page' => l(t('user account page'), 'user/'. $register_uid .'/edit'))
       ),
       '#prefix' => '<p>',
       '#suffix' => '</p>',
@@ -175,7 +187,7 @@ function versioncontrol_account_register_form($uid, $repository_names, $first_re
 
   $form['uid'] = array(
     '#type' => 'value',
-    '#value' => $uid,
+    '#value' => $register_uid,
   );
 
   $form['repository'] = array(
@@ -190,7 +202,7 @@ function versioncontrol_account_register_form($uid, $repository_names, $first_re
     '#default_value' => $first_repo_id,
   );
 
-  if (arg(2) != 'demo') { // demo mode for showing the page to the admin
+  if ($register_uid == VERSIONCONTROL_REGISTER_DEMO) {
     $form['repository']['submit'] = array(
       '#type' => 'submit',
       '#value' => t('Create account'),
@@ -240,23 +252,22 @@ function versioncontrol_get_repository_registration_message($repo_id) {
 }
 
 /**
- * Form callback for "user/$uid/edit/versioncontrol/$repository[repo_id]",
- * "versioncontrol/register/$uid/$repository[repo_id]" and (in certain cases)
- * "versioncontrol/register/$uid" or just "versioncontrol/register":
+ * Form callback for 'user/%(uid)/edit/versioncontrol/%versioncontrol_repository/%(username)',
+ * "versioncontrol/register/%(uid)/%(repo_id)" and (in certain cases)
+ * "versioncontrol/register/%(uid)" or just "versioncontrol/register":
  * Provide a form to edit or register a VCS user account.
  *
  * @param $uid
  *   The Drupal user id of the user whose account is being edited.
- * @param $username
- *   The VCS specific username of that user. If this is an empty string,
- *   it means that a user account for this repository does not yet exist
- *   and should be created.
  * @param $repository
  *   The repository of the added/edited account.
+ * @param $username
+ *   The user's VCS-specific username for the repository,
+ *   or VERSIONCONTROL_FORM_CREATE if a new VCS account should be registered.
  */
-function versioncontrol_account_edit_form($uid, $username, $repository) {
+function versioncontrol_account_edit_form($uid, $repository, $username) {
   $form = array();
-  $is_new_account = empty($username);
+  $create_account = ($username === VERSIONCONTROL_FORM_CREATE);
   $backends = versioncontrol_get_backends();
   $vcs_name = $backends[$repository['vcs']]['name'];
   $admin_access = user_access('administer version control systems');
@@ -285,7 +296,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     '#value' => $vcs_name,
   );
 
-  if ($is_new_account) {
+  if ($create_account) {
     $registration_message = versioncontrol_get_repository_registration_message($repository['repo_id']);
 
     if (!empty($registration_message)) {
@@ -307,11 +318,11 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
     '#weight' => 0,
   );
 
-  if ($is_new_account || $admin_access) {
+  if ($create_account || $admin_access) {
     $user = user_load(array('uid' => $uid));
 
     // Set a more appropriate title for account registrations.
-    if ($is_new_account) {
+    if ($create_account) {
       drupal_set_title(t(
         'Create user account in @repository',
         array('@repository' => $repository['name'])
@@ -362,7 +373,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
   if (arg(2) != 'demo') { // demo mode for showing the page to the admin
     $form['submit'] = array(
       '#type' => 'submit',
-      '#value' => $is_new_account
+      '#value' => $create_account
                   ? t('Create @vcs account', array('@vcs' => $vcs_name))
                   : t('Update @vcs account', array('@vcs' => $vcs_name)),
       '#weight' => 100,
