@@ -147,7 +147,7 @@ function versioncontrol_fakevcs_account_form_validate($form_id, $form_values) {
   if (!empty($form_values['original_username']) && empty($form_values['account_password'])) {
     return; // The (existing) user didn't change the password.
   }
-  else if (strlen($form_values['account_password']) < VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH) {
+  else if (drupal_strlen($form_values['account_password']) < VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH) {
     form_set_error('account_password', t('The FakeVCS password you have chosen is too short (it must be at least !min characters long).', array('!min' => VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH)));
   }
 }

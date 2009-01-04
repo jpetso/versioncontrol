@@ -318,7 +318,7 @@ function versioncontrol_account_edit_form($uid, $username, $repository) {
       ));
 
       // Have a nice default value for the new VCS username.
-      $username = strtr(strtolower($user->name),
+      $username = strtr(drupal_strtolower($user->name),
         array(' ' => '', '@' => '', '.' => '', '-' => '', '_' => '', '.' => '')
       );
     }

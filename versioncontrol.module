@@ -1950,7 +1950,7 @@ function versioncontrol_get_item_selected_label($repository, &$item) {
   $function_prefix = 'versioncontrol_'. $repository['vcs'];
 
   // Otherwise, determine how we might be able to retrieve the selected label.
-  switch($item['selected_label']->get_from) {
+  switch ($item['selected_label']->get_from) {
     case 'operation':
       $function = $function_prefix .'_get_selected_label_from_operation';
       $selected_label = $function($item['selected_label']->operation, $item);
@@ -2971,7 +2971,7 @@ function theme_versioncontrol_account_username($uid, $username, $repository, $pr
  * Print a list of contributors for the specified project.
  * The parameters are directly relayed to versioncontrol_get_user_statistics()
  * and determine how and for which commits the statistics are displayed.
- * @see versioncontrol_get_user_statistics
+ * @see versioncontrol_get_user_statistics()
  */
 function theme_versioncontrol_user_statistics($constraints, $order = 'by_date', $limit = NULL) {
   $statistics = versioncontrol_get_user_statistics($constraints, $order, $limit);
