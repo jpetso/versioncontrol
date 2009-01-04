@@ -151,7 +151,6 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
  * Implementation of hook_menu().
  */
 function versioncontrol_menu() {
-  global $user;
   $items = array();
 
   // If Version Control API is used without the Project module,
