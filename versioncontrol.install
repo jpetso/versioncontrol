@@ -89,28 +89,6 @@ function versioncontrol_schema() {
     ),
     'primary key' => array('vc_op_id'),
   );
-  /// TODO: make sure the indexes have a similar name in MySQL and Postgres
-  ///       prior to the 6.x upgrade.
-  /* D5 index definitions for {versioncontrol_operations}:
-  MySQL:
-    db_query("CREATE TABLE {versioncontrol_operations} (
-      (...)
-      KEY type (type),
-      KEY repo_id (repo_id),
-      KEY date (date),
-      KEY uid (uid),
-      KEY username (username),
-      KEY revision (revision)
-    )");
-
-  Postgres:
-    db_query("CREATE INDEX {versioncontrol_operations}_type_idx ON {versioncontrol_operations} (type)");
-    db_query("CREATE INDEX {versioncontrol_operations}_repo_id_idx ON {versioncontrol_operations} (repo_id)");
-    db_query("CREATE INDEX {versioncontrol_operations}_date_idx ON {versioncontrol_operations} (date)");
-    db_query("CREATE INDEX {versioncontrol_operations}_uid_idx ON {versioncontrol_operations} (uid)");
-    db_query("CREATE INDEX {versioncontrol_operations}_username_idx ON {versioncontrol_operations} (username)");
-    db_query("CREATE INDEX {versioncontrol_operations}_revision_idx ON {versioncontrol_operations} (revision)");
-  */
 
   $schema['versioncontrol_operation_labels'] = array(
     'description' => t(
@@ -239,18 +217,6 @@ function versioncontrol_schema() {
     ),
     'primary key' => array('vc_op_id', 'item_revision_id'),
   );
-  /// TODO: make sure the indexes have a similar name in MySQL and Postgres
-  ///       prior to the 6.x upgrade.
-  /* D5 index definitions for {versioncontrol_operation_items}:
-  MySQL:
-    db_query("CREATE TABLE {versioncontrol_operation_items} (
-      (...)
-      KEY (type)
-    )");
-
-  Postgres:
-    db_query("CREATE INDEX {versioncontrol_operation_items}_type_idx ON {versioncontrol_operation_items} (type)");
-  */
 
   $schema['versioncontrol_source_items'] = array(
     'description' => t('This table stores item history, i.e. it relates an item to one or more direct predecessors (= source items). Likewise, a source item can also have multiple successors, for example if it\'s copied to one location and later (or at the same time) moved to another location.'),
@@ -377,12 +343,12 @@ function versioncontrol_schema() {
     db_query("CREATE TABLE {versioncontrol_item_revisions} (
       (...)
       KEY (repo_id, path),
-      KEY revision (revision)
+      ('revision' index name is ok)
     )");
 
   Postgres:
     db_query("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
-    db_query("CREATE INDEX {versioncontrol_item_revisions}_revision_idx ON {versioncontrol_item_revisions} (revision)");
+    ('revision' index name is ok)
   */
 
   $schema['versioncontrol_repositories'] = array(
@@ -589,9 +555,6 @@ function versioncontrol_install() {
  * Implementation of hook_uninstall().
  */
 function versioncontrol_uninstall() {
-  // Remove tables.
-  drupal_uninstall_schema('versioncontrol');
-
   $variables = array(
     'versioncontrol_email_address',
     'versioncontrol_allow_unauthorized_access',
@@ -602,6 +565,9 @@ function versioncontrol_uninstall() {
   foreach ($variables as $variable) {
     variable_del($variable);
   }
+
+  // Remove tables.
+  drupal_uninstall_schema('versioncontrol');
 }
 
 
