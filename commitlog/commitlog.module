@@ -12,7 +12,7 @@
 /**
  * Implementation of hook_menu().
  */
-function commitlog_menu($may_cache) {
+function commitlog_menu() {
   $items = array();
 
   $view_access = 'access commit messages';
