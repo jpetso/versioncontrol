@@ -269,10 +269,6 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
   static $items;
   static $categories;
 
-  $admin_access = user_access('administer version control systems');
-  $user_access = user_access('use version control systems') || $admin_access;
-  $account_access = ($user_access && $uid == $user->uid) || $admin_access;
-
   // Cache the items, we don't want this being done twice.
   if (isset($items)) {
     if ($op == 'categories') {
@@ -284,6 +280,10 @@ function _versioncontrol_user_account_edit_items($user, $op = 'items') {
   $categories = array();
 
   $uid = arg(1);
+  $admin_access = user_access('administer version control systems');
+  $user_access = user_access('use version control systems') || $admin_access;
+  $account_access = ($user_access && $uid == $user->uid) || $admin_access;
+
   $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), TRUE);
   if (empty($accounts)) {
     $items = array();
