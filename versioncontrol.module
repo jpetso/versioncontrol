@@ -163,6 +163,12 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
 function versioncontrol_menu() {
   $items = array();
 
+  $admin = array(
+    'page callback' => 'drupal_get_form',
+    'access arguments' => array('administer version control systems'),
+    'file' => 'versioncontrol.admin.inc',
+  );
+
   // If Version Control API is used without the Project module,
   // we need to define our own version of /admin/project
   // so the rest of our admin pages all work.
@@ -179,12 +185,9 @@ function versioncontrol_menu() {
   $items['admin/project/versioncontrol-settings'] = array(
     'title' => 'Version control settings',
     'description' => 'Configure settings for Version Control API and related modules.',
-    'page callback' => 'drupal_get_form',
     'page arguments' => array('versioncontrol_admin_settings'),
-    'access callback' => 'versioncontrol_admin_access',
-    'file' => 'versioncontrol.admin.inc',
     'type' => MENU_NORMAL_ITEM,
-  );
+  ) + $admin;
   $items['admin/project/versioncontrol-settings/general'] = array(
     'title' => 'General',
     'type' => MENU_DEFAULT_LOCAL_TASK,
@@ -194,12 +197,9 @@ function versioncontrol_menu() {
   $items['admin/project/versioncontrol-repositories'] = array(
     'title' => 'VCS repositories',
     'description' => 'Define and configure what version control repositories are connected to your site, and how to integrate each repository with repository browser tools such as ViewVC or WebSVN.',
-    'page callback' => 'drupal_get_form',
     'page arguments' => array('versioncontrol_admin_repository_list'),
-    'access callback' => 'versioncontrol_admin_access',
-    'file' => 'versioncontrol.admin.inc',
     'type' => MENU_NORMAL_ITEM,
-  );
+  ) + $admin;
 
   $weight = 1;
   $items['admin/project/versioncontrol-repositories/list'] = array(
@@ -216,43 +216,32 @@ function versioncontrol_menu() {
     $items['admin/project/versioncontrol-repositories/add-'. $vcs] = array(
       'title' => 'Add @vcs repository',
       'title arguments' => array('@vcs' => $backend['name']),
-      'page callback' => 'drupal_get_form',
       'page arguments' => array('versioncontrol_admin_repository_edit',
         VERSIONCONTROL_FORM_CREATE, $vcs
       ),
-      'access callback' => 'versioncontrol_admin_access',
       'type' => MENU_LOCAL_TASK,
-      'file' => 'versioncontrol.admin.inc',
       'weight' => ++$weight,
-    );
+    ) + $admin;
   }
   // end former !$may_cache
 
   $items['admin/project/versioncontrol-repositories/edit/%versioncontrol_repository'] = array(
     'title' => 'Edit repository',
-    'page callback' => 'drupal_get_form',
     'page arguments' => array('versioncontrol_admin_repository_edit', 4),
-    'access callback' => 'versioncontrol_admin_access',
-    'file' => 'versioncontrol.admin.inc',
     'type' => MENU_CALLBACK,
-  );
+  ) + $admin;
   $items['admin/project/versioncontrol-repositories/delete/%versioncontrol_repository'] = array(
     'title' => 'Delete repository',
-    'page callback' => 'drupal_get_form',
     'page arguments' => array('versioncontrol_admin_repository_delete_confirm', 4),
-    'access callback' => 'versioncontrol_admin_access',
-    'file' => 'versioncontrol.admin.inc',
     'type' => MENU_CALLBACK,
-  );
+  ) + $admin;
 
   $items['admin/project/versioncontrol-accounts'] = array(
     'title' => 'VCS accounts',
     'description' => 'Manage associations of Drupal users to VCS user accounts.',
     'page callback' => 'versioncontrol_admin_account_list_page',
-    'access callback' => 'versioncontrol_admin_access',
-    'file' => 'versioncontrol.admin.inc',
     'type' => MENU_NORMAL_ITEM,
-  );
+  ) + $admin;
   $items['admin/project/versioncontrol-accounts/list'] = array(
     'title' => 'List',
     'type' => MENU_DEFAULT_LOCAL_TASK,
@@ -268,31 +257,24 @@ function versioncontrol_menu() {
       $items['admin/project/versioncontrol-accounts/import'] = array(
         'title' => 'Import',
         'description' => 'Import an existing set of VCS user accounts.',
-        'page callback' => 'drupal_get_form',
         'page arguments' => array('versioncontrol_admin_account_import_form'),
-        'access callback' => 'versioncontrol_admin_access',
         'type' => MENU_LOCAL_TASK,
-        'file' => 'versioncontrol.admin.inc',
         'weight' => 2,
-      );
+      ) + $admin;
     }
     if (versioncontrol_backend_implements($vcs, 'export_accounts')) {
       $items['admin/project/versioncontrol-accounts/export'] = array(
         'title' => 'Export',
         'description' => 'Export VCS user accounts of a specific repository.',
         'page callback' => 'versioncontrol_admin_account_export_form',
-        'access callback' => 'versioncontrol_admin_access',
-        'file' => 'versioncontrol.admin.inc',
         'type' => MENU_LOCAL_TASK,
         'weight' => 3,
-      );
+      ) + $admin;
       $items['admin/project/versioncontrol-accounts/export/%versioncontrol_repository'] = array(
         'title' => 'Export',
         'page callback' => 'versioncontrol_admin_account_export_page',
-        'access callback' => 'versioncontrol_admin_access',
-        'file' => 'versioncontrol.admin.inc',
         'type' => MENU_CALLBACK,
-      );
+      ) + $admin;
     }
   }
   // end former !$may_cache
