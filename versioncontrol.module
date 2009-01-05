@@ -232,7 +232,7 @@ function versioncontrol_menu() {
   ) + $admin;
   $items['admin/project/versioncontrol-repositories/delete/%versioncontrol_repository'] = array(
     'title' => 'Delete repository',
-    'page arguments' => array('versioncontrol_admin_repository_delete_confirm', 4),
+    'page callback' => 'versioncontrol_admin_repository_delete_confirm',
     'type' => MENU_CALLBACK,
   ) + $admin;
 
@@ -266,7 +266,7 @@ function versioncontrol_menu() {
       $items['admin/project/versioncontrol-accounts/export'] = array(
         'title' => 'Export',
         'description' => 'Export VCS user accounts of a specific repository.',
-        'page callback' => 'versioncontrol_admin_account_export_form',
+        'page arguments' => array('versioncontrol_admin_account_export_form'),
         'type' => MENU_LOCAL_TASK,
         'weight' => 3,
       ) + $admin;
