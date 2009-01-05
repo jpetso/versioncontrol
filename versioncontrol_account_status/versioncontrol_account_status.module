@@ -614,7 +614,7 @@ function versioncontrol_account_status_form_alter_account($form_id, &$form, $rep
   $uid = $form['uid']['#value'];
   $data = versioncontrol_account_status_get($uid, $repo_id);
 
-  $admin_access = user_access('administer version control systems');
+  $admin_access = versioncontrol_admin_access();
   if ($admin_access) {
     versioncontrol_account_status_form_alter_account_edit($form, $data, $admin_access);
     return;
@@ -988,7 +988,7 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
  */
 function _versioncontrol_account_status_send_application_mails($status_data) {
   // Don't send notification mails if the admin submitted the application.
-  if (user_access('administer version control systems')) {
+  if (versioncontrol_admin_access()) {
     return;
   }
 

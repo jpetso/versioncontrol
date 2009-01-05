@@ -165,7 +165,7 @@ function versioncontrol_menu() {
 
   $admin = array(
     'page callback' => 'drupal_get_form',
-    'access arguments' => array('administer version control systems'),
+    'access callback' => 'versioncontrol_admin_access',
     'file' => 'versioncontrol.admin.inc',
   );
 
@@ -288,22 +288,6 @@ function versioncontrol_menu() {
     'file' => 'versioncontrol.pages.inc',
     'type' => MENU_SUGGESTED_ITEM,
   );
-  $items['versioncontrol/register/%'] = array(
-    'title' => 'Get commit access',
-    'page callback' => 'versioncontrol_account_register_page',
-    'page arguments' => array(2),
-    'access callback' => TRUE, // access checking is done in the callback
-    'file' => 'versioncontrol.pages.inc',
-    'type' => MENU_CALLBACK,
-  );
-  $items['versioncontrol/register/%/%'] = array(
-    'title' => 'Get commit access',
-    'page callback' => 'versioncontrol_account_register_page',
-    'page arguments' => array(2, 3),
-    'access callback' => TRUE, // access checking is done in the callback
-    'file' => 'versioncontrol.pages.inc',
-    'type' => MENU_CALLBACK,
-  );
 
   // Autocomplete callback for Drupal usernames that have access to
   // the repo_id given in arg(3). (No need to fetch the full repository,
@@ -346,7 +330,7 @@ function versioncontrol_admin_access($account = NULL) {
  */
 function versioncontrol_user_access($account = NULL) {
   return user_access('use version control systems', $account)
-    || user_access('administer version control systems', $account);
+    || versioncontrol_admin_access($account);
 }
 
 /**
@@ -360,7 +344,7 @@ function versioncontrol_private_account_access($viewed_uid, $account = NULL) {
     $account = clone $user;
   }
   return ($viewed_uid == $account->uid && user_access('use version control systems', $account))
-    || user_access('administer version control systems', $account);
+    || versioncontrol_admin_access($account);
 }
 
 /**

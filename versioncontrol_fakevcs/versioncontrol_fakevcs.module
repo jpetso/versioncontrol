@@ -974,7 +974,7 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
                 WHERE uid = %d AND repo_id = %d",
                 $fakevcs_specific['password'], $uid, $repository['repo_id']);
 
-      if (!user_access('administer version control systems')) {
+      if (!versioncontrol_admin_access()) {
         // Admins get "The account has been updated successfully" anyways.
         drupal_set_message(t('The FakeVCS password has been updated successfully.'));
       }

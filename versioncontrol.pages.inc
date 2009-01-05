@@ -270,7 +270,6 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $user
   $create_account = ($username === VERSIONCONTROL_FORM_CREATE);
   $backends = versioncontrol_get_backends();
   $vcs_name = $backends[$repository['vcs']]['name'];
-  $admin_access = user_access('administer version control systems');
 
   $form['#id'] = 'versioncontrol-account-form';
   $form['#repository'] = $repository;
@@ -317,6 +316,8 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $user
     '#title' => t('@vcs account settings', array('@vcs' => $vcs_name)),
     '#weight' => 0,
   );
+
+  $admin_access = versioncontrol_admin_access();
 
   if ($create_account || $admin_access) {
     $user = user_load(array('uid' => $uid));
@@ -457,17 +458,15 @@ function versioncontrol_account_edit_form_submit(&$form, &$form_state) {
 
     // Regular users cannot change the username, and will probably get
     // a message for each of the other actions that hook into the form.
-    if (user_access('administer version control systems')) {
+    if (versioncontrol_admin_access()) {
       $message = drupal_set_message(t(
         'The @vcs account %username has been updated successfully.',
         array('@vcs' => $vcs_name, '%username' => $username)
       ));
     }
   }
-  if (user_access('administer version control systems')) {
-    $form_state['redirect'] = 'admin/project/versioncontrol-accounts';
-  }
-  else {
-    $form_state['redirect'] = 'user/'. $uid .'/edit/versioncontrol/'. $repository['repo_id'];
-  }
+
+  $form_state['redirect'] = versioncontrol_admin_access()
+    ? 'admin/project/versioncontrol-accounts'
+    : 'user/'. $uid .'/edit/versioncontrol/'. $repository['repo_id'];
 }
