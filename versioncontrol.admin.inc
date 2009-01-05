@@ -350,10 +350,10 @@ function versioncontrol_versioncontrol_filter_accounts(&$accounts) {
  * that will be imported into the selected repository.
  */
 function versioncontrol_admin_account_import_form(&$form_state) {
-  $selected_backends = $form = array();
+  $form = array();
+  $selected_backends = array();
 
-  $backends = versioncontrol_get_backends();
-  foreach ($backends as $vcs => $backend) {
+  foreach (versioncontrol_get_backends() as $vcs => $backend) {
     if (versioncontrol_backend_implements($vcs, 'import_accounts')) {
       $selected_backends[] = $vcs;
     }
@@ -452,15 +452,14 @@ function versioncontrol_admin_account_export_page($repository) {
  * data on submitting the form.
  */
 function versioncontrol_admin_account_export_form(&$form_state) {
-  $selected_backends = $form = array();
+  $form = array();
+  $selected_backends = array();
 
-  $backends = versioncontrol_get_backends();
-  foreach ($backends as $vcs => $backend) {
+  foreach (versioncontrol_get_backends() as $vcs => $backend) {
     if (versioncontrol_backend_implements($vcs, 'export_accounts')) {
       $selected_backends[] = $vcs;
     }
   }
-
   $repositories = versioncontrol_get_repositories(array('vcs' => $selected_backends));
 
   if (empty($repositories)) {
