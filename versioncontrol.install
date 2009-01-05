@@ -19,7 +19,7 @@ function versioncontrol_schema() {
     'fields' => array(
       'vc_op_id' => array(
         'description' => t('Unique identifier for each operation in this table. Does not necessarily correspond to chronological order in any way.'),
-        'type' => 'int', /// TODO: should probably be converted to 'serial'
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
@@ -142,7 +142,7 @@ function versioncontrol_schema() {
     'fields' => array(
       'label_id' => array(
         'description' => t('Unique identifier for a branch or tag in this label, equivalent to the (also unique) repo_id/name/type combination in the same row.'),
-        'type' => 'int', /// TODO: should probably be converted to 'serial'
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
