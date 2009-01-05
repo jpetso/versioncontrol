@@ -252,6 +252,8 @@ function versioncontrol_menu() {
   /// TODO: Backend specific stuff was done in !$may_cache, as it once
   ///       screwed up after activating a new backend in admin/build/modules.
   ///       Make sure this works now.
+  // TODO (sdb): this should all be reworked using a version of the loader that
+  // takes additional arguments for implementation checking.
   foreach (versioncontrol_get_backends() as $vcs => $backend) {
     if (versioncontrol_backend_implements($vcs, 'import_accounts')) {
       $items['admin/project/versioncontrol-accounts/import'] = array(

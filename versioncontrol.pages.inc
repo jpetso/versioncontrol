@@ -151,7 +151,7 @@ function versioncontrol_versioncontrol_alter_repository_selection(&$repository_n
 /**
  * The actual form for "versioncontrol/register[/$register_uid]".
  */
-function versioncontrol_account_register_form($register_uid, $repository_names, $first_repo_id) {
+function versioncontrol_account_register_form(&$form_state, $register_uid, $repository_names, $first_repo_id) {
   $form = array();
 
   if (empty($repository_names)) {
@@ -216,8 +216,8 @@ function versioncontrol_account_register_form($register_uid, $repository_names, 
  * Submit handler for the indirection form.
  * Surprisingly, all it does is redirect to the appropriate registration form.
  */
-function versioncontrol_account_register_form_submit($form_id, $form_values) {
-  return 'versioncontrol/register/'. $form_values['uid'] .'/'. $form_values['repo_id'];
+function versioncontrol_account_register_form_submit(&$form, &$form_state) {
+  $form_state['redirect'] = 'versioncontrol/register/'. $form_state['values']['uid'] .'/'. $form_state['values']['repo_id'];
 }
 
 
@@ -265,7 +265,7 @@ function versioncontrol_get_repository_registration_message($repo_id) {
  *   The user's VCS-specific username for the repository,
  *   or VERSIONCONTROL_FORM_CREATE if a new VCS account should be registered.
  */
-function versioncontrol_account_edit_form($uid, $repository, $username) {
+function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $username) {
   $form = array();
   $create_account = ($username === VERSIONCONTROL_FORM_CREATE);
   $backends = versioncontrol_get_backends();
@@ -336,7 +336,7 @@ function versioncontrol_account_edit_form($uid, $repository, $username) {
     else { // For the tab on the user edit page:
       // When someone else than the user goes here (the admin, that is),
       // the page title is incorrect and would say 'User', which is bad.
-      drupal_set_title(check_plain($user->name));
+      drupal_set_title($user->name);
     }
 
     if ($admin_access) { // the admin version
@@ -385,14 +385,14 @@ function versioncontrol_account_edit_form($uid, $repository, $username) {
 /**
  * Validate the edit/register user account form submission before it is submitted.
  */
-function versioncontrol_account_edit_form_validate($form_id, $form_values) {
-  if (!isset($form_values['account_name'])) {
+function versioncontrol_account_edit_form_validate(&$form, &$form_state) {
+  if (!isset($form_state['values']['account_name'])) {
     return;
   }
-  $uid = $form_values['uid'];
-  $username = trim($form_values['account_name']);
-  $repository = versioncontrol_get_repository($form_values['repo_id']);
-  $vcs_name = $form_values['vcs_name'];
+  $uid = $form_state['values']['uid'];
+  $username = trim($form_state['values']['account_name']);
+  $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
+  $vcs_name = $form_state['values']['vcs_name'];
 
   if (!isset($repository)) { // admin deletes repo while user fills in form
     form_set_error('account',
@@ -433,19 +433,19 @@ function versioncontrol_account_edit_form_validate($form_id, $form_values) {
 /**
  * Add or update the user account when the edit/register form is submitted.
  */
-function versioncontrol_account_edit_form_submit($form_id, $form_values) {
+function versioncontrol_account_edit_form_submit(&$form, &$form_state) {
   // Reconstruct the user data from the $form_values that were passed.
-  $uid = $form_values['uid'];
-  $username = trim($form_values['account_name']);
-  $repository = versioncontrol_get_repository($form_values['repo_id']);
-  $vcs_name = $form_values['vcs_name'];
+  $uid = $form_state['values']['uid'];
+  $username = trim($form_state['values']['account_name']);
+  $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
+  $vcs_name = $form_state['values']['vcs_name'];
   $vcs_specific = NULL;
 
   $additional_data = module_invoke_all(
-    'versioncontrol_extract_account_data', $form_values
+    'versioncontrol_extract_account_data', $form_state['values']
   );
 
-  if (empty($form_values['original_username'])) {
+  if (empty($form_state['values']['original_username'])) {
     versioncontrol_insert_account($repository, $uid, $username, $additional_data);
     $message = drupal_set_message(t(
       'The @vcs account %username has been registered.',
@@ -465,9 +465,9 @@ function versioncontrol_account_edit_form_submit($form_id, $form_values) {
     }
   }
   if (user_access('administer version control systems')) {
-    return 'admin/project/versioncontrol-accounts';
+    $form_state['redirect'] = 'admin/project/versioncontrol-accounts';
   }
   else {
-    return 'user/'. $uid .'/edit/versioncontrol/'. $repository['repo_id'];
+    $form_state['redirect'] = 'user/'. $uid .'/edit/versioncontrol/'. $repository['repo_id'];
   }
 }
