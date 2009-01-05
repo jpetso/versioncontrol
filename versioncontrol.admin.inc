@@ -642,6 +642,7 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
 
   if (!$repository_exists && !isset($backends[$vcs])) {
     drupal_goto('admin/project/versioncontrol-repositories');
+    // drupal_goto() calls exit() so script execution ends right here
   }
   $vcs = $repository_exists ? $repository['vcs'] : $vcs;
 

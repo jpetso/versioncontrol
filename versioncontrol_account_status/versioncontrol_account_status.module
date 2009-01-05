@@ -682,6 +682,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
   if (!valid_email_address($user->mail)) {
     drupal_set_message(t('You need to provide a valid e-mail address to request commit access. Please edit your user information.'), 'error');
     drupal_goto('user/'. $user->uid .'/edit');
+    // drupal_goto() calls exit() so script execution ends right here
   }
 
   if ($status_data['status'] == VERSIONCONTROL_ACCOUNT_STATUS_UNDEFINED) {

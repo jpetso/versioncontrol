@@ -107,7 +107,7 @@ function versioncontrol_account_register_page($register_uid = FALSE, $register_a
       drupal_set_message(t('You already have a registered account.'));
       drupal_goto('user/'. $user->uid .'/edit/versioncontrol/'. $repo_id
                   .'/'. reset($account_usernames[$repo_id]));
-      return '';
+      // drupal_goto() calls exit() so script execution ends right here
     }
     else if (isset($repository_names[$repo_id])) {
       return drupal_get_form('versioncontrol_account_edit_form',
