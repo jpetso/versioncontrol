@@ -12,8 +12,8 @@
  * Implementation of hook_form_alter(): Add commit restriction settings
  * to the add/edit repository form of the Version Control API module.
  */
-function commit_restrictions_form_alter($form_id, &$form) {
-  if ($form['#id'] == 'versioncontrol-repository-form') {
+function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
+  if ($form_id == 'versioncontrol-repository-form') {
     $backends = versioncontrol_get_backends();
     $backend_capabilities = $backends[$form['#vcs']]['capabilities'];
     $repo_id = $form['repo_id']['#value'];
