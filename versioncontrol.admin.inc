@@ -883,7 +883,7 @@ function versioncontrol_admin_repository_edit_submit(&$form, &$form_state) {
  * Form callback for 'admin/project/versioncontrol-repositories/delete/%versioncontrol_repository':
  * Provide a form to confirm deletion of a repository.
  */
-function versioncontrol_admin_repository_delete_confirm($repository) {
+function versioncontrol_admin_repository_delete_confirm(&$form_state, $repository) {
   $form = array();
   $form['repo_id'] = array('#type' => 'value', '#value' => $repo_id);
 
@@ -902,8 +902,8 @@ function versioncontrol_admin_repository_delete_confirm($repository) {
 function versioncontrol_admin_repository_delete_confirm_submit(&$form, &$form_state) {
   $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
   versioncontrol_delete_repository($repository);
-  drupal_set_message(t('The %repository repository has been deleted.',
-                      array('%repository' => $repository['name'])));
-
+  drupal_set_message(t('The %repository repository has been deleted.', array(
+    '%repository' => $repository['name'],
+  )));
   $form_state['redirect'] = 'admin/project/versioncontrol-repositories';
 }

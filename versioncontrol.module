@@ -232,7 +232,7 @@ function versioncontrol_menu() {
   ) + $admin;
   $items['admin/project/versioncontrol-repositories/delete/%versioncontrol_repository'] = array(
     'title' => 'Delete repository',
-    'page callback' => 'versioncontrol_admin_repository_delete_confirm',
+    'page arguments' => array('versioncontrol_admin_repository_delete_confirm', 4),
     'type' => MENU_CALLBACK,
   ) + $admin;
 
