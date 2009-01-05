@@ -262,16 +262,10 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
   }
 
   // Ok, everything's there, insert the operation into the database.
-  $operation['vc_op_id'] = db_next_id('{versioncontrol_operations}_vc_op_id');
-
-  db_query(
-    "INSERT INTO {versioncontrol_operations}
-     (vc_op_id, type, repo_id, date, uid, username, revision, message)
-     VALUES (%d, %d, %d, %d, %d, '%s', '%s', '%s')",
-    $operation['vc_op_id'], $operation['type'],
-    $operation['repository']['repo_id'], $operation['date'], $operation['uid'],
-    $operation['username'], $operation['revision'], $operation['message']
-  );
+  $operation['repo_id'] = $operation['repository']['repo_id']; // for drupal_write_record()
+  drupal_write_record('versioncontrol_operations', $operation);
+  unset($operation['repo_id']);
+  // drupal_write_record() has now added the 'vc_op_id' to the $operation array.
 
   // Insert labels that are attached to the operation.
   foreach ($operation['labels'] as $key => $label) {
@@ -474,20 +468,18 @@ function _versioncontrol_ensure_item_revision($repository, $item) {
 }
 
 function _versioncontrol_insert_item_revision($repository, $item) {
+  $item['repo_id'] = $repository['repo_id']; // for drupal_write_record() only
+
   if (isset($item['item_revision_id'])) {
-    db_query("DELETE FROM {versioncontrol_item_revisions}
-              WHERE item_revision_id = %d", $item['item_revision_id']);
+    // The item already exists in the database, update the record.
+    drupal_write_record('versioncontrol_item_revisions', $item, 'item_revision_id');
   }
   else {
-    $item['item_revision_id'] = db_next_id('{versioncontrol_item_revisions}_item_revision_id');
+    // The label does not yet exist, create it.
+    // drupal_write_record() also adds the 'item_revision_id' to the $item array.
+    drupal_write_record('versioncontrol_item_revisions', $item);
   }
-  db_query(
-    "INSERT INTO {versioncontrol_item_revisions}
-      (item_revision_id, repo_id, path, revision, type)
-      VALUES (%d, %d, '%s', '%s', %d)",
-    $item['item_revision_id'], $repository['repo_id'], $item['path'],
-    $item['revision'], $item['type']
-  );
+  unset($item['repo_id']);
   return $item;
 }
 
@@ -788,26 +780,12 @@ function versioncontrol_delete_account($repository, $uid, $username) {
  *   The finalized repository array, including the 'repo_id' element.
  */
 function versioncontrol_insert_repository($repository, $repository_urls) {
-  $repository['repo_id'] = db_next_id('{versioncontrol_repositories}_repo_id');
+  drupal_write_record('versioncontrol_repositories', $repository);
+  // drupal_write_record() has now added the 'repo_id' to the $repository array.
 
-  db_query(
-    "INSERT INTO {versioncontrol_repositories}
-     (repo_id, name, vcs, root, authorization_method, url_backend)
-     VALUES (%d, '%s', '%s', '%s', '%s', '%s')",
-     $repository['repo_id'], $repository['name'], $repository['vcs'],
-     $repository['root'], $repository['authorization_method'],
-     $repository['url_backend']
-  );
-  // TODO: abstract out repository URLs into separate backends
-  db_query(
-    "INSERT INTO {versioncontrol_repository_urls}
-     (repo_id, commit_view, file_log_view, file_view, directory_view, diff, tracker)
-     VALUES (%d, '%s', '%s', '%s', '%s', '%s', '%s')",
-     $repository['repo_id'], $repository_urls['commit_view'],
-     $repository_urls['file_log_view'], $repository_urls['file_view'],
-     $repository_urls['directory_view'], $repository_urls['diff'],
-     $repository_urls['tracker']
-  );
+  $repository_urls['repo_id'] = $repository['repo_id']; // for drupal_write_record()
+  drupal_write_record('versioncontrol_repository_urls', $repository_urls);
+  unset($repository_urls['repo_id']);
 
   // Auto-add repository info from $repository['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
@@ -874,26 +852,11 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
  *   defined by the corresponding URL backend.
  */
 function versioncontrol_update_repository($repository, $repository_urls) {
-  db_query(
-    "UPDATE {versioncontrol_repositories}
-     SET name = '%s', vcs = '%s', root = '%s',
-         authorization_method = '%s', url_backend = '%s'
-     WHERE repo_id = %d",
-     $repository['name'], $repository['vcs'], $repository['root'],
-     $repository['authorization_method'], $repository['url_backend'],
-     $repository['repo_id']
-  );
-  // TODO: abstract out repository URLs into separate backends
-  db_query(
-    "UPDATE {versioncontrol_repository_urls}
-     SET commit_view = '%s', file_log_view = '%s', file_view = '%s',
-         directory_view = '%s', diff = '%s', tracker = '%s'
-     WHERE repo_id = %d",
-     $repository_urls['commit_view'], $repository_urls['file_log_view'],
-     $repository_urls['file_view'], $repository_urls['directory_view'],
-     $repository_urls['diff'], $repository_urls['tracker'],
-     $repository['repo_id']
-  );
+  drupal_write_record('versioncontrol_repositories', $repository, 'repo_id');
+
+  $repository_urls['repo_id'] = $repository['repo_id']; // for drupal_write_record()
+  drupal_write_record('versioncontrol_repository_urls', $repository_urls, 'repo_id');
+  unset($repository_urls['repo_id']);
 
   // Auto-add commit info from $commit['[xxx]_specific'] into the database.
   $backends = versioncontrol_get_backends();
@@ -1000,7 +963,6 @@ function versioncontrol_delete_repository($repository) {
   // Phew, everything's cleaned up. Finally, delete the repository.
   db_query('DELETE FROM {versioncontrol_repositories} WHERE repo_id = %d',
            $repository['repo_id']);
-  // TODO: abstract out repository URLs into separate backends
   db_query('DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = %d',
            $repository['repo_id']);
   db_query('DELETE FROM {versioncontrol_repository_metadata} WHERE repo_id = %d',

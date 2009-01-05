@@ -2049,19 +2049,18 @@ function _versioncontrol_ensure_label($repository, $label) {
 }
 
 function _versioncontrol_insert_label($repository, $label) {
+  $label['repo_id'] = $repository['repo_id']; // for drupal_write_record() only
+
   if (isset($label['label_id'])) {
-    db_query("DELETE FROM {versioncontrol_labels}
-              WHERE label_id = %d", $label['label_id']);
+    // The label already exists in the database, update the record.
+    drupal_write_record('versioncontrol_labels', $label, 'label_id');
   }
   else {
-    $label['label_id'] = db_last_insert_id('versioncontrol_labels', 'label_id');
+    // The label does not yet exist, create it.
+    // drupal_write_record() also adds the 'label_id' to the $label array.
+    drupal_write_record('versioncontrol_labels', $label);
   }
-  db_query(
-    "INSERT INTO {versioncontrol_labels}
-      (label_id, repo_id, name, type)
-      VALUES (%d, %d, '%s', %d)",
-    $label['label_id'], $repository['repo_id'], $label['name'], $label['type']
-  );
+  unset($label['repo_id']);
   return $label;
 }
 
