@@ -2076,7 +2076,7 @@ function _versioncontrol_insert_label($repository, $label) {
               WHERE label_id = %d", $label['label_id']);
   }
   else {
-    $label['label_id'] = db_next_id('{versioncontrol_labels}_label_id');
+    $label['label_id'] = db_last_insert_id('versioncontrol_labels', 'label_id');
   }
   db_query(
     "INSERT INTO {versioncontrol_labels}
