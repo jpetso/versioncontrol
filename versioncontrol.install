@@ -15,19 +15,18 @@
  */
 function versioncontrol_schema() {
   $schema['versioncontrol_operations'] = array(
-    'description' => t('The combined table for commit, branch and tag operations.'),
+    'description' => 'The combined table for commit, branch and tag operations.',
     'fields' => array(
       'vc_op_id' => array(
-        'description' => t('Unique identifier for each operation in this table. Does not necessarily correspond to chronological order in any way.'),
+        'description' => 'Unique identifier for each operation in this table. Does not necessarily correspond to chronological order in any way.',
         'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'type' => array(
-        'description' => t(
-          'Operation type as specified by the backend: either of VERSIONCONTROL_OPERATION_COMMIT, VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG. (For version control systems like Subversion that need to emulate branches and tags, this will still be VERSIONCONTROL_OPERATION_COMMIT - the "intended" meaning is stored as associated label action.)'
-        ),
+        'description' =>
+          'Operation type as specified by the backend: either of VERSIONCONTROL_OPERATION_COMMIT, VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG. (For version control systems like Subversion that need to emulate branches and tags, this will still be VERSIONCONTROL_OPERATION_COMMIT - the "intended" meaning is stored as associated label action.)',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -35,46 +34,45 @@ function versioncontrol_schema() {
         'default' => 0,
       ),
       'repo_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that was affected by the operation.'),
+        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that was affected by the operation.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'date' => array(
-        'description' => t('Date/time when the operation was executed, as Unix timestamp.'),
+        'description' => 'Date/time when the operation was executed, as Unix timestamp.',
         'type' => 'int',
         'size' => 'big',
         'not null' => TRUE,
         'default' => 0,
       ),
       'uid' => array(
-        'description' => t('The {users}.uid for the Drupal user corresponding to the VCS-specific username in {versioncontrol_operations}.username, if such an association can be found. 0 otherwise. (The account associations are retrieved from the {versioncontrol_accounts} table.'),
+        'description' =>
+          'The {users}.uid for the Drupal user corresponding to the VCS-specific username in {versioncontrol_operations}.username, if such an association can be found. 0 otherwise. (The account associations are retrieved from the {versioncontrol_accounts} table.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'username' => array(
-        'description' => t('VCS specific username of the user who executed this operation. For distributed version control systems, this should be the author, not the committer.'),
+        'description' => 'VCS specific username of the user who executed this operation. For distributed version control systems, this should be the author, not the committer.',
         'type' => 'varchar',
         'length' => 64,
         'not null' => TRUE,
         'default' => '',
       ),
       'revision' => array(
-        'description' => t(
-          'VCS specific global revision identifier, like "1234" for Subversion or some SHA-1 hash for various distributed version control systems. Empty string if the VCS does not support atomic commits / global revisions.'
-        ),
+        'description' =>
+          'VCS specific global revision identifier, like "1234" for Subversion or some SHA-1 hash for various distributed version control systems. Empty string if the VCS does not support atomic commits / global revisions.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'message' => array(
-        'description' => t(
-          'Log message. Might be empty for branch and tag operations, depending on the version control system\'s capabilities. Should really not be empty for commit messages, except for the super-evil case when the commit author is sloppy enough not to enter one *and* the VCS allows that to happen.'
-        ),
+        'description' =>
+          'Log message. Might be empty for branch and tag operations, depending on the version control system\'s capabilities. Should really not be empty for commit messages, except for the super-evil case when the commit author is sloppy enough not to enter one *and* the VCS allows that to happen.',
         'type' => 'text',
         'not null' => FALSE,
       ),
@@ -91,7 +89,7 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_operation_labels'] = array(
-    'description' => t(
+    'description' =>
       'This table contains information about which branches and/or tags (= labels, referred to by the label_id) have been affected by an operation (vc_op_id), and how they\'ve been affected (action). Let\'s refer to that combination as "label action".
 
       Commit operations might not have any label associated, which happens e.g. for SVN commits outside of /trunk, /tags and /branches (or if labels are neither natively supported nor emulated).
@@ -104,27 +102,25 @@ function versioncontrol_schema() {
           same type as the operation, action == VERSIONCONTROL_ACTION_DELETED
       - Emulated branch/tag creation or deletion (think of SVN branches and
           tags): commit operation, any label type, action is the same as for
-          native creations/deletions.'
-    ),
+          native creations/deletions.',
     'fields' => array(
       'vc_op_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_operations}.vc_op_id) for the operation that affected the given label(s).'),
+        'description' => 'Foreign key (referring to {versioncontrol_operations}.vc_op_id) for the operation that affected the given label(s).',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'label_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_labels}.label_id) for the affected label.'),
+        'description' => 'Foreign key (referring to {versioncontrol_labels}.label_id) for the affected label.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'action' => array(
-        'description' => t(
-          'Specifies how the label was affected, see the {versioncontrol_operation_labels} table description for details on the semantics. Possible values are VERSIONCONTROL_ACTION_MODIFIED, VERSIONCONTROL_ACTION_ADDED and VERSIONCONTROL_ACTION_DELETED.'
-        ),
+        'description' =>
+          'Specifies how the label was affected, see the {versioncontrol_operation_labels} table description for details on the semantics. Possible values are VERSIONCONTROL_ACTION_MODIFIED, VERSIONCONTROL_ACTION_ADDED and VERSIONCONTROL_ACTION_DELETED.',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -136,35 +132,33 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_labels'] = array(
-    'description' => t(
-      'This table stores information about branches and tags (= labels) that exist in a repository. While there might be multiple operations involving the same branch/tag (see also {versioncontrol_operation_labels}, e.g. "create DRUPAL-6--1-0 tag for the files in project 1", "create DRUPAL-6--1-0 tag for the files in project 2", "delete DRUPAL-6--1-0 tag for the files in project 2 again"), there is only one row in this table that represents this label ("DRUPAL-6--1-0" in the above example).'
-    ),
+    'description' =>
+      'This table stores information about branches and tags (= labels) that exist in a repository. While there might be multiple operations involving the same branch/tag (see also {versioncontrol_operation_labels}, e.g. "create DRUPAL-6--1-0 tag for the files in project 1", "create DRUPAL-6--1-0 tag for the files in project 2", "delete DRUPAL-6--1-0 tag for the files in project 2 again"), there is only one row in this table that represents this label ("DRUPAL-6--1-0" in the above example).',
     'fields' => array(
       'label_id' => array(
-        'description' => t('Unique identifier for a branch or tag in this label, equivalent to the (also unique) repo_id/name/type combination in the same row.'),
+        'description' => 'Unique identifier for a branch or tag in this label, equivalent to the (also unique) repo_id/name/type combination in the same row.',
         'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'repo_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that this label is located in.'),
+        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that this label is located in.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'name' => array(
-        'description' => t('Name of the label, e.g. "HEAD", "master", "DRUPAL-6--1" or "6.x-1.0".'),
+        'description' => 'Name of the label, e.g. "HEAD", "master", "DRUPAL-6--1" or "6.x-1.0".',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'type' => array(
-        'description' => t(
-          'Whether this label is a branch or a tag. Consequently, this can be either VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG. (If we went for total correctness, it would have been VERSIONCONTROL_LABEL_{BRANCH,TAG} but I fear the confusion coming out of two similar constants. Therefore, reusing the operation constants.)'
-        ),
+        'description' =>
+          'Whether this label is a branch or a tag. Consequently, this can be either VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG. (If we went for total correctness, it would have been VERSIONCONTROL_LABEL_{BRANCH,TAG} but I fear the confusion coming out of two similar constants. Therefore, reusing the operation constants.)',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -182,30 +176,28 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_operation_items'] = array(
-    'description' => t(
+    'description' =>
       'This table relates an operation to the items (or more correctly, to the item revisions) that it affected. For example, an SVN commit with revision "1234" might modify an item that is now /trunk/file.txt at revision "1234", and move a directory from somewhere else that is now /trunk/dir at revision "1234". Those items are recorded here along with the vc_op_id that describes the general operation properties.
 
-      Branch/tag operations that affect the whole repository (like in Git or Mercurial) do not have items associated, whereas branch/tag operations that affect only a limited set of items (like in CVS or Subversion) link to the branched/tagged items with this table.'
-    ),
+      Branch/tag operations that affect the whole repository (like in Git or Mercurial) do not have items associated, whereas branch/tag operations that affect only a limited set of items (like in CVS or Subversion) link to the branched/tagged items with this table.',
     'fields' => array(
       'vc_op_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_operations}.vc_op_id) for the operation that affected the given item(s).'),
+        'description' => 'Foreign key (referring to {versioncontrol_operations}.vc_op_id) for the operation that affected the given item(s).',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'item_revision_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_item_revisions}.item_revision_id) for the affected item revision.'),
+        'description' => 'Foreign key (referring to {versioncontrol_item_revisions}.item_revision_id) for the affected item revision.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'type' => array(
-        'description' => t(
-          'Real member or cached item. This is an implementation detail of a performance optimization (for queries with a "paths" constraint), and private to the API module. Other modules must not touch this. VERSIONCONTROL_OPERATION_MEMBER_ITEM is the standard value and makes up for most entries in here, whereas VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM is the optimization (denoting an item that is not part of a versioncontrol_get_operation_items() result but will still cause that operation to be found if it matches the "paths" constraint).'
-        ),
+        'description' =>
+          'Real member or cached item. This is an implementation detail of a performance optimization (for queries with a "paths" constraint), and private to the API module. Other modules must not touch this. VERSIONCONTROL_OPERATION_MEMBER_ITEM is the standard value and makes up for most entries in here, whereas VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM is the optimization (denoting an item that is not part of a versioncontrol_get_operation_items() result but will still cause that operation to be found if it matches the "paths" constraint).',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -220,30 +212,32 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_source_items'] = array(
-    'description' => t('This table stores item history, i.e. it relates an item to one or more direct predecessors (= source items). Likewise, a source item can also have multiple successors, for example if it\'s copied to one location and later (or at the same time) moved to another location.'),
+    'description' =>
+      'This table stores item history, i.e. it relates an item to one or more direct predecessors (= source items). Likewise, a source item can also have multiple successors, for example if it\'s copied to one location and later (or at the same time) moved to another location.',
     'fields' => array(
       'item_revision_id' => array(
-        'description' => t('Foreign key for the successor item, referring to {versioncontrol_item_revisions}.item_revision_id. This one is more recent in revision history than the source item.'),
+        'description' =>
+          'Foreign key for the successor item, referring to {versioncontrol_item_revisions}.item_revision_id. This one is more recent in revision history than the source item.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'source_item_revision_id' => array(
-        'description' => t('Foreign key for the source item - also referring to {versioncontrol_item_revisions}.item_revision_id, but to a different one than the above {versioncontrol_source_items}.item_revision_id. Contains 0 if the action is VERSIONCONTROL_ACTION_ADDED.'),
+        'description' =>
+          'Foreign key for the source item - also referring to {versioncontrol_item_revisions}.item_revision_id, but to a different one than the above {versioncontrol_source_items}.item_revision_id. Contains 0 if the action is VERSIONCONTROL_ACTION_ADDED.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'action' => array(
-        'description' => t(
+        'description' =>
           'Action that was performed while transforming the source item into the successor item. Can be one of the VERSIONCONTROL_ACTION_* values listed at the top of versioncontrol.module.
 
           The VERSIONCONTROL_ACTION_DELETED and VERSIONCONTROL_ACTION_REPLACED actions are considered to be the end in the history of an item, no further successors than the current one should be retrieved. (For VERSIONCONTROL_ACTION_DELETED, item_revision_id links to a deleted item. For VERSIONCONTROL_ACTION_REPLACED, item_revision_id links to a different item at the same path that replaced the item specified by source_item_revision_id.
 
-          Likewise, the VERSIONCONTROL_ACTION_ADDED action is considered the beginning, with source_item_revision_id being 0 in that case.'
-        ),
+          Likewise, the VERSIONCONTROL_ACTION_ADDED action is considered the beginning, with source_item_revision_id being 0 in that case.',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -251,9 +245,8 @@ function versioncontrol_schema() {
         'default' => 0,
       ),
       'line_changes_recorded' => array(
-        'description' => t(
-          'Specifies whether line-change information is available (1 as value) or not (0 as value). Naturally, this should only apply to file items, not to directory items. VERSIONCONTROL_ACTION_DELETED and VERSIONCONTROL_ACTION_REPLACED actions are also not supposed to contain line-change information.'
-        ),
+        'description' =>
+          'Specifies whether line-change information is available (1 as value) or not (0 as value). Naturally, this should only apply to file items, not to directory items. VERSIONCONTROL_ACTION_DELETED and VERSIONCONTROL_ACTION_REPLACED actions are also not supposed to contain line-change information.',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -261,14 +254,16 @@ function versioncontrol_schema() {
         'default' => 0,
       ),
       'line_changes_added' => array(
-        'description' => t('If the line_changes_recorded column is 1 then this column contains the amount of lines that was added to the file compared to its source revision. (Equivalent to the "plus" lines in a unified diff.)'),
+        'description' =>
+          'If the line_changes_recorded column is 1 then this column contains the amount of lines that was added to the file compared to its source revision. (Equivalent to the "plus" lines in a unified diff.)',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'line_changes_removed' => array(
-        'description' => t('If the line_changes_recorded column is 1 then this column contains the amount of lines that was removed from the file compared to its source revision. (Equivalent to the "minus" lines in a unified diff.)'),
+        'description' =>
+          'If the line_changes_recorded column is 1 then this column contains the amount of lines that was removed from the file compared to its source revision. (Equivalent to the "minus" lines in a unified diff.)',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
@@ -279,46 +274,43 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_item_revisions'] = array(
-    'description' => t(
-      'This table contains all known different versions of a file or directory item. For version control systems using global revisions, only the revisions should be recorded in here when the item was actually changed, i.e. part of a commit operation. (Not every revision needs to have all associated items recorded in here, that would be insane.) Non-versioned items, such as directories in CVS or Git, should not be recorded in this table.'
-    ),
+    'description' =>
+      'This table contains all known different versions of a file or directory item. For version control systems using global revisions, only the revisions should be recorded in here when the item was actually changed, i.e. part of a commit operation. (Not every revision needs to have all associated items recorded in here, that would be insane.) Non-versioned items, such as directories in CVS or Git, should not be recorded in this table.',
     'fields' => array(
       'item_revision_id' => array(
-        'description' => t('Unique identifier for this item revision. The same item in a different revision gets a different item_revision_id. Equivalent to the (also unique) repo_id/path/revision combination in the same row.'),
+        'description' =>
+          'Unique identifier for this item revision. The same item in a different revision gets a different item_revision_id. Equivalent to the (also unique) repo_id/path/revision combination in the same row.',
         'type' => 'int', /// TODO: should probably be converted to 'serial'
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'repo_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that this item is located in.'),
+        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that this item is located in.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'path' => array(
-        'description' => t(
-          'Path of the item, relative to the repository root. Always starts with a slash, and never ends with one (not even if the item is a directory). Examples: "/" (root directory), "/contributions", "/sandbox/jpetso/evil-plans.txt". The slash is only used for separating the parts of the path, so it is safe to use explode("/", $path).'
-        ),
+        'description' =>
+          'Path of the item, relative to the repository root. Always starts with a slash, and never ends with one (not even if the item is a directory). Examples: "/" (root directory), "/contributions", "/sandbox/jpetso/evil-plans.txt". The slash is only used for separating the parts of the path, so it is safe to use explode("/", $path).',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'revision' => array(
-        'description' => t(
-          '(File-level) revision of the item, such as "1.12.4.3" for CVS. If the version control system supports global revisions, this should contain the same revision as the "revision" property of the associated commit operation. Contrary to {versioncontrol_operations}.revision which may be empty, this column must always contain a revision because every changed item has a revision assigned. (If it lacks a revision, it should not be recorded as operation item in the first place.)'
-        ),
+        'description' =>
+          '(File-level) revision of the item, such as "1.12.4.3" for CVS. If the version control system supports global revisions, this should contain the same revision as the "revision" property of the associated commit operation. Contrary to {versioncontrol_operations}.revision which may be empty, this column must always contain a revision because every changed item has a revision assigned. (If it lacks a revision, it should not be recorded as operation item in the first place.)',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'type' => array(
-        'description' => t(
-          'Specifies whether the item is a file or directory, and whether it exists or is deleted. Deleted items might exist for real, such as in CVS repositories (the "Attic") or they might just be recorded as part of a commit operation where the item was deleted, even though the version control system does not know about this revision. In Version Control API, deleted items only exist for display purposes, backends are expected not to retrieve information about them other than item history. Possible values for the item type are VERSIONCONTROL_ITEM_FILE, VERSIONCONTROL_ITEM_FILE_DELETED, VERSIONCONTROL_ITEM_DIRECTORY and VERSIONCONTROL_ITEM_DIRECTORY_DELETED. Usually though, API users should only use the functions versioncontrol_is_file_item(), versioncontrol_is_directory_item() and versioncontrol_is_deleted_item() for testing these constants.'
-        ),
+        'description' =>
+          'Specifies whether the item is a file or directory, and whether it exists or is deleted. Deleted items might exist for real, such as in CVS repositories (the "Attic") or they might just be recorded as part of a commit operation where the item was deleted, even though the version control system does not know about this revision. In Version Control API, deleted items only exist for display purposes, backends are expected not to retrieve information about them other than item history. Possible values for the item type are VERSIONCONTROL_ITEM_FILE, VERSIONCONTROL_ITEM_FILE_DELETED, VERSIONCONTROL_ITEM_DIRECTORY and VERSIONCONTROL_ITEM_DIRECTORY_DELETED. Usually though, API users should only use the functions versioncontrol_is_file_item(), versioncontrol_is_directory_item() and versioncontrol_is_deleted_item() for testing these constants.',
         'type' => 'int',
         'size' => 'tiny',
         'unsigned' => TRUE,
@@ -342,45 +334,45 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_repositories'] = array(
-    'description' => t('This table contains the set of repositories known to the Version Control API.'),
+    'description' => 'This table contains the set of repositories known to the Version Control API.',
     'fields' => array(
       'repo_id' => array(
-        'description' => t('Primary key, the unique identifier for the repository.'),
+        'description' => 'Primary key, the unique identifier for the repository.',
         'type' => 'int', /// TODO: should probably be converted to 'serial'
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'name' => array(
-        'description' => t('User visible name of the repository, to be run through check_plain().'),
+        'description' => 'User visible name of the repository, to be run through check_plain().',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'vcs' => array(
-        'description' => t('Unique string identifier of the backend, e.g. "cvs", "svn" or "git".'),
+        'description' => 'Unique string identifier of the backend, e.g. "cvs", "svn" or "git".',
         'type' => 'varchar',
         'length' => 8,
         'not null' => TRUE,
         'default' => '',
       ),
       'root' => array(
-        'description' => t('Root URL/path of the repository, to be interpreted by the VCS backend when it interfaces with the repository.'),
+        'description' => 'Root URL/path of the repository, to be interpreted by the VCS backend when it interfaces with the repository.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'authorization_method' => array(
-        'description' => t('Unique string identifier of the authorization method. (For more information on authorization methods, see hook_versioncontrol.php for functions marked with "@ingroup Authorization".)'),
+        'description' => 'Unique string identifier of the authorization method. (For more information on authorization methods, see hook_versioncontrol.php for functions marked with "@ingroup Authorization".)',
         'type' => 'varchar',
         'length' => 64,
         'not null' => TRUE,
         'default' => '',
       ),
       'url_backend' => array(
-        'description' => t('Repository URL backend. Intended to be pluggable, but for now this is hardcoded to "versioncontrol_default_urls" (which uses the values in the {versioncontrol_repository_urls} table).'),
+        'description' => 'Repository URL backend. Intended to be pluggable, but for now this is hardcoded to "versioncontrol_default_urls" (which uses the values in the {versioncontrol_repository_urls} table).',
         'type' => 'varchar',
         'length' => 64,
         'not null' => TRUE,
@@ -398,62 +390,58 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_repository_urls'] = array(
-    'description' => t('Repository URLs for repositories using the "versioncontrol_default_urls" backend. (Until the URL backend is made pluggable, all repositories will be using this default backend.)'),
+    'description' =>
+      'Repository URLs for repositories using the "versioncontrol_default_urls" backend. (Until the URL backend is made pluggable, all repositories will be using this default backend.)',
     'fields' => array(
       'repo_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that uses these URLs.'),
+        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that uses these URLs.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'commit_view' => array(
-        'description' => t('The URL of the repository viewer that displays a given commit in the repository. "%revision" is used as placeholder for the revision/commit/changeset identifier.'),
+        'description' => 'The URL of the repository viewer that displays a given commit in the repository. "%revision" is used as placeholder for the revision/commit/changeset identifier.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'file_log_view' => array(
-        'description' => t(
-          'The URL of the repository viewer that displays the commit log of a given file in the repository. "%path" is used as placeholder for the file path, "%revision" will be replaced by the file-level revision (the one in {versioncontrol_item_revisions}.revision), and "%branch" will be replaced by the branch name that the file is on.'
-        ),
+        'description' =>
+          'The URL of the repository viewer that displays the commit log of a given file in the repository. "%path" is used as placeholder for the file path, "%revision" will be replaced by the file-level revision (the one in {versioncontrol_item_revisions}.revision), and "%branch" will be replaced by the branch name that the file is on.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'file_view' => array(
-        'description' => t(
-          'The URL of the repository viewer that displays the contents of a given file in the repository. "%path" is used as placeholder for the file path, "%revision" will be replaced by the file-level revision (the one in {versioncontrol_item_revisions}.revision), and "%branch" will be replaced by the branch name that the file is on.'
-        ),
+        'description' =>
+          'The URL of the repository viewer that displays the contents of a given file in the repository. "%path" is used as placeholder for the file path, "%revision" will be replaced by the file-level revision (the one in {versioncontrol_item_revisions}.revision), and "%branch" will be replaced by the branch name that the file is on.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'directory_view' => array(
-        'description' => t(
-          'The URL of the repository viewer that displays the contents of a given directory in the repository. "%path" is used as placeholder for the directory path, "%revision" will be replaced by the file-level revision (the one in {versioncontrol_item_revisions}.revision - only makes sense if directories are versioned, of course), and "%branch" will be replaced by the branch name that the directory is on.'
-        ),
+        'description' =>
+          'The URL of the repository viewer that displays the contents of a given directory in the repository. "%path" is used as placeholder for the directory path, "%revision" will be replaced by the file-level revision (the one in {versioncontrol_item_revisions}.revision - only makes sense if directories are versioned, of course), and "%branch" will be replaced by the branch name that the directory is on.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'diff' => array(
-        'description' => t(
-          'The URL of the repository viewer that displays the diff between two given files in the repository. "%path" and "%old-path" are used as placeholders for the new and old paths (for some version control systems, like CVS, those paths will always be the same). "%new-revision" and "%old-revision" will be replaced by the respective file-level revisions (from {versioncontrol_item_revisions}.revision), and "%branch" will be replaced by the branch name that the file is on.'
-        ),
+        'description' =>
+          'The URL of the repository viewer that displays the diff between two given files in the repository. "%path" and "%old-path" are used as placeholders for the new and old paths (for some version control systems, like CVS, those paths will always be the same). "%new-revision" and "%old-revision" will be replaced by the respective file-level revisions (from {versioncontrol_item_revisions}.revision), and "%branch" will be replaced by the branch name that the file is on.',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
         'default' => '',
       ),
       'tracker' => array(
-        'description' => t(
-          'The URL of the issue tracker that displays the issue/case/bug page of an issue id which presumably has been mentioned in a commit message. As issue tracker URLs are likely specific to each repository, this is also a per-repository setting. (Although... maybe it would make sense to have per-project rather than per-repository. Oh well.)'
-        ),
+        'description' =>
+          'The URL of the issue tracker that displays the issue/case/bug page of an issue id which presumably has been mentioned in a commit message. As issue tracker URLs are likely specific to each repository, this is also a per-repository setting. (Although... maybe it would make sense to have per-project rather than per-repository. Oh well.)',
         'type' => 'varchar',
         'length' => 255,
         'not null' => TRUE,
@@ -464,26 +452,25 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_repository_metadata'] = array(
-    'description' => t('This table contains repository settings that are just intended for internal use by the API module itself.'),
+    'description' => 'This table contains repository settings that are just intended for internal use by the API module itself.',
     'fields' => array(
       'repo_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_repositories}.repo_id) for the corresponding repository.'),
+        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the corresponding repository.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'weight' => array(
-        'description' => t('Hm... unused? I think I might have used this for sorting the repositories in lists, seems I dropped it again. Bad maintainer, jpetso, bad maintainer. Ts.'),
+        'description' => 'Hm... unused? I think I might have used this for sorting the repositories in lists, seems I dropped it again. Bad maintainer, jpetso, bad maintainer. Ts.',
         'type' => 'int',
         'size' => 'small',
         'not null' => TRUE,
         'default' => 0,
       ),
       'registration_message' => array(
-        'description' => t(
-          'The message that shows up on the repository edit form when a new user wants to register an account. Grep versioncontrol.module for "versioncontrol_registration_message_repository" to have a look at the default value.'
-        ),
+        'description' =>
+          'The message that shows up on the repository edit form when a new user wants to register an account. Grep versioncontrol.module for "versioncontrol_registration_message_repository" to have a look at the default value.',
         'type' => 'text',
         'not null' => FALSE,
       ),
@@ -492,24 +479,25 @@ function versioncontrol_schema() {
   );
 
   $schema['versioncontrol_accounts'] = array(
-    'description' => t('Association table of VCS account usernames (in a specific repository) to Drupal user ids. A Drupal user can be associated to multiple VCS accounts. Ideally, multiple VCS accounts per repository should be possible too, but clumsy array data structures and assumptions in the admin interface (elsewhere, too? don\'t know) currently make it necessary to restrict the number of VCS accounts to a maximum of 1 per repository and Drupal user.'),
+    'description' =>
+      'Association table of VCS account usernames (in a specific repository) to Drupal user ids. A Drupal user can be associated to multiple VCS accounts. Ideally, multiple VCS accounts per repository should be possible too, but clumsy array data structures and assumptions in the admin interface (elsewhere, too? don\'t know) currently make it necessary to restrict the number of VCS accounts to a maximum of 1 per repository and Drupal user.',
     'fields' => array(
       'uid' => array(
-        'description' => t('The {users}.uid of the Drupal user associated with the VCS-specific username in {versioncontrol_accounts}.username.'),
+        'description' => 'The {users}.uid of the Drupal user associated with the VCS-specific username in {versioncontrol_accounts}.username.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'repo_id' => array(
-        'description' => t('Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that contains the VCS account.'),
+        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the repository that contains the VCS account.',
         'type' => 'int',
         'unsigned' => TRUE,
         'not null' => TRUE,
         'default' => 0,
       ),
       'username' => array(
-        'description' => t('VCS-specific username of the VCS account associated with the Drupal user in {versioncontrol_accounts}.uid.'),
+        'description' => 'VCS-specific username of the VCS account associated with the Drupal user in {versioncontrol_accounts}.uid.',
         'type' => 'varchar',
         'length' => 64,
         'not null' => TRUE,
