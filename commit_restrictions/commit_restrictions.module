@@ -393,8 +393,9 @@ function _commit_restrictions_label_access($operation, $restrictions) {
         if (!empty($labelinfo['other_restrictions'])) {
           foreach ($labelinfo['other_restrictions'] as $valid_other_regexp) {
             if (preg_match($valid_other_regexp, $label['name'])) {
-              $error = strtr($labelinfo['confusion_error'],
-                             array('!labelname' => $label['name']));
+              $error = strtr($labelinfo['confusion_error'], array(
+                '!labelname' => $label['name']
+              ));
             }
           }
         }

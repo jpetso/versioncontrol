@@ -79,7 +79,7 @@ function versioncontrol_admin_settings(&$form_state) {
  * system_settings_form() is left out because it's nasty for modules that
  * hook into this form and don't want to use automatic variable saving.
  */
-function versioncontrol_admin_settings_submit(&$form, &$form_state) {
+function versioncontrol_admin_settings_submit($form, &$form_state) {
   $value_names = array(
     'versioncontrol_email_address',
     'versioncontrol_allow_unauthorized_access',
@@ -201,8 +201,8 @@ function versioncontrol_admin_account_list_page(&$form_state) {
       ));
     }
     $vcs_usernames = empty($repo_usernames)
-                     ? t('VCS backend is currently disabled')
-                     : theme('item_list', $repo_usernames);
+      ? t('VCS backend is currently disabled')
+      : theme('item_list', $repo_usernames);
 
     $rows_by_uid[$uid] = array(
       theme('username', $user), $vcs_usernames,
@@ -304,7 +304,7 @@ function versioncontrol_admin_account_list_filter_form(&$form_state, $repositori
 /**
  * Submit handler for the account filter form.
  */
-function versioncontrol_admin_account_list_filter_form_submit(&$form, &$form_state) {
+function versioncontrol_admin_account_list_filter_form_submit($form, &$form_state) {
   $_SESSION['versioncontrol_filter_repo_id'] = $form_state['values']['repo_id'];
 }
 
@@ -405,7 +405,7 @@ function versioncontrol_admin_account_import_form(&$form_state) {
  *
  * Only actually validates that the repo backend is correctly configured.
  */
-function versioncontrol_admin_account_import_form_validate(&$form, &$form_state) {
+function versioncontrol_admin_account_import_form_validate($form, &$form_state) {
   if (is_null(versioncontrol_get_repository($form_state['values']['repo_id']))) {
     form_error($form['data'], t('The selected repository could not be found.'));
   }
@@ -415,10 +415,11 @@ function versioncontrol_admin_account_import_form_validate(&$form, &$form_state)
  * Submit handler for the "select repository to import" form from above:
  * Call the [vcs_backend]_admin_import_accounts() with the given data.
  */
-function versioncontrol_admin_account_import_form_submit(&$form, &$form_state) {
+function versioncontrol_admin_account_import_form_submit($form, &$form_state) {
   $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
-  _versioncontrol_call_backend($repository['vcs'], 'import_accounts',
-                               array($repository, $form_state['values']['data']));
+  _versioncontrol_call_backend($repository['vcs'], 'import_accounts', array(
+    $repository, $form_state['values']['data']
+  ));
 }
 
 
@@ -441,8 +442,9 @@ function versioncontrol_admin_account_export_page($repository) {
     print $data;
   }
   else {
-    return drupal_get_form('versioncontrol_admin_account_export_display_form',
-                           $repository, $data);
+    return drupal_get_form(
+      'versioncontrol_admin_account_export_display_form', $repository, $data
+    );
   }
 }
 
@@ -507,7 +509,7 @@ function versioncontrol_admin_account_export_form(&$form_state) {
  * Submit handler for the "select repository to export" form from above:
  * Redirect to the export form for the specific repository.
  */
-function versioncontrol_admin_account_export_form_submit(&$form, &$form_state) {
+function versioncontrol_admin_account_export_form_submit($form, &$form_state) {
   $form_state['redirect'] = 'admin/project/versioncontrol-accounts/export/'. $form_state['values']['repo_id'];
 
   if ($form_state['values']['op'] == t('Export to plaintext')) {
@@ -806,7 +808,7 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
 /**
  * Validate the add/edit repository form before it is submitted.
  */
-function versioncontrol_admin_repository_edit_validate(&$form, &$form_state) {
+function versioncontrol_admin_repository_edit_validate($form, &$form_state) {
   if ($form_state['values']['repo_id'] != 0 && $form_state['values']['repo_name'] == $form_state['values']['original_name']) {
     return;
   }
@@ -824,7 +826,7 @@ function versioncontrol_admin_repository_edit_validate(&$form, &$form_state) {
 /**
  * Add or update the repository when the add/edit form is submitted.
  */
-function versioncontrol_admin_repository_edit_submit(&$form, &$form_state) {
+function versioncontrol_admin_repository_edit_submit($form, &$form_state) {
   // Reconstruct the repository from the form values that were passed.
   $repository = array();
   $repository_urls = array();
@@ -861,8 +863,9 @@ function versioncontrol_admin_repository_edit_submit(&$form, &$form_state) {
               WHERE repo_id = %d",
               $registration_message, $repository['repo_id']);
 
-    drupal_set_message(t('The %repository repository has been updated.',
-                       array('%repository' => $repository['name'])));
+    drupal_set_message(t('The %repository repository has been updated.', array(
+      '%repository' => $repository['name'],
+    )));
   }
   else {
     $repository = versioncontrol_insert_repository($repository, $repository_urls);
@@ -871,8 +874,9 @@ function versioncontrol_admin_repository_edit_submit(&$form, &$form_state) {
               VALUES (%d, '%s')",
               $repository['repo_id'], $registration_message);
 
-    drupal_set_message(t('The %repository repository has been added.',
-                       array('%repository' => $repository['name'])));
+    drupal_set_message(t('The %repository repository has been added.', array(
+      '%repository' => $repository['name']
+    )));
   }
 
   $form_state['redirect'] = 'admin/project/versioncontrol-repositories';
@@ -899,7 +903,7 @@ function versioncontrol_admin_repository_delete_confirm(&$form_state, $repositor
 /**
  * Delete the repository when the confirmation form is submitted.
  */
-function versioncontrol_admin_repository_delete_confirm_submit(&$form, &$form_state) {
+function versioncontrol_admin_repository_delete_confirm_submit($form, &$form_state) {
   $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
   versioncontrol_delete_repository($repository);
   drupal_set_message(t('The %repository repository has been deleted.', array(

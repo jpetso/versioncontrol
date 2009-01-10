@@ -563,7 +563,8 @@ function _commitlog_affected_directory_item($operation, $operation_items) {
       continue;
     }
     foreach ($item['source_items'] as $source_path => $source_item) {
-      // If the source item 
+      // If the source item is already in the affected items array,
+      // there's no need to duplicate it there.
       if ($path != $source_path) {
         $affected_items[$source_path] = $source_item;
       }
@@ -790,7 +791,9 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
 
     // Determine how the item path should be displayed.
     $offset = ($directory_item['path'] == '/') ? 0 : 1;
-    $item_path = substr($item['path'], strlen($directory_item['path']) + $offset);
+    $item_path = drupal_substr(
+      $item['path'], drupal_strlen($directory_item['path']) + $offset
+    );
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
       $item_path = t('!path [directory]', array('!path' => $item_path));
     }
@@ -805,7 +808,9 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
 
       $olditems = array();
       foreach ($item['source_items'] as $source_item) {
-        $item_path = substr($source_item['path'], strlen($directory_item['path']) + $offset);
+        $item_path = drupal_substr(
+          $source_item['path'], drupal_strlen($directory_item['path']) + $offset
+        );
         $olditems[] = theme('commitlog_item', $operation['repository'], $source_item, $item_path, $format);
       }
       $olditems_string = implode(', ', $olditems);

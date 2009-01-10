@@ -117,7 +117,8 @@ function versioncontrol_account_register_page($register_uid = FALSE, $register_a
   }
 
   return drupal_get_form('versioncontrol_account_register_form',
-                         $register_uid, $repository_names, $first_repo_id);
+    $register_uid, $repository_names, $first_repo_id
+  );
 }
 
 /**
@@ -216,7 +217,7 @@ function versioncontrol_account_register_form(&$form_state, $register_uid, $repo
  * Submit handler for the indirection form.
  * Surprisingly, all it does is redirect to the appropriate registration form.
  */
-function versioncontrol_account_register_form_submit(&$form, &$form_state) {
+function versioncontrol_account_register_form_submit($form, &$form_state) {
   $form_state['redirect'] = 'versioncontrol/register/'. $form_state['values']['uid'] .'/'. $form_state['values']['repo_id'];
 }
 
@@ -386,7 +387,7 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $user
 /**
  * Validate the edit/register user account form submission before it is submitted.
  */
-function versioncontrol_account_edit_form_validate(&$form, &$form_state) {
+function versioncontrol_account_edit_form_validate($form, &$form_state) {
   if (!isset($form_state['values']['account_name'])) {
     return;
   }
@@ -434,7 +435,7 @@ function versioncontrol_account_edit_form_validate(&$form, &$form_state) {
 /**
  * Add or update the user account when the edit/register form is submitted.
  */
-function versioncontrol_account_edit_form_submit(&$form, &$form_state) {
+function versioncontrol_account_edit_form_submit($form, &$form_state) {
   // Reconstruct the user data from the $form_values that were passed.
   $uid = $form_state['values']['uid'];
   $username = trim($form_state['values']['account_name']);

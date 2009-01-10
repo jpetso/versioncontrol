@@ -346,12 +346,14 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
 
   // Notify the backend first.
   if (versioncontrol_backend_implements($vcs, 'operation')) {
-    _versioncontrol_call_backend($vcs, 'operation',
-                                 array('insert', $operation, $operation_items));
+    _versioncontrol_call_backend($vcs, 'operation', array(
+      'insert', $operation, $operation_items
+    ));
   }
   // Everything's done, let the world know about it!
   module_invoke_all('versioncontrol_operation',
-                    'insert', $operation, $operation_items);
+    'insert', $operation, $operation_items
+  );
 
   // Rules integration, because we like to enable people to be flexible.
   if (module_exists('workflow_ng')) {
@@ -545,8 +547,9 @@ function versioncontrol_delete_operation($operation) {
 
   // Provide an opportunity for the backend to delete its own stuff.
   if (versioncontrol_backend_implements($vcs, 'operation')) {
-    _versioncontrol_call_backend($vcs, 'operation',
-                                 array('delete', $operation, $operation_items));
+    _versioncontrol_call_backend($vcs, 'operation', array(
+      'delete', $operation, $operation_items
+    ));
   }
 
   db_query('DELETE FROM {versioncontrol_operation_labels}

@@ -3188,14 +3188,15 @@ function versioncontrol_block($op = 'list', $delta = 0) {
       $interval = 7 * 24 * 60 * 60;
       $length = 15;
 
-      $result = db_query_range(
-        'SELECT COUNT(op.vc_op_id) AS count, op.uid, u.name
-         FROM {versioncontrol_operations} op
-         INNER JOIN {users} u ON op.uid = u.uid AND op.uid != 0 AND op.date > %d
-         WHERE op.type = %d
-         GROUP BY op.uid ORDER BY count DESC',
-         array(time() - $interval, VERSIONCONTROL_OPERATION_COMMIT), // placeholders
-         0, $length // query range arguments: 'from' and 'count'
+      $result = db_query_range('
+        SELECT COUNT(op.vc_op_id) AS count, op.uid, u.name
+        FROM {versioncontrol_operations} op
+          INNER JOIN {users} u
+            ON op.uid = u.uid AND op.uid != 0 AND op.date > %d
+        WHERE op.type = %d
+        GROUP BY op.uid ORDER BY count DESC',
+        array(time() - $interval, VERSIONCONTROL_OPERATION_COMMIT), // placeholders
+        0, $length // query range arguments: 'from' and 'count'
       );
 
       $usernames = array();
