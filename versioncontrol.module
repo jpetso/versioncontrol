@@ -165,7 +165,7 @@ function versioncontrol_menu() {
 
   $admin = array(
     'page callback' => 'drupal_get_form',
-    'access callback' => 'versioncontrol_admin_access',
+    'access arguments' => array('administer version control systems'),
     'file' => 'versioncontrol.admin.inc',
   );
 
@@ -177,7 +177,7 @@ function versioncontrol_menu() {
       'title' => 'Project administration',
       'description' => 'Administrative interface for project management and related modules.',
       'page callback' => 'system_admin_menu_block_page',
-      'access callback' => 'versioncontrol_admin_access',
+      'access arguments' => array('administer version control systems'),
       'type' => MENU_NORMAL_ITEM,
     );
   }
@@ -330,7 +330,7 @@ function versioncontrol_admin_access($account = NULL) {
  */
 function versioncontrol_user_access($account = NULL) {
   return user_access('use version control systems', $account)
-    || versioncontrol_admin_access($account);
+    || user_access('administer version control systems', $account);
 }
 
 /**
@@ -344,7 +344,7 @@ function versioncontrol_private_account_access($viewed_uid, $account = NULL) {
     $account = clone $user;
   }
   return ($viewed_uid == $account->uid && user_access('use version control systems', $account))
-    || versioncontrol_admin_access($account);
+    || user_access('administer version control systems', $account);
 }
 
 /**
