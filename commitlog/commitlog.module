@@ -81,10 +81,10 @@ function commitlog_perm() {
  * Add a fieldset for to the general settings form so that the user can
  * enable/disable admin notification mails and configure the pager limit.
  */
-function commitlog_form_alter($form_id, &$form) {
+function commitlog_form_alter(&$form, $form_state, $form_id) {
   if ($form['#id'] == 'versioncontrol-settings-form') {
-    $form['#validate']['commitlog_settings_validate'] = array();
-    $form['#submit']['commitlog_settings_submit'] = array();
+    $form['#validate'][] = 'commitlog_settings_validate';
+    $form['#submit'][] = 'commitlog_settings_submit';
 
     $form['commitlog'] = array(
       '#type' => 'fieldset',
@@ -112,18 +112,21 @@ function commitlog_form_alter($form_id, &$form) {
  * Validation handler for the settings form:
  * Make sure that the pager limit is a positive number.
  */
-function commitlog_settings_validate($form_id, $form_values) {
-  if (!is_numeric($form_values['commitlog_pager']) || $form_values['commitlog_pager'] <= 0) {
-    form_set_error('commitlog_pager', t('The number of commits per page needs to be a positive number.'));
+function commitlog_settings_validate($form, &$form_state) {
+  if (!is_numeric($form_state['values']['commitlog_pager'])
+      || $form_state['values']['commitlog_pager'] <= 0) {
+    form_error($form['commitlog']['commitlog_pager'],
+      t('The number of commits per page needs to be a positive number.')
+    );
   }
 }
 
 /**
  * Submit handler for the settings form.
  */
-function commitlog_settings_submit($form_id, $form_values) {
-  variable_set('commitlog_pager', $form_values['commitlog_pager']);
-  variable_set('commitlog_send_notification_mails', $form_values['commitlog_send_notification_mails']);
+function commitlog_settings_submit($form, &$form_state) {
+  variable_set('commitlog_pager', $form_state['values']['commitlog_pager']);
+  variable_set('commitlog_send_notification_mails', $form_state['values']['commitlog_send_notification_mails']);
 }
 
 
@@ -364,9 +367,9 @@ function theme_commitlog_operations_page($constraints) {
   $output .= '</div>';
 
   // The feed icon, with reconstructed query attributes.
-  $query_items = _commitlog_query_attributes($constraints);
-  $query = empty($query_items) ? NULL : implode('&', $query_items);
-  $output .= theme('feed_icon', url('commitlog/feed', $query));
+  $output .= theme('feed_icon', url('commitlog/feed', array(
+    'query' => _commitlog_query_attributes($constraints),
+  )));
 
   return $output;
 }
@@ -391,11 +394,16 @@ function theme_commitlog_rss($constraints) {
       $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
     );
 
-    $link = url('commitlog', 'id='. $operation['vc_op_id'], NULL, TRUE);
+    $link = url('commitlog', array(
+      'query' => 'id='. $operation['vc_op_id'],
+      'absolute' => TRUE,
+    ));
     $extra = array(
       array('key' => 'pubDate', 'value' => gmdate('r', $operation['date'])),
       array('key' => 'dc:creator', 'value' => $plain_username),
       array('key' => 'guid',
+        // This is intentionally not translated: the RSS GUID just needs to be
+        // any sort of globally unique value and won't be shown to users.
         'value' => 'Version control operation '. $operation['vc_op_id'] .' at '. $base_url,
         'attributes' => array('isPermaLink' => 'false'),
       ),
@@ -432,12 +440,11 @@ function theme_commitlog_rss($constraints) {
   }
 
   $query_items = _commitlog_query_attributes($constraints);
-  $query = empty($query_items) ? NULL : implode('&', $query_items);
 
   $channel = array(
     'version'     => '2.0',
     'title'       => $title,
-    'link'        => url('commitlog', $query, NULL, TRUE),
+    'link'        => url('commitlog', array('query' => $query_items, 'absolute' => TRUE)),
     'description' => t('Commit messages for @site', array('@site' => $site_name)),
     'language'    => $locale,
   );
@@ -535,14 +542,16 @@ function theme_commitlog_operation_plaintext($variables) {
  * Return the commitlog URL for the log history of a given account.
  */
 function commitlog_account_url($repository, $username) {
-  return l($username, 'commitlog', NULL,
-    'username='. drupal_urlencode($username) .'&repo='. $repository['repo_id']
-  );
+  return l($username, 'commitlog', array(
+    'query' => array('username' => $username, 'repo' => $repository['repo_id']),
+  ));
 }
 
 function theme_commitlog_repository($repository, $format = 'html') {
   if ($format == 'html') {
-    return l($repository['name'], 'commitlog', NULL, 'repo='. $repository['repo_id']);
+    return l($repository['name'], 'commitlog', array(
+      'query' => 'repo='. $repository['repo_id'],
+    ));
   }
   return check_plain($repository['name']);
 }
@@ -606,7 +615,7 @@ function theme_commitlog_vc_op_id($vc_op_id, $text = NULL, $format = 'html') {
     $text = $vc_op_id;
   }
   if ($format == 'html') {
-    return l($text, 'commitlog', NULL, 'id='. $vc_op_id);
+    return l($text, 'commitlog', array('query' => 'id='. $vc_op_id));
   }
   return $text;
 }
@@ -749,9 +758,11 @@ function theme_commitlog_label($label, $options = array()) {
   $options = _commitlog_options($options);
 
   if ($options['format'] == 'html') {
-    $commitlog_filter = ($label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
-                        ? 'branch' : 'tag';
-    return l($label['name'], 'commitlog', NULL, $commitlog_filter .'='. $label['name']);
+    $label_type_filter = ($label['type'] == VERSIONCONTROL_OPERATION_BRANCH)
+                          ? 'branch' : 'tag';
+    return l($label['name'], 'commitlog', array(
+      'query' => array($label_type_filter => $label['name']),
+    ));
   }
   return $label['name'];
 }

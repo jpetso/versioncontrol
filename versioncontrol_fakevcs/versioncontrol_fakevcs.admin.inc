@@ -18,19 +18,19 @@ define('VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH', 5);
  * Implementation of hook_form_alter(): Add elements to various
  * administrative forms that the Version Control API provides.
  */
-function versioncontrol_fakevcs_form_alter($form_id, &$form) {
+function versioncontrol_fakevcs_form_alter(&$form, $form_state, $form_id) {
   if ($form['#id'] == 'versioncontrol-repository-form' && $form['#vcs'] == 'fakevcs') {
-    versioncontrol_fakevcs_repository_admin_form_alter($form_id, $form);
+    versioncontrol_fakevcs_repository_admin_form_alter($form, $form_state, $form_id);
   }
   else if ($form['#id'] == 'versioncontrol-account-form' && $form['#vcs'] == 'fakevcs') {
-    versioncontrol_fakevcs_account_form_alter($form_id, $form);
+    versioncontrol_fakevcs_account_form_alter($form, $form_state, $form_id);
   }
 }
 
 /**
  * Add CVS specific elements to the add/edit repository form.
  */
-function versioncontrol_fakevcs_repository_admin_form_alter($form_id, &$form) {
+function versioncontrol_fakevcs_repository_admin_form_alter(&$form, $form_state, $form_id) {
   $repository = $form['#repository'];
 
   $form['versioncontrol_fakevcs'] = array(
@@ -119,7 +119,7 @@ function versioncontrol_fakevcs_versioncontrol_alter_repository_list($vcs, $repo
 /**
  * Add FakeVCS specific elements to the edit/register user account form.
  */
-function versioncontrol_fakevcs_account_form_alter($form_id, &$form) {
+function versioncontrol_fakevcs_account_form_alter(&$form, $form_state, $form_id) {
   $form['versioncontrol_fakevcs'] = array(
     '#type' => 'value',
     '#value' => TRUE,
@@ -137,17 +137,17 @@ function versioncontrol_fakevcs_account_form_alter($form_id, &$form) {
     '#description' => $description,
     '#weight' => 10,
   );
-  $form['#validate']['versioncontrol_fakevcs_account_form_validate'] = array();
+  $form['#validate'][] = 'versioncontrol_fakevcs_account_form_validate'];
 }
 
 /**
  * Additional validation for the edit/register user account form.
  */
-function versioncontrol_fakevcs_account_form_validate($form_id, $form_values) {
-  if (!empty($form_values['original_username']) && empty($form_values['account_password'])) {
+function versioncontrol_fakevcs_account_form_validate($form, &$form_state) {
+  if (!empty($form_state['values']['original_username']) && empty($form_state['values']['account_password'])) {
     return; // The (existing) user didn't change the password.
   }
-  else if (drupal_strlen($form_values['account_password']) < VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH) {
+  else if (drupal_strlen($form_state['values']['account_password']) < VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH) {
     form_set_error('account_password', t('The FakeVCS password you have chosen is too short (it must be at least !min characters long).', array('!min' => VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH)));
   }
 }

@@ -11,7 +11,7 @@
  */
 
 // First up, token integration. This is not in the main module because no
-// module other than workflow_ng can currently make use of it.
+// module other than Rules can currently make use of it.
 
 /**
  * Implementation of hook_token_list().
@@ -221,9 +221,9 @@ function versioncontrol_condition_repository_form($settings = array(), $argument
   return $form;
 }
 
-function versioncontrol_condition_repository_submit($form_id, $form_values) {
+function versioncontrol_condition_repository_submit($form, &$form_state) {
   return array(
-    'repo_ids' => array_filter(array_keys(array_filter($form_values['repo_ids']))),
+    'repo_ids' => array_filter(array_keys(array_filter($form_state['values']['repo_ids']))),
   );
 }
 
@@ -290,10 +290,10 @@ function versioncontrol_condition_item_paths_form($settings = array(), $argument
   return $form;
 }
 
-function versioncontrol_condition_item_paths_submit($form_id, $form_values) {
+function versioncontrol_condition_item_paths_submit($form, &$form_state) {
   return array(
-    'path_regexps' => array_filter(explode(' ', $form_values['path_regexps'])),
-    'operation' => $form_values['operation'],
+    'path_regexps' => array_filter(explode(' ', $form_state['values']['path_regexps'])),
+    'operation' => $form_state['values']['operation'],
   );
 }
 
@@ -331,8 +331,8 @@ function versioncontrol_condition_operation_labels_form($settings = array(), $ar
   return $form;
 }
 
-function versioncontrol_condition_operation_labels_submit($form_id, $form_values) {
+function versioncontrol_condition_operation_labels_submit($form, &$form_state) {
   return array(
-    'label_regexps' => array_filter(explode(' ', $form_values['label_regexps'])),
+    'label_regexps' => array_filter(explode(' ', $form_state['values']['label_regexps'])),
   );
 }

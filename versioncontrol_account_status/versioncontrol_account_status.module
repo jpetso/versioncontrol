@@ -301,22 +301,22 @@ function _versioncontrol_account_status_get_cell($uid, $usernames_by_repository,
  * Implementation of hook_form_alter():
  * Change the form according to the user's account status.
  */
-function versioncontrol_account_status_form_alter($form_id, &$form) {
+function versioncontrol_account_status_form_alter(&$form, $form_state, $form_id) {
   switch ($form['#id']) {
     case 'versioncontrol-repository-form':
-      versioncontrol_account_status_form_alter_repository_settings($form_id, $form);
+      versioncontrol_account_status_form_alter_repository_settings($form);
       break;
 
     case 'versioncontrol-account-form':
       if ($form['#repository']['authorization_method'] == 'versioncontrol_account_status_repository') {
         versioncontrol_account_status_form_alter_account(
-          $form_id, $form, $form['#repository']['repo_id']
+          $form, $form['#repository']['repo_id']
         );
       }
       break;
 
     case 'versioncontrol-account-filter-form':
-      versioncontrol_account_status_form_alter_account_filter($form_id, $form);
+      versioncontrol_account_status_form_alter_account_filter($form);
       break;
   }
 }
@@ -326,7 +326,7 @@ function versioncontrol_account_status_form_alter($form_id, &$form) {
  * Implementation of hook_form_alter() for Version Control API's
  * account filtering form on the admin account list.
  */
-function versioncontrol_account_status_form_alter_account_filter($form_id, &$form) {
+function versioncontrol_account_status_form_alter_account_filter(&$form) {
   $options = array_merge(
     array(VERSIONCONTROL_ACCOUNT_STATUS_ALL => t('All')),
     _versioncontrol_account_status_get_status_options()
@@ -336,7 +336,7 @@ function versioncontrol_account_status_form_alter_account_filter($form_id, &$for
     $_SESSION['versioncontrol_account_status_filter'] = VERSIONCONTROL_ACCOUNT_STATUS_QUEUED;
   }
 
-  $form['#submit']['versioncontrol_account_status_account_filter_form_submit'] = array();
+  $form['#submit'][] = 'versioncontrol_account_status_account_filter_form_submit';
 
   $form['fieldset']['filters']['versioncontrol_account_status'] = array(
     '#type' => 'select',
@@ -350,8 +350,9 @@ function versioncontrol_account_status_form_alter_account_filter($form_id, &$for
 /**
  * Additional submit handler for the account filter form.
  */
-function versioncontrol_account_status_account_filter_form_submit($form_id, $form_values) {
-  $_SESSION['versioncontrol_account_status_filter'] = $form_values['versioncontrol_account_status'];
+function versioncontrol_account_status_account_filter_form_submit($form, &$form_state) {
+  $_SESSION['versioncontrol_account_status_filter'] =
+    $form_state['values']['versioncontrol_account_status'];
 }
 
 /**
@@ -401,7 +402,7 @@ function versioncontrol_account_status_versioncontrol_filter_accounts(&$accounts
  * Implementation of hook_form_alter() for Version Control API's
  * repository settings form.
  */
-function versioncontrol_account_status_form_alter_repository_settings($form_id, &$form) {
+function versioncontrol_account_status_form_alter_repository_settings(&$form) {
   $backends = versioncontrol_get_backends();
   $vcs_name = $backend[$form['#vcs']]['name'];
   $repository = $form['#repository'];
@@ -608,7 +609,7 @@ function _versioncontrol_account_status_get_value_names() {
 /**
  * Implementation of hook_form_alter() for the register/edit account form.
  */
-function versioncontrol_account_status_form_alter_account($form_id, &$form, $repo_id) {
+function versioncontrol_account_status_form_alter_account(&$form, $repo_id) {
   global $user;
 
   $uid = $form['uid']['#value'];
@@ -806,7 +807,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
       'Request @vcs account', array('@vcs' => $form['vcs_name']['#value'])
     );
   }
-  $form['#validate']['versioncontrol_account_status_application_validate'] = array();
+  $form['#validate'][] = 'versioncontrol_account_status_application_validate';
 }
 
 /**
@@ -877,16 +878,16 @@ function _versioncontrol_account_status_form_alter_status_admin(&$form, $status_
  * Validation handler for the application form:
  * Make sure that all conditions have been answered with "Yes".
  */
-function versioncontrol_account_status_application_validate($form_id, $form_values) {
+function versioncontrol_account_status_application_validate($form, &$form_state) {
   $strings = _versioncontrol_account_status_get_strings(
-    $form_values['versioncontrol_account_status_repo_id']
+    $form_state['values']['versioncontrol_account_status_repo_id']
   );
   $conditions = _versioncontrol_account_status_get_conditions(
     $strings['default_condition_description'], $strings['default_condition_error']
   );
-  if (!isset($form_values['skip_conditions_check'])) {
+  if (!isset($form_state['values']['skip_conditions_check'])) {
     foreach ($conditions as $element_name => $texts) {
-      if ($form_values[$element_name] != 1) {
+      if ($form_state['values'][$element_name] != 1) {
         form_set_error($element_name, $texts['error']);
       }
     }
@@ -998,10 +999,7 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
   $strings = _versioncontrol_account_status_get_strings($status_data['repo_id']);
 
   $client_information = array();
-  $client_information[] = @gethostbyaddr($_SERVER["REMOTE_ADDR"]);
-  if ($_SERVER['HTTP_X_FORWARDED_FOR']) {
-    $client_information[] = @gethostbyaddr($_SERVER['HTTP_X_FORWARDED_FOR']);
-  }
+  $client_information[] = @gethostbyaddr(ip_address());
   $client_information[] = $_SERVER['HTTP_USER_AGENT'];
 
   $repository = versioncontrol_get_repository($status_data['repo_id']);
@@ -1010,8 +1008,8 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
 
   $message_variables = array(
     '%account-name' => $applicant->name,
-    '%user-account-url' => url('user/'. $applicant->uid, NULL, NULL, TRUE),
-    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], NULL, NULL, TRUE),
+    '%user-account-url' => url('user/'. $applicant->uid, array('absolute' => TRUE)),
+    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE))),
     '%vcs-name' => $vcs_name,
     '%repository-name' => check_plain($repository['name']),
     '%motivation-message' => wordwrap($status_data['motivation'], 72),
@@ -1020,6 +1018,7 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
 
   $subject = t('@vcs account request', array('@vcs' => $vcs_name));
 
+  /// TODO: $form_values not set? bug in D5 version too, probably
   if (isset($form_values['is_reapplication'])) {
     $subject = t('!subject [reapplication]', array('!subject' => $subject));
   }
@@ -1083,8 +1082,8 @@ function _versioncontrol_account_status_send_status_update_mails($status_data, $
 
   $message_variables = array(
     '%account-name' => $updated_user->name,
-    '%user-account-url' => url('user/'. $status_data['uid'], NULL, NULL, TRUE),
-    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], NULL, NULL, TRUE),
+    '%user-account-url' => url('user/'. $status_data['uid'], array('absolute' => TRUE))),
+    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE))),
     '%vcs-name' => $vcs_name,
     '%repository-name' => check_plain($repository['name']),
     '%admin-message' => $admin_message,

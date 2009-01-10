@@ -2400,11 +2400,16 @@ function versioncontrol_get_url_item_log_view($repository, &$item) {
     return '';
   }
   else if (module_exists('commitlog')) { // fallback, as 'file_log_view' is empty
-    return url('commitlog',
-      'repos='. $repository['repo_id']
-      .'&paths='. drupal_urlencode($item['path'])
-      . (isset($current_branch) ? '&branches='. $current_branch : ''),
-      NULL, TRUE /* return absolute URL */
+    $query = array(
+      'repos' => $repository['repo_id'],
+      'paths' => drupal_urlencode($item['path']),
+    );
+    if (isset($current_branch)) {
+      $query['branches'] = $current_branch;
+    }
+    return url('commitlog', array(
+      'query' => $query,
+      'absolute' => TRUE,
     );
   }
   return ''; // in case we really can't retrieve any sensible URL

@@ -1120,7 +1120,7 @@ function versioncontrol_fakevcs_export_accounts($repository, $accounts) {
 
   $data = '';
   foreach ($accounts_flat as $uid => $account) {
-    $data .= '# '. url('user/'. $uid, NULL, NULL, TRUE) ."\n";
+    $data .= '# '. url('user/'. $uid, array('absolute' => TRUE))) ."\n";
     $data .= $account['username'] .':'. $account['password'] ."\n";
   }
   return $data;
