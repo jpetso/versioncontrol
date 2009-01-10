@@ -61,24 +61,22 @@ define('VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM', 2);
 define('VERSIONCONTROL_FORM_CREATE', FALSE);
 
 
-// The backend-only part of the API.
-// Including this here outside of hook_boot(), so that we can be really sure
-// it's always included when versioncontrol.module is. (E.g. in .install files.)
-// Maybe we can put this into a versioncontrol_backend_api_include() and just
-// include it prior to *any* backend code execution. But a task like that needs
-// to be investigated more thoroughly.
-include_once(drupal_get_path('module', 'versioncontrol') .'/versioncontrol-backend.inc');
-
 /**
- * Implementation of hook_boot():
- * Code that is run on every page request (even on cached ones).
+ * Implementation of hook_init():
+ * Code that is run on every page request, except for cached ones.
  */
-function versioncontrol_boot() {
+function versioncontrol_init() {
+  // The backend-only part of the API.
+  module_load_include('inc', 'versioncontrol', 'versioncontrol-backend');
+
   if (module_exists('workflow_ng') && !$may_cache) {
-    include_once(drupal_get_path('module', 'versioncontrol') .'/includes/versioncontrol.rules.inc');
+    module_load_include('inc', 'versioncontrol', 'includes/versioncontrol.rules');
   }
 }
 
+/**
+ * Implementation of hook_theme().
+ */
 function versioncontrol_theme() {
   $theme = array();
   $theme['versioncontrol_account_username'] = array(
