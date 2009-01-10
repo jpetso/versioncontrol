@@ -2410,7 +2410,7 @@ function versioncontrol_get_url_item_log_view($repository, &$item) {
     return url('commitlog', array(
       'query' => $query,
       'absolute' => TRUE,
-    );
+    ));
   }
   return ''; // in case we really can't retrieve any sensible URL
 }
