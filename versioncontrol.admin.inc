@@ -262,7 +262,7 @@ function versioncontrol_admin_get_paged_accounts($accounts, $element = 0) {
 /**
  * A form for filtering accounts which is embedded in the account list page.
  */
-function versioncontrol_admin_account_list_filter_form($repositories) {
+function versioncontrol_admin_account_list_filter_form(&$form_state, $repositories) {
   $form = array();
   $repository_names = array(0 => t('All'));
 
@@ -304,8 +304,8 @@ function versioncontrol_admin_account_list_filter_form($repositories) {
 /**
  * Submit handler for the account filter form.
  */
-function versioncontrol_admin_account_list_filter_form_submit($form_id, $form_values) {
-  $_SESSION['versioncontrol_filter_repo_id'] = $form_values['repo_id'];
+function versioncontrol_admin_account_list_filter_form_submit(&$form, &$form_state) {
+  $_SESSION['versioncontrol_filter_repo_id'] = $form_state['values']['repo_id'];
 }
 
 /**
@@ -508,11 +508,11 @@ function versioncontrol_admin_account_export_form(&$form_state) {
  * Redirect to the export form for the specific repository.
  */
 function versioncontrol_admin_account_export_form_submit(&$form, &$form_state) {
-  $target_path = 'admin/project/versioncontrol-accounts/export/'. $form_state['values']['repo_id'];
+  $form_state['redirect'] = 'admin/project/versioncontrol-accounts/export/'. $form_state['values']['repo_id'];
+
   if ($form_state['values']['op'] == t('Export to plaintext')) {
-    $target_path .= '/plaintext';
+    $form_state['redirect'] .= '/plaintext';
   }
-  return $target_path;
 }
 
 /**
