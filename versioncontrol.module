@@ -174,9 +174,12 @@ function versioncontrol_menu() {
     $items['admin/project'] = array(
       'title' => 'Project administration',
       'description' => 'Administrative interface for project management and related modules.',
+      'position' => 'left',
+      'weight' => 3,
       'page callback' => 'system_admin_menu_block_page',
-      'access arguments' => array('administer version control systems'),
-      'type' => MENU_NORMAL_ITEM,
+      'access arguments' => array('administer site configuration'),
+      'file' => 'system.admin.inc',
+      'file path' => drupal_get_path('module', 'system'),
     );
   }
 
@@ -196,7 +199,6 @@ function versioncontrol_menu() {
     'title' => 'VCS repositories',
     'description' => 'Define and configure what version control repositories are connected to your site, and how to integrate each repository with repository browser tools such as ViewVC or WebSVN.',
     'page arguments' => array('versioncontrol_admin_repository_list'),
-    'type' => MENU_NORMAL_ITEM,
   ) + $admin;
 
   $weight = 1;
@@ -237,7 +239,7 @@ function versioncontrol_menu() {
   $items['admin/project/versioncontrol-accounts'] = array(
     'title' => 'VCS accounts',
     'description' => 'Manage associations of Drupal users to VCS user accounts.',
-    'page callback' => 'versioncontrol_admin_account_list_page',
+    'page arguments' => array('versioncontrol_admin_account_list_form'),
     'type' => MENU_NORMAL_ITEM,
   ) + $admin;
   $items['admin/project/versioncontrol-accounts/list'] = array(
@@ -282,7 +284,7 @@ function versioncontrol_menu() {
   $items['versioncontrol/register'] = array(
     'title' => 'Get commit access',
     'page callback' => 'versioncontrol_account_register_page',
-    'access arguments' => TRUE, // access checking is done in the callback
+    'access callback' => TRUE, // access checking is done in the page callback
     'file' => 'versioncontrol.pages.inc',
     'type' => MENU_SUGGESTED_ITEM,
   );

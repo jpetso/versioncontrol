@@ -96,7 +96,7 @@ function versioncontrol_admin_settings_submit($form, &$form_state) {
  * Form callback for "admin/project/versioncontrol-accounts":
  * A list of accounts with filtering possibilities.
  */
-function versioncontrol_admin_account_list_page(&$form_state) {
+function versioncontrol_admin_account_list_form(&$form_state) {
   $users = array();
   $accounts = versioncontrol_get_accounts(array(), TRUE);
 
@@ -109,7 +109,12 @@ function versioncontrol_admin_account_list_page(&$form_state) {
   }
   $repo_ids = array_unique($repo_ids);
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
-  $filter_form = drupal_get_form('versioncontrol_admin_account_list_filter_form', $repositories);
+
+  $form = array();
+  $form['filters'] = array(
+    '#type' => 'markup',
+    '#value' => drupal_get_form('versioncontrol_admin_account_list_filter_form', $repositories),
+  );
 
   // Filter the list of accounts.
   foreach (module_implements('versioncontrol_filter_accounts') as $module) {
@@ -128,9 +133,11 @@ function versioncontrol_admin_account_list_page(&$form_state) {
     $users[$uid] = $user;
   }
   if (empty($users)) {
-    return $filter_form .'<p>'.
-      t('No accounts could be found with the current filter settings.')
-      .'</p>';
+    $form['empty'] = array(
+      '#type' => 'markup',
+      '#value' => '<p>'. t('No accounts could be found with the current filter settings.') .'</p>',
+    );
+    return $form;
   }
 
   $placeholders = array();
@@ -221,13 +228,18 @@ function versioncontrol_admin_account_list_page(&$form_state) {
   $rows = array_values($rows_by_uid);
 
   // The finished user account list with account filter.
-  $output .= $filter_form . theme('table', $header, $rows);
+  $form['accounts'] = array(
+    '#type' => 'markup',
+    '#value' => theme('table', $header, $rows),
+  );
 
   if ($pager = theme('pager', NULL, variable_get('versioncontrol_admin_account_pager', 20), 0)) {
-    $output .= $pager;
+    $form['pager'] = array(
+      '#type' => 'markup',
+      '#value' => $pager,
+    );
   }
-
-  return $output;
+  return $form;
 }
 
 /**
