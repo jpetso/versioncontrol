@@ -203,7 +203,7 @@ function versioncontrol_account_register_form(&$form_state, $register_uid, $repo
     '#default_value' => $first_repo_id,
   );
 
-  if ($register_uid == VERSIONCONTROL_REGISTER_DEMO) {
+  if ($register_uid != VERSIONCONTROL_REGISTER_DEMO) {
     $form['repository']['submit'] = array(
       '#type' => 'submit',
       '#value' => t('Create account'),
