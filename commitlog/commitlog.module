@@ -75,6 +75,67 @@ function commitlog_perm() {
   return array('access commit messages');
 }
 
+/**
+ * Implementation of hook_theme().
+ */
+function commitlog_theme() {
+  return array(
+    'commitlog_operations_page' => array(
+      'arguments' => array('constraints' => NULL),
+    ),
+    'commitlog_rss' => array(
+      'arguments' => array('constraints' => NULL),
+    ),
+    'commitlog_operation_html' => array(
+      'arguments' => array('variables' => NULL),
+    ),
+    'commitlog_operation_plaintext' => array(
+      'arguments' => array('variables' => NULL),
+    ),
+    'commitlog_repository' => array(
+      'arguments' => array('repository' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_operation_location' => array(
+      'arguments' => array('operation' => NULL, 'operation_items' => NULL,
+                            'directory_item' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_revision_identifier' => array(
+      'arguments' => array('operation' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_vc_op_id' => array(
+      'arguments' => array('vc_op_id' => NULL, 'text' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_operation_message' => array(
+      'arguments' => array('operation' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_operation_caption' => array(
+      'arguments' => array('variables' => NULL, 'options' => array()),
+    ),
+    'commitlog_operation_subject' => array(
+      'arguments' => array('variables' => NULL, 'options' => array()),
+    ),
+    'commitlog_label' => array(
+      'arguments' => array('label' => NULL, 'options' => array()),
+    ),
+    'commitlog_operation_items' => array(
+      'arguments' => array('operation' => NULL, 'operation_items' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_item' => array(
+      'arguments' => array('repository' => NULL, 'item' => NULL,
+                            'path_override' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_item_revision' => array(
+      'arguments' => array('repository' => NULL, 'item' => NULL, 'format' => 'html'),
+    ),
+    'commitlog_diff_link' => array(
+      'arguments' => array('operation' => NULL, 'item' => NULL),
+    ),
+    'commitlog_project' => array(
+      'arguments' => array('repository' => NULL, 'project' => NULL, 'format' => 'html'),
+    ),
+  );
+}
+
 
 /**
  * Implementation of hook_form_alter():
@@ -369,7 +430,7 @@ function theme_commitlog_operations_page($constraints) {
   // The feed icon, with reconstructed query attributes.
   $output .= theme('feed_icon', url('commitlog/feed', array(
     'query' => _commitlog_query_attributes($constraints),
-  )));
+  )), t('Commit messages RSS feed'));
 
   return $output;
 }
