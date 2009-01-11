@@ -97,31 +97,38 @@ function versioncontrol_admin_settings_submit($form, &$form_state) {
  * A list of accounts with filtering possibilities.
  */
 function versioncontrol_admin_account_list_form(&$form_state) {
-  $users = array();
-  $accounts = versioncontrol_get_accounts(array(), TRUE);
-
-  // Retrieve all repositories that users are listed in.
+  // Retrieve a list of all repositories with registered VCS accounts.
+  $result = db_query('SELECT DISTINCT repo_id FROM {versioncontrol_accounts}');
   $repo_ids = array();
-  foreach ($accounts as $uid => $usernames_by_repository) {
-    foreach ($usernames_by_repository as $repo_id => $username) {
-      $repo_ids[] = $repo_id;
-    }
+
+  while ($repo_id = db_result($result)) {
+    $repo_ids[] = $repo_id;
   }
-  $repo_ids = array_unique($repo_ids);
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
 
+  $filter_form = versioncontrol_admin_account_list_filter_form($form_state, $repositories);
+  $filter_form['#id'] = 'versioncontrol-account-filter-form';
+  drupal_alter('form', $filter_form, $form_state, 'versioncontrol_admin_account_list_filter_form');
+
   $form = array();
-  $form['filters'] = array(
-    '#type' => 'markup',
-    '#value' => drupal_get_form('versioncontrol_admin_account_list_filter_form', $repositories),
-  );
+  $form['filters'] = array_merge($filter_form, array(
+    '#type' => 'fieldset',
+    '#title' => t('Filter'),
+    '#collapsible' => TRUE,
+    '#collapsed' => FALSE,
+    '#prefix' => '<div class="container-inline">',
+    '#suffix' => '</div>',
+  ));
 
   // Filter the list of accounts.
+  $accounts = versioncontrol_get_accounts(array(), TRUE);
+
   foreach (module_implements('versioncontrol_filter_accounts') as $module) {
     $function = $module .'_versioncontrol_filter_accounts';
     $function($accounts);
   }
   $accounts = versioncontrol_admin_get_paged_accounts($accounts);
+  $users = array();
 
   // Retrieve more info for the accounts that survived filtering.
   foreach ($accounts as $uid => $usernames_by_repository) {
@@ -287,27 +294,17 @@ function versioncontrol_admin_account_list_filter_form(&$form_state, $repositori
 
   $form['#id'] = 'versioncontrol-account-filter-form';
 
-  $form['fieldset'] = array(
-    '#type' => 'fieldset',
-    '#title' => t('Filter'),
-    '#collapsible' => TRUE,
-    '#collapsed' => FALSE,
-  );
-  $form['fieldset']['filters'] = array(
-    '#value' => '',
-    '#prefix' => '<div class="container-inline">',
-    '#suffix' => '</div>',
-  );
-  $form['fieldset']['filters']['repo_id'] = array(
+  $form['repo_id'] = array(
     '#type' => 'select',
     '#title' => t('Repository'),
     '#options' => $repository_names,
     '#default_value' => $_SESSION['versioncontrol_filter_repo_id'],
     '#weight' => 10,
   );
-  $form['fieldset']['filters']['submit'] = array(
+  $form['submit'] = array(
     '#type' => 'submit',
     '#value' => t('Filter'),
+    '#submit' => array('versioncontrol_admin_account_list_filter_form_submit'),
     '#weight' => 100,
   );
   return $form;

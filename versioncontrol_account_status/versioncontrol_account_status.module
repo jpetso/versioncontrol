@@ -336,9 +336,9 @@ function versioncontrol_account_status_form_alter_account_filter(&$form) {
     $_SESSION['versioncontrol_account_status_filter'] = VERSIONCONTROL_ACCOUNT_STATUS_QUEUED;
   }
 
-  $form['#submit'][] = 'versioncontrol_account_status_account_filter_form_submit';
+  $form['submit']['#submit'][] = 'versioncontrol_account_status_account_filter_form_submit';
 
-  $form['fieldset']['filters']['versioncontrol_account_status'] = array(
+  $form['versioncontrol_account_status'] = array(
     '#type' => 'select',
     '#title' => t('Status'),
     '#options' => $options,
