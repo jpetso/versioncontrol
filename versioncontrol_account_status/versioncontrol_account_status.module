@@ -1009,7 +1009,7 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
   $message_variables = array(
     '%account-name' => $applicant->name,
     '%user-account-url' => url('user/'. $applicant->uid, array('absolute' => TRUE)),
-    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE))),
+    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE)),
     '%vcs-name' => $vcs_name,
     '%repository-name' => check_plain($repository['name']),
     '%motivation-message' => wordwrap($status_data['motivation'], 72),
@@ -1082,8 +1082,8 @@ function _versioncontrol_account_status_send_status_update_mails($status_data, $
 
   $message_variables = array(
     '%account-name' => $updated_user->name,
-    '%user-account-url' => url('user/'. $status_data['uid'], array('absolute' => TRUE))),
-    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE))),
+    '%user-account-url' => url('user/'. $status_data['uid'], array('absolute' => TRUE)),
+    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE)),
     '%vcs-name' => $vcs_name,
     '%repository-name' => check_plain($repository['name']),
     '%admin-message' => $admin_message,
