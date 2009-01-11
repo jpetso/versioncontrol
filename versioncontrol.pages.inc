@@ -275,8 +275,8 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $user
   $form['#id'] = 'versioncontrol-account-form';
   $form['#repository'] = $repository;
   $form['#vcs'] = $repository['vcs'];
-  $form['#validate'] = array('versioncontrol_account_edit_form_validate' => array());
-  $form['#submit'] = array('versioncontrol_account_edit_form_submit' => array());
+  $form['#validate'] = array('versioncontrol_account_edit_form_validate');
+  $form['#submit'] = array('versioncontrol_account_edit_form_submit');
 
   // Values stored for later processing.
   $form['uid'] = array(
