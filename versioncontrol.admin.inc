@@ -545,8 +545,10 @@ function versioncontrol_admin_account_export_display_form(&$form_state, $reposit
   $backends = versioncontrol_get_backends();
   $vcs_name = $backends[$repository['vcs']]['name'];
 
+  if (!empty($repository)) {
+    $form['#repository'] = $repository;
+  }
   $form['#vcs'] = $vcs_name;
-  $form['#repository'] = $repository;
 
   $form['data'] = array(
     '#type' => 'textarea',
@@ -662,7 +664,10 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
   $form = array();
   $form['#id'] = 'versioncontrol-repository-form';
   $form['#vcs'] = $vcs;
-  $form['#repository'] = $repository;
+
+  if (!empty($repository)) {
+    $form['#repository'] = $repository;
+  }
 
   $form['repo_id'] = array(
     '#type' => 'value',
