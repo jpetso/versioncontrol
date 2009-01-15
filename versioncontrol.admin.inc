@@ -132,7 +132,7 @@ function versioncontrol_admin_account_list_form(&$form_state) {
 
   // Retrieve more info for the accounts that survived filtering.
   foreach ($accounts as $uid => $usernames_by_repository) {
-    $user = user_load(array('uid' => $uid));
+    $user = user_load($uid);
     if (!$user) {
       unset($accounts[$uid]);
       continue;
@@ -198,20 +198,19 @@ function versioncontrol_admin_account_list_form(&$form_state) {
       if (!isset($repositories[$repo_id])) { // happens if the backend isn't loaded
         continue;
       }
-      $username = theme('versioncontrol_account_username',
+      $formatted_username = theme('versioncontrol_account_username',
         $uid, $username, $repositories[$repo_id], FALSE
       );
-      if (module_exists('commitlog')) {
-        $repo_name = theme('commitlog_repository', $repositories[$repo_id]);
-      }
-      else {
-        $repo_name = check_plain($repositories[$repo_id]['name']);
-      }
+      $repo_name = module_exists('commitlog')
+        ? theme('commitlog_repository', $repositories[$repo_id])
+        : check_plain($repositories[$repo_id]['name']);
 
       $repo_usernames[] = t('!username in !repository (!edit)', array(
-        '!username' => $username,
+        '!username' => $formatted_username,
         '!repository' => $repo_name,
-        '!edit' => l(t('edit'), 'user/'. $uid .'/edit/versioncontrol/'. $repo_id),
+        '!edit' => l(t('edit'),
+          'user/'. $uid .'/edit/versioncontrol/'. $repo_id .'/'. drupal_urlencode($username)
+        ),
       ));
     }
     $vcs_usernames = empty($repo_usernames)

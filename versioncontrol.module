@@ -97,35 +97,12 @@ function versioncontrol_user($type, &$edit, &$user, $category = NULL) {
   switch ($type) {
     case 'categories':
       $categories = array();
-
-      $uid = arg(1);
-      $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), TRUE);
-
-      if (empty($accounts)) {
-        return array();
-      }
-
-      $repo_ids = array();
-      foreach ($accounts as $uid => $usernames_by_repository) {
-        foreach ($usernames_by_repository as $repo_id => $username) {
-          $repo_ids[] = $repo_id;
-        }
-      }
-      $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
-
-      // The form for editing an account.
-      foreach ($accounts as $uid => $usernames_by_repository) {
-        foreach ($usernames_by_repository as $repo_id => $username) {
-          if (isset($repositories[$repo_id])) {
-            $categories[] = array(
-              'name' => 'versioncontrol/'. $repo_id .'/'. $username,
-              // user_menu() pipes 'title' though check_plain() already.
-              'title' => $repositories[$repo_id]['name'],
-              'weight' => 99,
-            );
-          }
-        }
-      }
+      $categories[] = array(
+        'name' => 'versioncontrol',
+        // user_menu() pipes 'title' though check_plain() already.
+        'title' => 'Repository accounts',
+        'weight' => 99,
+      );
       return $categories;
 
     case 'delete':
@@ -281,12 +258,27 @@ function versioncontrol_menu() {
   }
   // end former !$may_cache
 
+  // Account registration and editing pages for the regular user.
   $items['versioncontrol/register'] = array(
     'title' => 'Get commit access',
     'page callback' => 'versioncontrol_account_register_page',
     'access callback' => TRUE, // access checking is done in the page callback
     'file' => 'versioncontrol.pages.inc',
     'type' => MENU_SUGGESTED_ITEM,
+  );
+  $items['user/%versioncontrol_user_accounts/edit/versioncontrol'] = array(
+    // Load with $include_unauthorized == TRUE, so that the user can inspect
+    // his/her VCS accounts even if they are not approved by the admin yet.
+    'load arguments' => array(TRUE),
+    'title callback' => 'versioncontrol_user_accounts_title_callback',
+    'title arguments' => array(1),
+    'page callback' => 'versioncontrol_account_page',
+    'page arguments' => array(1),
+    'access callback' => 'versioncontrol_private_account_access',
+    'access arguments' => array(1),
+    'file' => 'versioncontrol.pages.inc',
+    'weight' => 99,
+    'type' => MENU_LOCAL_TASK,
   );
 
   // Autocomplete callback for Drupal usernames that have access to
@@ -297,18 +289,6 @@ function versioncontrol_menu() {
     'page callback' => 'versioncontrol_user_autocomplete',
     'access callback' => 'versioncontrol_user_access',
     'type' => MENU_CALLBACK,
-  );
-
-  // Also include the repository items for the user account edit pages.
-  $items['user/%/edit/versioncontrol/%versioncontrol_repository/%'] = array(
-    'title arguments' => array(4),
-    'page callback' => 'drupal_get_form',
-    'page arguments' => array('versioncontrol_account_edit_form', 1, 4, 5),
-    'access callback' => 'versioncontrol_private_account_access',
-    'access arguments' => array(1),
-    'file' => 'versioncontrol.pages.inc',
-    'type' => MENU_LOCAL_TASK,
-    'weight' => 99,
   );
 
   return $items;
@@ -336,9 +316,15 @@ function versioncontrol_user_access($account = NULL) {
 /**
  * Custom access callback, determining if the current user (or the one given
  * in @p $account, if set) is permitted to view version control account
- * settings of the user specified by @p $viewed_uid.
+ * settings of the user specified the first user id in @p $vcs_accounts.
+ * (We take that parameter because it's what the '%versioncontrol_user_accounts'
+ * wildcard returns.)
  */
-function versioncontrol_private_account_access($viewed_uid, $account = NULL) {
+function versioncontrol_private_account_access($vcs_accounts, $account = NULL) {
+  $viewed_uid = array_shift(array_keys($vcs_accounts));
+  if (!$viewed_uid) {
+    return FALSE;
+  }
   if (is_null($account)) {
     global $user;
     $account = clone $user;
@@ -365,6 +351,48 @@ function versioncontrol_repository_load($repo_id) {
  */
 function versioncontrol_repository_title_callback($repository) {
   return check_plain($repository['name']);
+}
+
+/**
+ * Menu wildcard loader for '%versioncontrol_user_accounts':
+ * Load all VCS accounts of a given user (in the format that
+ * versioncontrol_get_accounts() returns) and return either that
+ * or FALSE if no VCS accounts exist for this user.
+ *
+ * @param $uid
+ *   Drupal user id of the user whose VCS accounts should be loaded.
+ * @param $include_unauthorized
+ *   Will be passed on to versioncontrol_get_accounts(), see the
+ *   API documentation of that function.
+ */
+function versioncontrol_user_accounts_load($uid, $include_unauthorized = FALSE) {
+  $accounts = versioncontrol_get_accounts(array('uids' => array($uid)), $include_unauthorized);
+  return empty($accounts) ? FALSE : $accounts;
+}
+
+/**
+ * Title callback for the "user/%versioncontrol_user_accounts/edit/versioncontrol" tab.
+ */
+function versioncontrol_user_accounts_title_callback($accounts) {
+  $usernames = array();
+  foreach ($accounts as $uid => $user_accounts) {
+    foreach ($user_accounts as $repo_id => $username) {
+      $usernames[] = $username;
+    }
+  }
+  $repositories = versioncontrol_get_repositories(array(
+    'repo_ids' => array_keys(reset($accounts)), // a.k.a. list of account repo_ids
+  ));
+  $vcses = array();
+  foreach ($repositories as $repository) {
+    $vcses[$repository['vcs']] = TRUE;
+  }
+  if (count($vcses) == 1) {
+    $backends = versioncontrol_get_backends();
+    $vcs = array_shift(array_keys($vcses));
+    return check_plain($backends[$vcs]['name']);
+  }
+  return t('Repository accounts');
 }
 
 /**
