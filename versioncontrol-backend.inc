@@ -433,11 +433,13 @@ function _versioncontrol_sanitize_item($repository, $item) {
  * Print out a "Bad item received from VCS backend" warning to watchdog.
  */
 function _versioncontrol_bad_item_warning($repository, $item, $message) {
-  watchdog('special',
-    'Bad item received from VCS backend: '. $message
-      .'<br/><pre>Item array: '. print_r($item)
-      ."\nRepository array: ". print_r($repository) .'</pre>',
-    'warning');
+  watchdog('special', "<p>Bad item received from VCS backend: !message</p>
+    <pre>Item array: !item\nRepository array: !repository</pre>", array(
+      '!message' => $message,
+      '!item' => print_r($item, TRUE),
+      '!repository' => print_r($repository, TRUE),
+    ), WATCHDOG_ERROR
+  );
 }
 
 /**
@@ -641,9 +643,10 @@ function versioncontrol_insert_account($repository, $uid, $username, $additional
   );
 
   watchdog('special',
-            'Version Control API: added '. $username .' account '.
-            'in repository '. $repository['name'],
-            l('view', 'admin/project/versioncontrol-accounts'));
+    'Version Control API: added @username account in repository @repository',
+    array('@username' => $username, '@repository' => $repository['name']),
+    WATCHDOG_NOTICE, l('view', 'admin/project/versioncontrol-accounts')
+  );
 }
 
 /**
@@ -700,9 +703,10 @@ function versioncontrol_update_account($repository, $uid, $username, $additional
   );
 
   watchdog('special',
-            'Version Control API: updated '. $username .' account '.
-            'in repository '. $repository['name'],
-            l('view', 'admin/project/versioncontrol-accounts'));
+    'Version Control API: updated @username account in repository @repository',
+    array('@username' => $username, '@repository' => $repository['name']),
+    WATCHDOG_NOTICE, l('view', 'admin/project/versioncontrol-accounts')
+  );
 }
 
 /**
@@ -741,9 +745,10 @@ function versioncontrol_delete_account($repository, $uid, $username) {
             $uid, $repository['repo_id']);
 
   watchdog('special',
-            'Version Control API: deleted '. $username .' account '.
-            'in repository '. $repository['name'],
-            l('view', 'admin/project/versioncontrol-accounts'));
+    'Version Control API: deleted @username account in repository @repository',
+    array('@username' => $username, '@repository' => $repository['name']),
+    WATCHDOG_NOTICE, l('view', 'admin/project/versioncontrol-accounts')
+  );
 }
 
 /**
@@ -811,9 +816,10 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
   module_invoke_all('versioncontrol_repository', 'insert', $repository);
 
   watchdog('special',
-            'Version Control API: added repository '. $repository['name'],
-            l('view', 'admin/project/versioncontrol-repositories'));
-
+    'Version Control API: added repository @repository',
+    array('@repository' => $repository['name']),
+    WATCHDOG_NOTICE, l('view', 'admin/project/versioncontrol-repositories')
+  );
   return $repository;
 }
 
@@ -882,8 +888,10 @@ function versioncontrol_update_repository($repository, $repository_urls) {
   module_invoke_all('versioncontrol_repository', 'update', $repository);
 
   watchdog('special',
-            'Version Control API: updated repository '. $repository['name'],
-            l('view', 'admin/project/versioncontrol-repositories'));
+    'Version Control API: updated repository @repository',
+    array('@repository' => $repository['name']),
+    WATCHDOG_NOTICE, l('view', 'admin/project/versioncontrol-repositories')
+  );
 }
 
 /**
@@ -972,8 +980,10 @@ function versioncontrol_delete_repository($repository) {
            $repository['repo_id']);
 
   watchdog('special',
-            'Version Control API: deleted repository '. $repository['name'],
-            l('view', 'admin/project/versioncontrol-repositories'));
+    'Version Control API: deleted repository @repository',
+    array('@repository' => $repository['name']),
+    WATCHDOG_NOTICE, l('view', 'admin/project/versioncontrol-repositories')
+  );
 }
 
 
