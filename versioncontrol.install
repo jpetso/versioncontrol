@@ -165,9 +165,6 @@ function versioncontrol_schema() {
       ),
     ),
     'unique keys' => array(
-      /// TODO: D5 version currently has 'repo_id' as MySQL index name,
-      ///       rename to 'repo_id_name_type' for 5.x-2.0
-      /// TODO: Index name for Postgres?
       'repo_id_name_type' => array('repo_id', 'name', 'type'),
     ),
     'primary key' => array('label_id'),
@@ -321,9 +318,6 @@ function versioncontrol_schema() {
     //),
     // So instead, we roll two separate indexes.
     'indexes' => array(
-      /// TODO: D5 version currently has 'repo_id' as MySQL index name,
-      ///       rename to 'repo_id_path' for 5.x-2.0
-      // Index name is ok for Postgres ('{versioncontrol_item_revisions}_repo_id_path_idx')
       'repo_id_path' => array('repo_id', 'path'),
       'revision' => array('revision'),
     ),
@@ -376,10 +370,6 @@ function versioncontrol_schema() {
       ),
     ),
     'unique keys' => array(
-      /// TODO: make sure the indexes have a similar name in MySQL and Postgres
-      ///       prior to the 6.x upgrade.
-      // Index name is ok for MySQL ('name')
-      /// TODO: Index name for Postgres?
       'name' => array('name'),
     ),
     'primary key' => array('repo_id'),
@@ -501,9 +491,6 @@ function versioncontrol_schema() {
       ),
     ),
     'unique keys' => array(
-      /// TODO: D5 version currently has 'repo_id' as MySQL index name,
-      ///       rename to 'repo_id_username' for 5.x-2.0
-      /// TODO: Index name for Postgres?
       'repo_id_username' => array('repo_id', 'username'),
     ),
     'primary key' => array('uid', 'repo_id'),
