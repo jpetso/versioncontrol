@@ -528,6 +528,7 @@ function versioncontrol_account_status_form_alter_repository_settings(&$form) {
  * the repository editing/adding form's submitted values.
  */
 function versioncontrol_account_status_versioncontrol_extract_repository_data($form_values) {
+  ///TODO: Get rid of $form_values
   $value_names = _versioncontrol_account_status_get_value_names();
   $strings = array();
 
@@ -901,6 +902,7 @@ function versioncontrol_account_status_application_validate($form, &$form_state)
  * submitted values.
  */
 function versioncontrol_account_status_versioncontrol_extract_account_data($form_values) {
+  ///TODO: Get rid of $form_values
   // If the form wasn't altered at all, let it be.
   if (!isset($form_values['versioncontrol_account_status_uid'])) {
     return array();
@@ -928,6 +930,7 @@ function versioncontrol_account_status_versioncontrol_extract_account_data($form
       'is_send' => $form_values['send_admin_message'],
       'contents' => $form_values['admin_message'],
     ),
+    'is_reapplication' => !empty($form_values['is_reapplication']),
     'send_application_mails' => $form_values['send_application_mails'],
   ));
 }
@@ -973,7 +976,8 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
         _versioncontrol_account_status_send_status_update_mails($status_data, $contents);
       }
       if ($additional_data['send_application_mails']) {
-        _versioncontrol_account_status_send_application_mails($status_data);
+        $is_reapplication = !empty($additional_data['is_reapplication']);
+        _versioncontrol_account_status_send_application_mails($status_data, $is_reapplication);
       }
       break;
 
@@ -987,60 +991,37 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
 /**
  * Send out notification mails in response to an application submission.
  */
-function _versioncontrol_account_status_send_application_mails($status_data) {
+function _versioncontrol_account_status_send_application_mails($status_data, $is_reapplication) {
   // Don't send notification mails if the admin submitted the application.
   if (versioncontrol_admin_access()) {
     return;
   }
-
-  // Gather data for the notification mails.
-  $applicant = user_load(array('uid' => $status_data['uid']));
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-  $strings = _versioncontrol_account_status_get_strings($status_data['repo_id']);
+  $applicant = user_load($status_data['uid']);
 
-  $client_information = array();
-  $client_information[] = @gethostbyaddr(ip_address());
-  $client_information[] = $_SERVER['HTTP_USER_AGENT'];
-
-  $repository = versioncontrol_get_repository($status_data['repo_id']);
-  $backends = versioncontrol_get_backends();
-  $vcs_name = $backends[$repository['vcs']]['name'];
-
-  $message_variables = array(
-    '%account-name' => $applicant->name,
-    '%user-account-url' => url('user/'. $applicant->uid, array('absolute' => TRUE)),
-    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE)),
-    '%vcs-name' => $vcs_name,
-    '%repository-name' => check_plain($repository['name']),
-    '%motivation-message' => wordwrap($status_data['motivation'], 72),
-    '%client-information' => implode("\n", $client_information),
+  $params = array(
+    'applicant_user' => $applicant,
+    'repository' => versioncontrol_get_repository($status_data['repo_id']),
+    'motivation_message' => $status_data['motivation'],
+    'status' => $status_data['status'],
+    'is_reapplication' => $is_reapplication,
   );
-
-  $subject = t('@vcs account request', array('@vcs' => $vcs_name));
-
-  /// TODO: $form_values not set? bug in D5 version too, probably
-  if (isset($form_values['is_reapplication'])) {
-    $subject = t('!subject [reapplication]', array('!subject' => $subject));
-  }
+  $backend = versioncontrol_get_backend($params['repository']);
 
   // Send an e-mail to the version control administrators.
   $from = "$applicant->name <$applicant->mail>";
-  $message = strtr($strings['admin_notification_email'], $message_variables);
-  drupal_mail(
-    'versioncontrol_email_admin', $admin_mail,
-    $subject, $message, $from, array('X-Mailer' => 'Drupal')
+  drupal_mail('versioncontrol_account_status', 'application_admin',
+    $admin_mail, language_default(), $params, $from
   );
 
   // Send an e-mail to the applicant.
   $from = t('!site @vcs administrator <!mail>', array(
     '!site' => variable_get('site_name', 'Drupal'),
-    '@vcs' => $vcs_name,
-    '!mail' => $admin_mail
+    '@vcs' => $backend['name'],
+    '!mail' => $admin_mail,
   ));
-  $message = strtr($strings['user_notification_email'], $message_variables);
-  drupal_mail(
-    'versioncontrol_email_applicant', $applicant->mail,
-    $subject, $message, $from, array('X-Mailer' => 'Drupal')
+  drupal_mail('versioncontrol_account_status', 'application_applicant',
+    $applicant->mail, user_preferred_language($applicant), $params, $from
   );
 
   // Display a status message.
@@ -1052,76 +1033,121 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
  */
 function _versioncontrol_account_status_send_status_update_mails($status_data, $admin_message) {
   global $user; // = the admin who submitted the update form
-
-  // Gather data for the status update mails.
-  $updated_user = user_load(array('uid' => $status_data['uid']));
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-  $strings = _versioncontrol_account_status_get_strings($status_data['repo_id']);
+  $applicant = user_load($status_data['uid']);
 
-  $backends = versioncontrol_get_backends();
-  $repository = versioncontrol_get_repository($status_data['repo_id']);
-  $vcs_name = $backends[$repository['vcs']]['name'];
-
-  if ($admin_message) {
-    $admin_message = t('Message from the @vcs maintainer:', array('@vcs' => $vcs_name))
-      ."\n". $admin_message ."\n";
-  }
-
-  switch ($status_data['status']) {
-    case VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
-    case VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
-      $admin_message = $admin_message ? t('Question:') ."\n". $admin_message ."\n\n" : '';
-      break;
-    case VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
-    case VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
-      $admin_message = $admin_message ? t('Reason:') ."\n". $admin_message ."\n\n" : '';
-      break;
-    default:
-      break;
-  }
-
-  $message_variables = array(
-    '%account-name' => $updated_user->name,
-    '%user-account-url' => url('user/'. $status_data['uid'], array('absolute' => TRUE)),
-    '%manage-account-url' => url('user/'. $status_data['uid'] .'/edit/versioncontrol/'. $status_data['repo_id'], array('absolute' => TRUE)),
-    '%vcs-name' => $vcs_name,
-    '%repository-name' => check_plain($repository['name']),
-    '%admin-message' => $admin_message,
-    '%admin-name' => $user->name,
-    '%motivation-message' => wordwrap($status_data['motivation'], 72),
+  $params = array(
+    'admin_user' => drupal_clone($user),
+    'applicant_user' => $applicant,
+    'repository' => versioncontrol_get_repository($status_data['repo_id']),
+    'admin_message' => $admin_message,
+    'status' => $status_data['status'],
   );
-
-  switch ($status_data['status']) {
-    case VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
-    case VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
-      $message = strtr($strings['pending_email'], $message_variables);
-      break;
-    case VERSIONCONTROL_ACCOUNT_STATUS_APPROVED:
-      $message = strtr($strings['approved_email'], $message_variables);
-      break;
-    case VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
-      $message = strtr($strings['declined_email'], $message_variables);
-      break;
-    case VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
-      $message = strtr($strings['disabled_email'], $message_variables);
-      break;
-    default:
-      $message = 'Error in versioncontrol_account_status.module, should not happen.';
-      break;
-  }
+  $backend = versioncontrol_get_backend($params['repository']);
 
   // Send an e-mail to the user whose account status has been updated.
   $from = t('!site @vcs administrator <!mail>', array(
     '!site' => variable_get('site_name', 'Drupal'),
-    '@vcs' => $vcs_name,
+    '@vcs' => $backend['name'],
     '!mail' => $admin_mail,
   ));
-  $subject = t('@vcs account maintenance', array('@vcs' => $vcs_name));
-
-  drupal_mail(
-    'versioncontrol_email_updated_user', "$updated_user->mail, $admin_mail",
-    $subject, $message, $from, array('X-Mailer' => 'Drupal')
+  drupal_mail('versioncontrol_account_status', 'status_update',
+    "$applicant->mail, $admin_mail", user_preferred_language($applicant), $params, $from
   );
+}
+
+/**
+ * Implementation of hook_mail().
+ */
+function versioncontrol_account_status_mail($key, &$message, $params) {
+  $is_application_mail = in_array($key, array('application_admin', 'application_applicant'));
+  $is_update_mail = ($key == 'status_update');
+
+  // Gather data for the notification mails.
+  $strings = _versioncontrol_account_status_get_strings($params['repository']['repo_id']);
+  $backend = versioncontrol_get_backend($params['repository']);
+
+  $variables = array(
+    '%account-name' => $params['applicant_user']->name,
+    '%user-account-url' => url('user/'. $params['applicant_user']->uid, array('absolute' => TRUE)),
+    '%manage-account-url' => url('user/'. $params['applicant_user']->uid .'/edit/versioncontrol/'. $params['repository']['repo_id'], array('absolute' => TRUE)),
+    '%vcs-name' => $backend['name'],
+    '%repository-name' => check_plain($params['repository']['name']),
+    '%motivation-message' => wordwrap($params['motivation_message'], 72),
+  );
+
+  if ($is_application_mail) {
+    $client_information = array();
+    $client_information[] = @gethostbyaddr(ip_address());
+    $client_information[] = $_SERVER['HTTP_USER_AGENT'];
+
+    $variables['%client-information'] = implode("\n", $client_information);
+
+    $message['subject'] = t('@vcs account request', array('@vcs' => $backend['name']));
+
+    if (isset($params['is_reapplication'])) {
+      $message['subject'] = t('!subject [reapplication]', array(
+        '!subject' => $message['subject'],
+      ));
+    }
+
+    switch ($key) {
+      case 'application_admin':
+        $message['body'] = strtr($strings['admin_notification_email'], $variables);
+        break;
+      case 'application_applicant':
+        $message['body'] = strtr($strings['user_notification_email'], $variables);
+        break;
+    }
+  }
+  if ($is_update_mail) {
+    if (!empty($params['admin_message'])) {
+      $params['admin_message'] = t('Message from the @vcs maintainer:',
+        array('@vcs' => $backend['name'])) ."\n". $params['admin_message'] ."\n";
+    }
+
+    switch ($params['status']) {
+      case VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
+      case VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
+        $params['admin_message'] = empty($params['admin_message'])
+          ? t('Question:') ."\n". $params['admin_message'] ."\n\n"
+          : '';
+        break;
+      case VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
+      case VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
+        $params['admin_message'] = empty($params['admin_message'])
+          ? t('Reason:') ."\n". $params['admin_message'] ."\n\n"
+          : '';
+        break;
+      default:
+        break;
+    }
+
+    $variables['%admin-message'] = $params['admin_message'];
+    $variables['%admin-name'] = $params['admin_user']->name;
+
+    $message['subject'] = t('@vcs account maintenance', array('@vcs' => $backend['name']));
+
+    switch ($params['status']) {
+      case VERSIONCONTROL_ACCOUNT_STATUS_PENDING:
+      case VERSIONCONTROL_ACCOUNT_STATUS_QUEUED:
+        $message['body'] = strtr($strings['pending_email'], $variables);
+        break;
+      case VERSIONCONTROL_ACCOUNT_STATUS_APPROVED:
+        $message['body'] = strtr($strings['approved_email'], $variables);
+        break;
+      case VERSIONCONTROL_ACCOUNT_STATUS_DECLINED:
+        $message['body'] = strtr($strings['declined_email'], $variables);
+        break;
+      case VERSIONCONTROL_ACCOUNT_STATUS_DISABLED:
+        $message['body'] = strtr($strings['disabled_email'], $variables);
+        break;
+    }
+  }
+
+  if (!isset($message['body'])) {
+    $message['body'] = 'Error in versioncontrol_account_status.module, should not happen.';
+  }
 }
 
 

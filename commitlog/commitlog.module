@@ -208,26 +208,53 @@ function commitlog_versioncontrol_operation($op, $operation, $operation_items) {
  * Send out a notification mail to the given mail address.
  */
 function commitlog_send_notification_mail($mailto, $operation, $operation_items) {
-  $username = theme('versioncontrol_account_username',
-    $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
+  $language = language_default();
+  _commitlog_send_notification_mail($mailto, $operation, $operation_items, $language);
+}
+
+/**
+ * Send out a notification mail to the given Drupal user.
+ */
+function commitlog_send_user_notification_mail($account, $operation, $operation_items) {
+  $mailto = $account->mail;
+  $language = user_preferred_language($account);
+  _commitlog_send_notification_mail($mailto, $operation, $operation_items, $language);
+}
+
+/**
+ * Common code for the above notification mail functions.
+ */
+function _commitlog_send_notification_mail($mailto, $operation, $operation_items, $language) {
+  $params = array(
+    'operation' => $operation,
+    'operation_items' => $operation_items,
   );
-  $variables = array();
-  $variables['operation'] = $operation;
-  $variables['operation_items'] = $operation_items;
-
-  $subject = theme('commitlog_operation_subject', $variables, array('format' => 'plaintext'));
-
-  $message = commitlog_operation($operation, $operation_items, array(
-    'format' => 'plaintext',
-    'username' => $username,
-  ));
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
   $from = "$username <$admin_mail>";
 
-  drupal_mail(
-    'commitlog_notification_email', $mailto,
-    $subject, $message, $from, array('X-Mailer' => 'Drupal')
+  drupal_mail('commitlog', 'notification_email', $mailto, $language, $params, $from);
+}
+
+/**
+ * Implementation of hook_mail().
+ */
+function commitlog_mail($key, &$message, $params) {
+  if ($key != 'notification_email') {
+    return;
+  }
+  $operation = $params['operation'];
+  $username = theme('versioncontrol_account_username',
+    $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
   );
+
+  $variables = $params; // also using 'operation' and 'operation_items'
+  $message['subject'] = theme('commitlog_operation_subject',
+    $variables, array('format' => 'plaintext')
+  );
+  $message['body'] = commitlog_operation($operation, $params['operation_items'], array(
+    'format' => 'plaintext',
+    'username' => $username,
+  ));
 }
 
 
