@@ -926,6 +926,7 @@ function versioncontrol_account_status_versioncontrol_extract_account_data($form
       'is_send' => $form_values['send_admin_message'],
       'contents' => $form_values['admin_message'],
     ),
+    'is_reapplication' => !empty($form_values['is_reapplication']),
     'send_application_mails' => $form_values['send_application_mails'],
   ));
 }
@@ -971,7 +972,8 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
         _versioncontrol_account_status_send_status_update_mails($status_data, $contents);
       }
       if ($additional_data['send_application_mails']) {
-        _versioncontrol_account_status_send_application_mails($status_data);
+        $is_reapplication = !empty($additional_data['is_reapplication']);
+        _versioncontrol_account_status_send_application_mails($status_data, $is_reapplication);
       }
       break;
 
@@ -985,7 +987,7 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
 /**
  * Send out notification mails in response to an application submission.
  */
-function _versioncontrol_account_status_send_application_mails($status_data) {
+function _versioncontrol_account_status_send_application_mails($status_data, $is_reapplication) {
   // Don't send notification mails if the admin submitted the application.
   if (user_access('administer version control systems')) {
     return;
@@ -1019,7 +1021,7 @@ function _versioncontrol_account_status_send_application_mails($status_data) {
 
   $subject = t('@vcs account request', array('@vcs' => $vcs_name));
 
-  if (isset($form_values['is_reapplication'])) {
+  if ($is_reapplication) {
     $subject = t('!subject [reapplication]', array('!subject' => $subject));
   }
 
