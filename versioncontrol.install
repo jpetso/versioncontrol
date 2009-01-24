@@ -148,7 +148,7 @@ function versioncontrol_install() {
         type tinyint unsigned NOT NULL default 0,
 
         PRIMARY KEY (label_id),
-        UNIQUE KEY (repo_id, name, type)
+        UNIQUE KEY repo_id_name_type (repo_id, name, type)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
       // Table that relates an operation to the items (or more correctly, to
@@ -297,7 +297,7 @@ function versioncontrol_install() {
 
         PRIMARY KEY (item_revision_id),
         /* UNIQUE KEY (repo_id, path, revision) -- key too long */
-        KEY (repo_id, path),
+        KEY repo_id_path (repo_id, path),
         KEY revision (revision)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
 
@@ -407,7 +407,7 @@ function versioncontrol_install() {
         username varchar(64) NOT NULL default '',
 
         PRIMARY KEY (uid, repo_id),
-        UNIQUE KEY (repo_id, username)
+        UNIQUE KEY repo_id_username (repo_id, username)
       ) /*!40100 DEFAULT CHARACTER SET utf8 */");
       break;
 
@@ -443,7 +443,8 @@ function versioncontrol_install() {
         name varchar(255) NOT NULL default '',
         type smallint NOT NULL default 0,
         PRIMARY KEY (label_id),
-        UNIQUE (repo_id, name, type)
+        CONSTRAINT {versioncontrol_labels}_repo_id_name_type_key
+          UNIQUE (repo_id, name, type)
       )");
 
       db_query("CREATE TABLE {versioncontrol_operation_items} (
@@ -471,7 +472,7 @@ function versioncontrol_install() {
         revision varchar(255) NOT NULL default '',
         type smallint NOT NULL default 0,
         PRIMARY KEY (item_revision_id),
-        /* UNIQUE (repo_id, path) -- key too long */
+        /* UNIQUE (repo_id, path, revision) -- key too long */
       )");
       db_query("CREATE INDEX {versioncontrol_item_revisions}_repo_id_path_idx ON {versioncontrol_item_revisions} (repo_id, path)");
       db_query("CREATE INDEX {versioncontrol_item_revisions}_revision_idx ON {versioncontrol_item_revisions} (revision)");
@@ -510,7 +511,8 @@ function versioncontrol_install() {
         repo_id int NOT NULL default 0,
         username varchar(64) NOT NULL default '',
         PRIMARY KEY (uid, repo_id),
-        UNIQUE (repo_id, username)
+        CONSTRAINT {versioncontrol_accounts}_repo_id_username_key
+          UNIQUE (repo_id, username)
       )");
       break;
   }
@@ -1069,5 +1071,38 @@ function versioncontrol_update_8() {
   $ret = array();
   $ret[] = update_sql('UPDATE {versioncontrol_operation_labels}
                         SET action = action + 1');
+  return $ret;
+}
+
+/**
+ * Update 9: Rename indexes so that they match the index names in the 6.x-1.x
+ *   versions. (The use of Schema API has triggered these changes).
+ */
+function versioncontrol_update_9() {
+  $ret = array();
+
+  switch ($GLOBALS['db_type']) {
+    case 'mysqli':
+    case 'mysql':
+      $ret[] = update_sql('ALTER TABLE {versioncontrol_item_revisions}
+                            DROP KEY repo_id,
+                            ADD KEY repo_id_path (repo_id, path)');
+      $ret[] = update_sql('ALTER TABLE {versioncontrol_accounts}
+                            DROP KEY repo_id,
+                            ADD UNIQUE KEY repo_id_username (repo_id, username)');
+      $ret[] = update_sql('ALTER TABLE {versioncontrol_labels}
+                            DROP KEY repo_id,
+                            ADD UNIQUE KEY repo_id_name_type (repo_id, name, type)');
+      break;
+
+    case 'pgsql':
+      $ret[] = update_sql('ALTER TABLE {versioncontrol_accounts}
+                            DROP CONSTRAINT {versioncontrol_accounts}_repo_id_key,
+                            ADD CONSTRAINT {versioncontrol_accounts}_repo_id_username_key UNIQUE (repo_id, username)');
+      $ret[] = update_sql('ALTER TABLE {versioncontrol_labels}
+                            DROP CONSTRAINT {versioncontrol_labels}_repo_id_key,
+                            ADD CONSTRAINT {versioncontrol_labels}_repo_id_name_type_key UNIQUE (repo_id, name, type)');
+      break;
+  }
   return $ret;
 }
