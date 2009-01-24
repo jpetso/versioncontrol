@@ -25,12 +25,6 @@ define('VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS',     4);
 define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      1);
 
 // VCS item types.
-  // Empty: A "0" item for joining the {versioncontrol_operation_items}
-  // table with {versioncontrol_item_revisions} without omitting items.
-  // (Required for versioncontrol_fetch_source_items().)
-  /// TODO: Has been removed from the database ('serial' types may not be null)
-  ///       so let's get this replaced in the code as well.
-  define('VERSIONCONTROL_ITEM_EMPTY',             0);
 define('VERSIONCONTROL_ITEM_FILE',              1);
 define('VERSIONCONTROL_ITEM_DIRECTORY',         2);
 // "Deleted" item types are only used for items that don't exist in the
@@ -1669,7 +1663,7 @@ function versioncontrol_fetch_source_items($repository, &$items) {
             sit.line_changes_recorded, sit.line_changes_added,
             sit.line_changes_removed, ir.path, ir.revision, ir.type
      FROM {versioncontrol_source_items} sit
-      INNER JOIN {versioncontrol_item_revisions} ir
+      LEFT JOIN {versioncontrol_item_revisions} ir
        ON sit.source_item_revision_id = ir.item_revision_id
      WHERE sit.item_revision_id IN ('. implode(',', $placeholders) .')', $ids);
 
@@ -1696,8 +1690,8 @@ function versioncontrol_fetch_source_items($repository, &$items) {
     }
     else if ($item_revision->action == VERSIONCONTROL_ACTION_ADDED) {
       $items[$successor_key]['action'] = $item_revision->action;
-      // Added items only have the VERSIONCONTROL_ITEM_EMPTY item assigned,
-      // ignore that one instead of adding it to the source items.
+      // Added items only join to an empty (NULL) item, ignore that one
+      // instead of adding it to the source items.
     }
     else {
       $items[$successor_key]['action'] = $item_revision->action;
