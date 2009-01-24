@@ -19,7 +19,7 @@ function versioncontrol_schema() {
     'fields' => array(
       'vc_op_id' => array(
         'description' => 'Unique identifier for each operation in this table. Does not necessarily correspond to chronological order in any way.',
-        'type' => 'serial', /// TODO: update function to make sure the pre-Schema-API data type matches
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
@@ -136,7 +136,7 @@ function versioncontrol_schema() {
     'fields' => array(
       'label_id' => array(
         'description' => 'Unique identifier for a branch or tag in this label, equivalent to the (also unique) repo_id/name/type combination in the same row.',
-        'type' => 'serial', /// TODO: update function to make sure the pre-Schema-API data type matches
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
@@ -275,7 +275,7 @@ function versioncontrol_schema() {
       'item_revision_id' => array(
         'description' =>
           'Unique identifier for this item revision. The same item in a different revision gets a different item_revision_id. Equivalent to the (also unique) repo_id/path/revision combination in the same row.',
-        'type' => 'serial', /// TODO: update function to make sure the pre-Schema-API data type matches
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
@@ -329,7 +329,7 @@ function versioncontrol_schema() {
     'fields' => array(
       'repo_id' => array(
         'description' => 'Primary key, the unique identifier for the repository.',
-        'type' => 'serial', /// TODO: update function to make sure the pre-Schema-API data type matches
+        'type' => 'serial',
         'unsigned' => TRUE,
         'not null' => TRUE,
       ),
@@ -539,13 +539,39 @@ function versioncontrol_uninstall() {
 // major version of Drupal core, y is the major version of Version Control API
 // for this version of Drupal core, and zz is a consecutive number.
 
-// versioncontrol_update_8() was the last update on Drupal 5.x (-2.x).
+// versioncontrol_update_9() was the last update on Drupal 5.x (-2.x).
 
 /**
- * Update 6100: Blah blah blah.
+ * Update 6100: Change 5.x pure integer types to 6.x serial types.
  */
-/* function versioncontrol_update_6100() {
+function versioncontrol_update_6100() {
   $ret = array();
-  $ret[] = update_sql('UPDATE {versioncontrol_blah} SET value = othervalue');
+
+  // Auto-increment fields don't like 0 values.
+  // So let's remove the "empty" item and implement it in some other way.
+  $ret = update_sql('DELETE FROM {versioncontrol_item_revisions}
+                      WHERE item_revision_id = 0');
+
+  db_drop_primary_key($ret, 'versioncontrol_operations');
+  db_change_field($ret, 'versioncontrol_operations', 'vc_op_id', 'vc_op_id',
+    array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+    array('primary key' => array('vc_op_id'))
+  );
+  db_drop_primary_key($ret, 'versioncontrol_labels');
+  db_change_field($ret, 'versioncontrol_labels', 'label_id', 'label_id',
+    array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+    array('primary key' => array('label_id'))
+  );
+  db_drop_primary_key($ret, 'versioncontrol_item_revisions');
+  db_change_field($ret, 'versioncontrol_item_revisions', 'item_revision_id', 'item_revision_id',
+    array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+    array('primary key' => array('item_revision_id'))
+  );
+  db_drop_primary_key($ret, 'versioncontrol_repositories');
+  db_change_field($ret, 'versioncontrol_repositories', 'repo_id', 'repo_id',
+    array('type' => 'serial', 'unsigned' => TRUE, 'not null' => TRUE),
+    array('primary key' => array('repo_id'))
+  );
+
   return $ret;
-}*/
+}
