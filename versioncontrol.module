@@ -25,7 +25,12 @@ define('VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS',     4);
 define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      1);
 
 // VCS item types.
-define('VERSIONCONTROL_ITEM_EMPTY',             0);
+  // Empty: A "0" item for joining the {versioncontrol_operation_items}
+  // table with {versioncontrol_item_revisions} without omitting items.
+  // (Required for versioncontrol_fetch_source_items().)
+  /// TODO: Has been removed from the database ('serial' types may not be null)
+  ///       so let's get this replaced in the code as well.
+  define('VERSIONCONTROL_ITEM_EMPTY',             0);
 define('VERSIONCONTROL_ITEM_FILE',              1);
 define('VERSIONCONTROL_ITEM_DIRECTORY',         2);
 // "Deleted" item types are only used for items that don't exist in the
