@@ -6,7 +6,7 @@
  * optionally filtered by a set of constraint arguments.
  *
  * Copyright 2006, 2007 Derek Wright ("dww" , http://drupal.org/user/46549)
- * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 /**
@@ -199,40 +199,68 @@ function commitlog_versioncontrol_operation($op, $operation, $operation_items) {
   if ($op == 'insert') {
     if (variable_get('commitlog_send_notification_mails', 0)) {
       $mailto = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-      commitlog_send_notification_mail($mailto, $operation, $operation_items);
+      commitlog_notification_mail($mailto, $operation, $operation_items);
     }
   }
 }
 
 /**
- * Send out a notification mail to the given mail address.
+ * Send out a notification mail to the given mail address, or just construct
+ * the message if @p $send is TRUE.
+ *
+ * @return
+ *   The $message array structure containing all details of the message -
+ *   same result value as is returned by drupal_mail(). If already sent
+ *   ($send == TRUE), then the 'result' element will contain the success
+ *   indicator of the e-mail, failure being already written to the watchdog.
+ *   (Success means nothing more than the message being accepted at php-level,
+ *   which still doesn't guarantee it to be delivered.)
  */
-function commitlog_send_notification_mail($mailto, $operation, $operation_items) {
-  $language = language_default();
-  _commitlog_send_notification_mail($mailto, $operation, $operation_items, $language);
+function commitlog_notification_mail($mailto, $operation, $operation_items, $send = TRUE, $language = NULL) {
+  if (!isset($language)) {
+    $language = language_default();
+  }
+  return _commitlog_notification_mail($mailto, $operation, $operation_items, $language, $send);
 }
 
 /**
- * Send out a notification mail to the given Drupal user.
+ * Send out a notification mail to the given Drupal user, or just construct
+ * the message if @p $send is TRUE.
+ *
+ * @return
+ *   An empty array if the anonymous user is passed as @p $account. Otherwise,
+ *   the $message array structure containing all details of the message -
+ *   same result value as is returned by drupal_mail(). If already sent
+ *   ($send == TRUE), then the 'result' element will contain the success
+ *   indicator of the e-mail, failure being already written to the watchdog.
+ *   (Success means nothing more than the message being accepted at php-level,
+ *   which still doesn't guarantee it to be delivered.)
  */
-function commitlog_send_user_notification_mail($account, $operation, $operation_items) {
+function commitlog_user_notification_mail($account, $operation, $operation_items, $send = TRUE) {
+  if (empty($account->uid)) { // Make sure we don't try to send to Anonymous.
+    return array();
+  }
   $mailto = $account->mail;
   $language = user_preferred_language($account);
-  _commitlog_send_notification_mail($mailto, $operation, $operation_items, $language);
+  return _commitlog_notification_mail($mailto, $operation, $operation_items, $language, $send);
 }
 
 /**
  * Common code for the above notification mail functions.
  */
-function _commitlog_send_notification_mail($mailto, $operation, $operation_items, $language) {
-  $params = array(
-    'operation' => $operation,
-    'operation_items' => $operation_items,
+function _commitlog_notification_mail($mailto, $operation, $operation_items, $language, $send) {
+  $username = theme('versioncontrol_account_username',
+    $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
   );
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
   $from = "$username <$admin_mail>";
 
-  drupal_mail('commitlog', 'notification_email', $mailto, $language, $params, $from);
+  $params = array(
+    'operation' => $operation,
+    'operation_items' => $operation_items,
+    'username' => $username,
+  );
+  return drupal_mail('commitlog', 'notification_email', $mailto, $language, $params, $from, $send);
 }
 
 /**
@@ -242,19 +270,17 @@ function commitlog_mail($key, &$message, $params) {
   if ($key != 'notification_email') {
     return;
   }
-  $operation = $params['operation'];
-  $username = theme('versioncontrol_account_username',
-    $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
+  $variables = array(
+    'operation' => $params['operation'],
+    'operation_items' => $params['operation_items'],
   );
-
-  $variables = $params; // also using 'operation' and 'operation_items'
   $message['subject'] = theme('commitlog_operation_subject',
     $variables, array('format' => 'plaintext')
   );
-  $message['body'] = commitlog_operation($operation, $params['operation_items'], array(
-    'format' => 'plaintext',
-    'username' => $username,
-  ));
+  $message['body'] = commitlog_operation(
+    $params['operation'], $params['operation_items'],
+    array('format' => 'plaintext', 'username' => $params['username'])
+  );
 }
 
 

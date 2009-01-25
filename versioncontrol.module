@@ -67,10 +67,6 @@ define('VERSIONCONTROL_FORM_CREATE', FALSE);
 function versioncontrol_init() {
   // The backend-only part of the API.
   module_load_include('inc', 'versioncontrol', 'versioncontrol-backend');
-
-  if (module_exists('workflow_ng') && !$may_cache) {
-    module_load_include('inc', 'versioncontrol', 'includes/versioncontrol.rules');
-  }
 }
 
 /**
@@ -2372,21 +2368,21 @@ function versioncontrol_is_account_authorized($uid, $repository) {
  * Retrieve the URL of the repository viewer that displays the given commit
  * in the corresponding repository.
  *
- * @param $commit
- *   The commit whose view URL should be retrieved.
+ * @param $operation
+ *   The commit operation whose view URL should be retrieved.
  *
  * @return
  *   The commit view URL corresponding to the given arguments.
  *   An empty string is returned if no commit view URL has been defined,
  *   or if the commit cannot be viewed for any reason.
  */
-function versioncontrol_get_url_commit_view($commit) {
-  if (empty($commit['revision'])) {
+function versioncontrol_get_url_commit_view($operation) {
+  if (empty($operation['revision'])) {
     return '';
   }
-  $urls = _versioncontrol_get_repository_urls($commit['repository']);
+  $urls = _versioncontrol_get_repository_urls($operation['repository']);
   return strtr($urls['commit_view'], array(
-    '%revision' => $commit['revision'],
+    '%revision' => $operation['revision'],
   ));
 }
 

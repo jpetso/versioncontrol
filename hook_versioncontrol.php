@@ -124,7 +124,7 @@ function hook_versioncontrol_operation($op, $operation, $operation_items) {
   if ($op == 'insert' && module_exists('commitlog')) {
     if (variable_get('commitlog_send_notification_mails', 0)) {
       $mailto = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
-      commitlog_send_notification_mail($mailto, $operation, $operation_items);
+      commitlog_notification_mail($mailto, $operation, $operation_items);
     }
   }
 }

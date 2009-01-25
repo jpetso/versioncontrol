@@ -5,7 +5,7 @@
  * Version Control API - An interface to version control systems
  * whose functionality is provided by pluggable back-end modules.
  *
- * This file provides support for workflow-ng (will be Rules in Drupal 6).
+ * This file provides support for Rules.
  *
  * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
@@ -96,46 +96,113 @@ function versioncontrol_token_values($type, $object = NULL) {
 }
 
 
-// Secondly, workflow_ng integration.
+// Secondly, Rules integration.
 
 /**
- * Implementation of hook_entity_into().
+ * Implementation of hook_rules_data_type_info().
  */
-function versioncontrol_entity_info() {
+function versioncontrol_rules_data_type_info() {
   return array(
-    'versioncontrol_repository' => array(),
-    'versioncontrol_operation' => array(),
-    'versioncontrol_item_list' => array(),
+    'versioncontrol_repository' => array(
+      'label' => t('Repository'),
+      'class' => 'versioncontrol_data_type_repository',
+      // The versioncontrol_data_type_repository class also supports
+      // 'savable' == TRUE, but there's no use case for it currently.
+      'savable' => FALSE,
+      'identifiable' => TRUE,
+      'module' => t('Version Control API'),
+    ),
+    'versioncontrol_operation' => array(
+      'label' => t('Version control operation'),
+      'class' => 'versioncontrol_data_type_operation',
+      'savable' => FALSE,
+      'identifiable' => TRUE,
+      'module' => t('Version Control API'),
+    ),
+    'versioncontrol_item_list' => array(
+      'label' => t('List of repository items (files/directories)'),
+      'class' => 'rules_data_type',
+      'savable' => FALSE,
+      'identifiable' => FALSE,
+      'module' => t('Version Control API'),
+    ),
   );
 }
 
 /**
- * Implementation of hook_event_info().
+ * Defines the versioncontrol_repository data type for Rules.
  */
-function versioncontrol_event_info() {
+class versioncontrol_data_type_repository extends rules_data_type {
+  function save() {
+    $repository = &$this->get();
+    $repository_urls = _versioncontrol_get_repository_urls($repository);
+    versioncontrol_update_repository($repository);
+    return TRUE;
+  }
+
+  function load($repo_id) {
+    return versioncontrol_get_repository($repo_id);
+  }
+
+  function get_identifier() {
+    $repository = &$this->get();
+    return $repository['repo_id'];
+  }
+}
+
+/**
+ * Defines the versioncontrol_operation data type for Rules.
+ */
+class versioncontrol_data_type_operation extends rules_data_type {
+  function load($vc_op_id) {
+    $operations = versioncontrol_get_operations(array('vc_op_ids' => array($vc_op_id)));
+    return empty($operations) ? FALSE : reset($operation); // first (only) element
+  }
+
+  function get_identifier() {
+    $operation = &$this->get();
+    return $operation['vc_op_id'];
+  }
+}
+
+
+/**
+ * Implementation of hook_rules_event_info().
+ */
+function versioncontrol_rules_event_info() {
   return array(
     'versioncontrol_operation_insert' => array(
-      '#label' => t('Version control operation has been recorded'),
-      '#description' => t('A "version control operation" is either a commit or the creation/deletion of a branch or tag. Note that this event is normally called from either cron or an external script, so you shouldn\'t do things like page redirections, message popups or similar on-site actions.'),
-      '#module' => t('Version Control API'),
-      '#arguments' => array(
+      'label' => t('Version control operation has been recorded'),
+      'help' => t('A "version control operation" is either a commit or the creation/deletion of a branch or tag. Note that this event is normally called from either cron or an external script, so you shouldn\'t do things like page redirections, message popups or similar on-site actions.'),
+      'module' => t('Version Control API'),
+      'arguments' => array(
         'operation' => array(
-          '#entity' => 'versioncontrol_operation',
-          '#label' => t('Operation'),
+          'type' => 'versioncontrol_operation',
+          'label' => t('Operation'),
         ),
         'author' => array(
-          '#entity' => 'user',
-          '#label' => t('Author'),
-          '#handler' => 'versioncontrol_events_argument_get_author',
+          'type' => 'user',
+          'label' => t('Author'),
+          'handler' => 'versioncontrol_events_argument_get_author',
         ),
         'repository' => array(
-          '#entity' => 'versioncontrol_repository',
-          '#label' => t('Repository'),
-          '#handler' => 'versioncontrol_events_argument_get_repository',
+          'type' => 'versioncontrol_repository',
+          'label' => t('Repository'),
+          'handler' => 'versioncontrol_events_argument_get_repository',
+        ),
+        'message' => array(
+          'type' => 'string',
+          'label' => t('Log message'),
+          'handler' => 'versioncontrol_events_argument_get_message',
+        ),
+        'date' => array(
+          'type' => 'date',
+          'label' => t('Date'),
+          'handler' => 'versioncontrol_events_argument_get_date',
         ),
         'items' => array(
-          '#entity' => 'versioncontrol_item_list',
-          '#label' => t('Items (files/directories)'),
+          'type' => 'versioncontrol_item_list',
+          'label' => t('Items (files/directories)'),
         ),
       ),
     ),
@@ -143,50 +210,60 @@ function versioncontrol_event_info() {
 }
 
 function versioncontrol_events_argument_get_author($operation) {
-  return user_load(array('uid' => $operation['uid']));
+  return user_load($operation['uid']);
 }
 
 function versioncontrol_events_argument_get_repository($operation) {
   return $operation['repository'];
 }
 
+function versioncontrol_events_argument_get_message($operation) {
+  return $operation['message'];
+}
+
+function versioncontrol_events_argument_get_date($operation) {
+  // Looking at the source code of rules.rules.inc, this seems to be the
+  // native date representation of the rules_data_type_date class.
+  return gmdate('Y-m-d H:i:s', $operation['date']);
+}
+
 /**
- * Implementation of hook_condition_info().
+ * Implementation of hook_rules_condition_info().
  */
-function versioncontrol_condition_info() {
+function versioncontrol_rules_condition_info() {
   return array(
     'versioncontrol_condition_repository' => array(
-      '#label' => t('Compare repository'),
-      '#arguments' => array(
+      'label' => t('Compare repository'),
+      'arguments' => array(
         'repository' => array(
-          '#entity' => 'versioncontrol_repository',
-          '#label' => t('Repository to compare'),
+          'entity' => 'versioncontrol_repository',
+          'label' => t('Repository to compare'),
         ),
       ),
-      '#description' => t('Evaluates to TRUE if a repository is one of several selected repositories.'),
-      '#module' => t('Version Control API'),
+      'help' => t('Evaluates to TRUE if a repository is one of several selected repositories.'),
+      'module' => t('Version Control API'),
     ),
     'versioncontrol_condition_operation_labels' => array(
-      '#label' => t('Compare branch/tag name'),
-      '#arguments' => array(
+      'label' => t('Compare branch/tag name'),
+      'arguments' => array(
         'items' => array(
-          '#entity' => 'versioncontrol_operation',
-          '#label' => t('Operation (commit, or creation/deletion of a branch or tag)'),
+          'entity' => 'versioncontrol_operation',
+          'label' => t('Operation (commit, or creation/deletion of a branch or tag)'),
         ),
       ),
-      '#description' => t('Evaluates to TRUE if the version control operation affected a branch or tag of the given name.'),
-      '#module' => t('Version Control API'),
+      'help' => t('Evaluates to TRUE if the version control operation affected a branch or tag of the given name.'),
+      'module' => t('Version Control API'),
     ),
     'versioncontrol_condition_item_paths' => array(
-      '#label' => t('Compare item paths'),
-      '#arguments' => array(
+      'label' => t('Compare item paths'),
+      'arguments' => array(
         'items' => array(
-          '#entity' => 'versioncontrol_item_list',
-          '#label' => t('Set of items to be compared'),
+          'entity' => 'versioncontrol_item_list',
+          'label' => t('Set of items to be compared'),
         ),
       ),
-      '#description' => t('Evaluates to TRUE if the path of at least one of the items matches a given set of regular expressions.'),
-      '#module' => t('Version Control API'),
+      'help' => t('Evaluates to TRUE if the path of at least one of the items matches a given set of regular expressions.'),
+      'module' => t('Version Control API'),
     ),
   );
 }
@@ -202,13 +279,13 @@ function versioncontrol_condition_repository($repository, $settings) {
   return in_array($repository['repo_id'], $settings['repo_ids']);
 }
 
-function versioncontrol_condition_repository_form($settings = array(), $argument_info) {
+function versioncontrol_condition_repository_form($settings, &$form) {
   $repository_options = array();
   foreach (versioncontrol_get_repositories() as $repo_id => $repository) {
     $repository_options[$repo_id] = check_plain($repository['name']);
   }
 
-  $form['repo_ids'] = array(
+  $form['settings']['repo_ids'] = array(
     '#type' => 'checkboxes',
     '#title' => t('Matched repositories'),
     '#description' => t('If the repository is in the selected set of repositories, this condition will return TRUE.'),
@@ -218,13 +295,10 @@ function versioncontrol_condition_repository_form($settings = array(), $argument
                         : $settings['repo_ids'],
     '#required' => TRUE,
   );
-  return $form;
 }
 
-function versioncontrol_condition_repository_submit($form, &$form_state) {
-  return array(
-    'repo_ids' => array_filter(array_keys(array_filter($form_state['values']['repo_ids']))),
-  );
+function versioncontrol_condition_repository_submit(&$settings, $form, $form_state) {
+  $settings['repo_ids'] = array_filter(array_keys(array_filter($settings['repo_ids'])));
 }
 
 
@@ -269,8 +343,8 @@ function versioncontrol_condition_item_paths($items, $settings) {
   return FALSE;
 }
 
-function versioncontrol_condition_item_paths_form($settings = array(), $argument_info) {
-  $form['item_paths']['path_regexps'] = array(
+function versioncontrol_condition_item_paths_form($settings, &$form) {
+  $form['settings']['item_paths']['path_regexps'] = array(
     '#type' => 'textfield',
     '#title' => t('List of regular expressions'),
     '#description' => t('If the paths of the items (relative to the repository root, starting with "/") match one of these PHP regular expressions, this condition will return TRUE. Separate the regular expressions from each other with spaces. Example: "@^/trunk/@ @^/contributions/profiles.*(?&lt;!\.profile|\.txt)$@ @^.*\.(gz|tgz|tar|zip)$@"'),
@@ -280,21 +354,17 @@ function versioncontrol_condition_item_paths_form($settings = array(), $argument
     '#required' => TRUE,
     '#size' => 60,
   );
-  $form['item_paths']['operation'] = array(
+  $form['settings']['item_paths']['operation'] = array(
     '#type' => 'select',
     '#title' => t('How many items must match one of the regular expressions'),
     '#options' => array('OR' => t('It\'s enough if any item matches'), 'AND' => t('All items must match')),
     '#description' => t('Specify whether any item or all items must match one of the regular expressions for the condition to return TRUE.'),
     '#default_value' => $settings['operation'],
   );
-  return $form;
 }
 
-function versioncontrol_condition_item_paths_submit($form, &$form_state) {
-  return array(
-    'path_regexps' => array_filter(explode(' ', $form_state['values']['path_regexps'])),
-    'operation' => $form_state['values']['operation'],
-  );
+function versioncontrol_condition_item_paths_submit(&$settings, $form, $form_state) {
+  $settings['path_regexps'] = array_filter(explode(' ', $settings['path_regexps']));
 }
 
 
@@ -317,8 +387,8 @@ function versioncontrol_condition_operation_labels($operation, $settings) {
   return FALSE;
 }
 
-function versioncontrol_condition_operation_labels_form($settings = array(), $argument_info) {
-  $form['labels']['label_regexps'] = array(
+function versioncontrol_condition_operation_labels_form($settings, &$form) {
+  $form['settings']['labels']['label_regexps'] = array(
     '#type' => 'textfield',
     '#title' => t('List of regular expressions'),
     '#description' => t('If a branch/tag name matches one of these PHP regular expressions, this condition will return TRUE. Separate the regular expressions from each other with spaces. Example (for a branch name, in this case): "@^HEAD$@ @^DRUPAL-5(--[2-9])?$@ @^DRUPAL-6--[1-9]$@"'),
@@ -328,11 +398,8 @@ function versioncontrol_condition_operation_labels_form($settings = array(), $ar
     '#required' => TRUE,
     '#size' => 60,
   );
-  return $form;
 }
 
-function versioncontrol_condition_operation_labels_submit($form, &$form_state) {
-  return array(
-    'label_regexps' => array_filter(explode(' ', $form_state['values']['label_regexps'])),
-  );
+function versioncontrol_condition_operation_labels_submit(&$settings, $form, $form_state) {
+  $settings['label_regexps'] = array_filter(explode(' ', $settings['label_regexps']));
 }
