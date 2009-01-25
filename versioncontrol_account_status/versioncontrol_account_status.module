@@ -619,7 +619,7 @@ function _versioncontrol_account_status_get_value_names() {
 function versioncontrol_account_status_form_alter_account(&$form, $repo_id) {
   global $user;
 
-  $uid = $form['uid']['#value'];
+  $uid = $form['#uid'];
   $data = versioncontrol_account_status_get($uid, $repo_id);
 
   $admin_access = versioncontrol_admin_access();
@@ -735,10 +735,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
   // The motivation message is editable for new application submissions,
   // otherwise it will just be displayed as unmodifiable markup.
   if ($is_application) {
-    $form['send_application_mails'] = array(
-      '#type' => 'value',
-      '#value' => TRUE,
-    );
+    $form['#send_application_mails'] = TRUE;
 
     if (!isset($form['overview'])) {
       $registration_message = versioncontrol_get_repository_registration_message($status_data['repo_id']);
@@ -775,10 +772,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
     );
   }
   else {
-    $form['skip_conditions_check'] = array(
-      '#type' => 'value',
-      '#value' => TRUE,
-    );
+    $form['#skip_conditions_check'] = TRUE;
     $form['motivation_fieldset']['motivation'] = array(
       '#type' => 'value',
       '#value' => $status_data['motivation'],
@@ -805,7 +799,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
   // Adapt the caption of the submit button, and add our validation handler.
   if (!$admin_access && isset($form['submit'])) { // not set in the demo mode
     $form['submit']['#value'] = t(
-      'Request @vcs account', array('@vcs' => $form['vcs_name']['#value'])
+      'Request @vcs account', array('@vcs' => $form['#vcs_name'])
     );
   }
   $form['#validate'][] = 'versioncontrol_account_status_application_validate';
@@ -816,10 +810,7 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
  * form value, and disable the VCS username for account edit forms.
  */
 function _versioncontrol_account_status_form_alter_reapplication(&$form) {
-  $form['is_reapplication'] = array(
-    '#type' => 'value',
-    '#value' => TRUE,
-  );
+  $form['#is_reapplication'] = TRUE;
 
   $form['reapplication_message'] = array(
     '#type' => 'item',
@@ -847,10 +838,7 @@ function _versioncontrol_account_status_form_alter_status_admin(&$form, $status_
   if (isset($form['motivation_fieldset']['motivation_display'])) {
     $form['status_admin']['motivation_display'] = $form['motivation_fieldset']['motivation_display'];
   }
-  $form['skip_conditions_check'] = array(
-    '#type' => 'value',
-    '#value' => TRUE,
-  );
+  $form['#skip_conditions_check'] = TRUE;
   unset($form['motivation_fieldset']);
 
   // Provide the admin with tools to edit the account status.
@@ -886,7 +874,7 @@ function versioncontrol_account_status_application_validate($form, &$form_state)
   $conditions = _versioncontrol_account_status_get_conditions(
     $strings['default_condition_description'], $strings['default_condition_error']
   );
-  if (!isset($form_state['values']['skip_conditions_check'])) {
+  if (!isset($form['#skip_conditions_check'])) {
     foreach ($conditions as $element_name => $texts) {
       if ($form_state['values'][$element_name] != 1) {
         form_set_error($element_name, $texts['error']);
@@ -931,8 +919,8 @@ function versioncontrol_account_status_versioncontrol_account_submit(&$additiona
       'is_send' => $form_state['values']['send_admin_message'],
       'contents' => $form_state['values']['admin_message'],
     ),
-    'is_reapplication' => !empty($form_state['values']['is_reapplication']),
-    'send_application_mails' => $form_state['values']['send_application_mails'],
+    'is_reapplication' => !empty($form['#is_reapplication']),
+    'send_application_mails' => $form['#send_application_mails'],
   );
 }
 

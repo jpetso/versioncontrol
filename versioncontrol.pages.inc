@@ -186,10 +186,7 @@ function versioncontrol_account_register_form(&$form_state, $register_uid, $repo
     );
   }
 
-  $form['uid'] = array(
-    '#type' => 'value',
-    '#value' => $register_uid,
-  );
+  $form['#uid'] = $register_uid;
 
   $form['repository'] = array(
     '#type' => 'fieldset',
@@ -218,7 +215,7 @@ function versioncontrol_account_register_form(&$form_state, $register_uid, $repo
  * Surprisingly, all it does is redirect to the appropriate registration form.
  */
 function versioncontrol_account_register_form_submit($form, &$form_state) {
-  $form_state['redirect'] = 'versioncontrol/register/'. $form_state['values']['uid'] .'/'. $form_state['values']['repo_id'];
+  $form_state['redirect'] = 'versioncontrol/register/'. $form['#uid'] .'/'. $form_state['values']['repo_id'];
 }
 
 
@@ -389,28 +386,15 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $vcs_
   }
 
   $form['#id'] = 'versioncontrol-account-form';
+
   $form['#repository'] = $repository;
   $form['#vcs'] = $repository['vcs'];
+  $form['#vcs_name'] = $vcs_name;
+  $form['#uid'] = $uid;
+  $form['#original_username'] = $vcs_username;
+
   $form['#validate'] = array('versioncontrol_account_edit_form_validate');
   $form['#submit'] = array('versioncontrol_account_edit_form_submit');
-
-  // Values stored for later processing.
-  $form['uid'] = array(
-    '#type' => 'value',
-    '#value' => $uid,
-  );
-  $form['original_username'] = array(
-    '#type' => 'value',
-    '#value' => $vcs_username,
-  );
-  $form['repo_id'] = array(
-    '#type' => 'value',
-    '#value' => $repository['repo_id'],
-  );
-  $form['vcs_name'] = array(
-    '#type' => 'value',
-    '#value' => $vcs_name,
-  );
 
   if ($create_account) {
     $registration_message = versioncontrol_get_repository_registration_message($repository['repo_id']);
@@ -494,10 +478,10 @@ function versioncontrol_account_edit_form_validate($form, &$form_state) {
   if (!isset($form_state['values']['account_name'])) {
     return;
   }
-  $uid = $form_state['values']['uid'];
+  $uid = $form['#uid'];
   $username = trim($form_state['values']['account_name']);
-  $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
-  $vcs_name = $form_state['values']['vcs_name'];
+  $repository = $form['#repository'];
+  $vcs_name = $form['#vcs_name'];
 
   if (!isset($repository)) { // admin deletes repo while user fills in form
     form_set_error('account',
@@ -540,10 +524,10 @@ function versioncontrol_account_edit_form_validate($form, &$form_state) {
  */
 function versioncontrol_account_edit_form_submit($form, &$form_state) {
   // Reconstruct the user data from the $form_state that was passed.
-  $uid = $form_state['values']['uid'];
+  $uid = $form['#uid'];
   $username = trim($form_state['values']['account_name']);
-  $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
-  $vcs_name = $form_state['values']['vcs_name'];
+  $repository = $form['#repository'];
+  $vcs_name = $form['#vcs_name'];
   $vcs_specific = NULL;
 
   // Let other modules provide additional account data.
@@ -553,7 +537,7 @@ function versioncontrol_account_edit_form_submit($form, &$form_state) {
     $function($additional_data, $form, $form_state);
   );
 
-  if (empty($form_state['values']['original_username'])) {
+  if (empty($form['#original_username'])) {
     versioncontrol_insert_account($repository, $uid, $username, $additional_data);
     $message = drupal_set_message(t(
       'The @vcs account %username has been registered.',

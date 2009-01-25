@@ -409,12 +409,12 @@ function versioncontrol_admin_account_import_form(&$form_state) {
 }
 
 /**
- * Validation form callback for vcs account data.
+ * Validation form callback for VCS account data.
  *
  * Only actually validates that the repo backend is correctly configured.
  */
 function versioncontrol_admin_account_import_form_validate($form, &$form_state) {
-  if (is_null(versioncontrol_get_repository($form_state['values']['repo_id']))) {
+  if (empty(versioncontrol_get_repository($form_state['values']['repo_id']))) {
     form_error($form['data'], t('The selected repository could not be found.'));
   }
 }
@@ -537,19 +537,13 @@ function versioncontrol_admin_account_export_form_submit($form, &$form_state) {
  */
 function versioncontrol_admin_account_export_display_form(&$form_state, $repository, $data) {
   $form = array();
-
-  $backends = versioncontrol_get_backends();
-  $vcs_name = $backends[$repository['vcs']]['name'];
-
-  if (!empty($repository)) {
-    $form['#repository'] = $repository;
-  }
-  $form['#vcs'] = $vcs_name;
+  $form['#repo_id'] = $repository['repo_id'];
+  $backend = versioncontrol_get_backend($repository);
 
   $form['data'] = array(
     '#type' => 'textarea',
-    '#title' => t('@vcs account data', array('@vcs' => $vcs_name)),
-    '#description' => t('The exported account data. You can copy this to the config file that contains the @vcs accounts.', array('@vcs' => $vcs_name)),
+    '#title' => t('@vcs account data', array('@vcs' => $backend['name'])),
+    '#description' => t('The exported account data. You can copy this to the config file that contains the @vcs accounts.', array('@vcs' => $backend['name'])),
     '#default_value' => $data,
     '#cols' => 70,
     '#rows' => 30,
@@ -655,28 +649,15 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
     drupal_goto('admin/project/versioncontrol-repositories');
     // drupal_goto() calls exit() so script execution ends right here
   }
-  $vcs = $repository_exists ? $repository['vcs'] : $vcs;
 
   $form = array();
   $form['#id'] = 'versioncontrol-repository-form';
-  $form['#vcs'] = $vcs;
 
   if (!empty($repository)) {
     $form['#repository'] = $repository;
   }
-
-  $form['repo_id'] = array(
-    '#type' => 'value',
-    '#value' => $repository_exists ? $repository['repo_id'] : 0,
-  );
-  $form['original_name'] = array(
-    '#type' => 'value',
-    '#value' => $repository_exists ? check_plain($repository['name']) : 0,
-  );
-  $form['vcs'] = array(
-    '#type' => 'value',
-    '#value' => $vcs,
-  );
+  $form['#vcs'] = $repository_exists ? $repository['vcs'] : $vcs;
+  $form['#original_name'] = $repository_exists ? $repository['name'] : 0;
 
   $form['repository_information'] = array(
     '#type' => 'fieldset',
@@ -689,7 +670,7 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
     '#type' => 'textfield',
     '#title' => t('Repository name'),
     '#description' => t('A label for the repository that will be used in all user visible messages.'),
-    '#default_value' => $repository_exists ? check_plain($repository['name']) : '',
+    '#default_value' => $repository_exists ? $repository['name'] : '',
     '#required' => TRUE,
     '#weight' => 0,
     '#size' => 40,
@@ -752,7 +733,6 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
     $repo_urls = _versioncontrol_get_repository_urls($repository);
   }
 
-  // TODO: abstract out repository URLs into separate backends
   $form['repository_urls'] = array(
     '#type' => 'fieldset',
     '#title' => t('Repository browser URLs'),
@@ -822,16 +802,16 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
  * Validate the add/edit repository form before it is submitted.
  */
 function versioncontrol_admin_repository_edit_validate($form, &$form_state) {
-  if ($form_state['values']['repo_id'] != 0 && $form_state['values']['repo_name'] == $form_state['values']['original_name']) {
+  if (!empty($form['#repository']) && $form_state['values']['repo_name'] == $form['#original_name']) {
     return;
   }
   $same_repositories = versioncontrol_get_repositories(array(
     'names' => array($form_state['values']['repo_name']),
   ));
   if (!empty($same_repositories)) {
-    form_set_error('repo_name',
-      t('The repository name %repo-name is already in use, please assign a different one.',
-        array('%repo-name' => $form_state['values']['repo_name']))
+    form_error($form['repo_name'],
+      t('The repository name %reponame is already in use, please assign a different one.',
+        array('%reponame' => $form_state['values']['repo_name']))
     );
   }
 }
@@ -840,29 +820,27 @@ function versioncontrol_admin_repository_edit_validate($form, &$form_state) {
  * Add or update the repository when the add/edit form is submitted.
  */
 function versioncontrol_admin_repository_edit_submit($form, &$form_state) {
-  // Reconstruct the repository from the form values that were passed.
-  $repository = array();
+  // Take the existing repository and modify it with the given form values,
+  // or construct a new one altogether.
+  $repository = isset($form['#repository']) ? $form['#repository'] : array(
+    'vcs' => $form['#vcs'],
+    'url_backend' => 'versioncontrol_default_urls', // hardcoded for now
+  );
+
+  $repository['name']                 = $form_state['values']['repo_name'];
+  $repository['root']                 = $form_state['values']['root'];
+  $repository['authorization_method'] = $form_state['values']['authorization_method'];
+
+  $registration_message = $form_state['values']['registration_message'];
+
   $repository_urls = array();
   $repository_url_keys = array(
     'commit_view', 'file_log_view', 'file_view', 'directory_view',
     'diff', 'tracker'
   );
-
-  foreach ($form_state['values'] as $key => $value) {
-    if (in_array($key, array('repo_id', 'vcs', 'root', 'authorization_method'))) {
-      $repository[$key] = $form_state['values'][$key];
-    }
-    else if ($key == 'repo_name') {
-      $repository['name'] = $form_state['values'][$key];
-    }
-    else if (in_array($key, $repository_url_keys)) {
-      $repository_urls[$key] = $form_state['values'][$key];
-    }
-    else if ($key == 'registration_message') {
-      $registration_message = $form_state['values'][$key];
-    }
+  foreach ($repository_url_keys as $key) {
+    $repository_urls[$key] = $form_state['values'][$key];
   }
-  $repository['url_backend'] = 'versioncontrol_default_urls'; // hardcoded for now
 
   // Let other modules alter the repository array.
   foreach (module_implements('versioncontrol_repository_submit') as $module) {
@@ -870,7 +848,7 @@ function versioncontrol_admin_repository_edit_submit($form, &$form_state) {
     $function($repository, $form, $form_state);
   }
 
-  if ($repository['repo_id'] > 0) {
+  if (!empty($repository['repo_id'])) {
     versioncontrol_update_repository($repository, $repository_urls);
     db_query("UPDATE {versioncontrol_repository_metadata}
               SET registration_message = '%s'
@@ -903,7 +881,7 @@ function versioncontrol_admin_repository_edit_submit($form, &$form_state) {
  */
 function versioncontrol_admin_repository_delete_confirm(&$form_state, $repository) {
   $form = array();
-  $form['repo_id'] = array('#type' => 'value', '#value' => $repo_id);
+  $form['#repo_id'] = $repository['repo_id'];
 
   $form = confirm_form($form,
     t('Are you sure you want to delete %name?', array('%name' => $repository['name'])),
@@ -918,7 +896,7 @@ function versioncontrol_admin_repository_delete_confirm(&$form_state, $repositor
  * Delete the repository when the confirmation form is submitted.
  */
 function versioncontrol_admin_repository_delete_confirm_submit($form, &$form_state) {
-  $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
+  $repository = versioncontrol_get_repository($form['#repo_id']);
   versioncontrol_delete_repository($repository);
   drupal_set_message(t('The %repository repository has been deleted.', array(
     '%repository' => $repository['name'],

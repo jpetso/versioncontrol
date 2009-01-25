@@ -117,8 +117,8 @@ function versioncontrol_fakevcs_versioncontrol_alter_repository_list($vcs, $repo
 function versioncontrol_fakevcs_account_form_alter(&$form, $form_state, $form_id) {
   $form['#versioncontrol_fakevcs'] = TRUE;
 
-  if (empty($form['original_username']['#value'])) { // creating the account
-    $description = t('Choose a password to access the FakeCVS repository with.');
+  if (empty($form['#original_username'])) { // creating the account
+    $description = t('Choose a password to access the FakeVCS repository with.');
   }
   else { // editing the account
     $description = t('To change the current FakeVCS password, enter the new password in both fields.');
@@ -136,7 +136,7 @@ function versioncontrol_fakevcs_account_form_alter(&$form, $form_state, $form_id
  * Additional validation for the edit/register user account form.
  */
 function versioncontrol_fakevcs_account_form_validate($form, &$form_state) {
-  if (!empty($form_state['values']['original_username']) && empty($form_state['values']['account_password'])) {
+  if (!empty($form['#original_username']) && empty($form_state['values']['account_password'])) {
     return; // The (existing) user didn't change the password.
   }
   else if (drupal_strlen($form_state['values']['account_password']) < VERSIONCONTROL_FAKEVCS_MIN_PASSWORD_LENGTH) {

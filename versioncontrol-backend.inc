@@ -788,6 +788,10 @@ function versioncontrol_delete_account($repository, $uid, $username) {
  *   The finalized repository array, including the 'repo_id' element.
  */
 function versioncontrol_insert_repository($repository, $repository_urls) {
+  if (isset($repository['repo_id'])) {
+    // This is a new repository, it's not supposed to have a repo_id yet.
+    unset($repository['repo_id']);
+  }
   drupal_write_record('versioncontrol_repositories', $repository);
   // drupal_write_record() has now added the 'repo_id' to the $repository array.
 
