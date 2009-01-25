@@ -82,38 +82,20 @@ function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
 }
 
 /**
- * Implementation of hook_versioncontrol_extract_repository_data():
- * Extract commit restriction repository additions from the repository
- * editing/adding form's submitted values.
+ * Implementation of hook_versioncontrol_repository_submit():
+ * Extract repository data from the repository editing/adding form's
+ * submitted values, and add it to the @p $repository array. Later, that array
+ * will be passed to hook_versioncontrol_repository() as part of the repository
+ * insert/update procedure.
  */
-function commit_restrictions_versioncontrol_extract_repository_data($form_values) {
-  $allowed_paths = empty($form_values['allowed_paths'])
-    ? array() : array_filter(explode(' ', $form_values['allowed_paths']));
-
-  $forbidden_paths = empty($form_values['forbidden_paths'])
-    ? array() : array_filter(explode(' ', $form_values['forbidden_paths']));
-
-  $deny_undefined_paths = isset($form_values['deny_undefined_paths'])
-                          ? FALSE : $form_values['deny_undefined_paths'];
-
-  $valid_branch_tag_paths = empty($form_values['valid_branch_tag_paths'])
-    ? array() : array_filter(explode(' ', $form_values['valid_branch_tag_paths']));
-
-  $valid_branches = empty($form_values['valid_branches'])
-    ? array() : array_filter(explode(' ', $form_values['valid_branches']));
-
-  $valid_tags = empty($form_values['valid_tags'])
-    ? array() : array_filter(explode(' ', $form_values['valid_tags']));
-
-  return array(
-    'commit_restrictions' => array(
-      'allowed_paths'          => $form_values['allowed_paths'],
-      'forbidden_paths'        => $form_values['forbidden_paths'],
-      'deny_undefined_paths'   => $form_values['deny_undefined_paths'],
-      'valid_branch_tag_paths' => $form_values['valid_branch_tag_paths'],
-      'valid_branches'         => $form_values['valid_branches'],
-      'valid_tags'             => $form_values['valid_tags'],
-    ),
+function commit_restrictions_versioncontrol_repository_submit(&$repository, $form, $form_state) {
+  $repository['commit_restrictions'] = array(
+    'allowed_paths'          => $form_state['values']['allowed_paths'],
+    'forbidden_paths'        => $form_state['values']['forbidden_paths'],
+    'deny_undefined_paths'   => $form_state['values']['deny_undefined_paths'],
+    'valid_branch_tag_paths' => $form_state['values']['valid_branch_tag_paths'],
+    'valid_branches'         => $form_state['values']['valid_branches'],
+    'valid_tags'             => $form_state['values']['valid_tags'],
   );
 }
 
@@ -149,7 +131,7 @@ function commit_restrictions_versioncontrol_extract_repository_data($form_values
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
  *   - '???': Any other additions that modules added by implementing
- *        versioncontrol_extract_repository_data().
+ *        hook_versioncontrol_repository_submit().
  */
 function commit_restrictions_versioncontrol_repository($op, $repository) {
   $restrictions = $repository['commit_restrictions'];

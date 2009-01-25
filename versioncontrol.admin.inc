@@ -864,10 +864,11 @@ function versioncontrol_admin_repository_edit_submit($form, &$form_state) {
   }
   $repository['url_backend'] = 'versioncontrol_default_urls'; // hardcoded for now
 
-  $additional_data = module_invoke_all(
-    'versioncontrol_extract_repository_data', $form_state['values']
-  );
-  $repository = array_merge($additional_data, $repository);
+  // Let other modules alter the repository array.
+  foreach (module_implements('versioncontrol_repository_submit') as $module) {
+    $function = $module .'_versioncontrol_repository_submit';
+    $function($repository, $form, $form_state);
+  }
 
   if ($repository['repo_id'] > 0) {
     versioncontrol_update_repository($repository, $repository_urls);

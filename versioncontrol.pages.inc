@@ -539,15 +539,18 @@ function versioncontrol_account_edit_form_validate($form, &$form_state) {
  * Add or update the user account when the edit/register form is submitted.
  */
 function versioncontrol_account_edit_form_submit($form, &$form_state) {
-  // Reconstruct the user data from the $form_values that were passed.
+  // Reconstruct the user data from the $form_state that was passed.
   $uid = $form_state['values']['uid'];
   $username = trim($form_state['values']['account_name']);
   $repository = versioncontrol_get_repository($form_state['values']['repo_id']);
   $vcs_name = $form_state['values']['vcs_name'];
   $vcs_specific = NULL;
 
-  $additional_data = module_invoke_all(
-    'versioncontrol_extract_account_data', $form_state['values']
+  // Let other modules provide additional account data.
+  $additional_data = array();
+  foreach (module_implements('versioncontrol_account_submit') as $module) {
+    $function = $module .'_versioncontrol_account_submit';
+    $function($additional_data, $form, $form_state);
   );
 
   if (empty($form_state['values']['original_username'])) {

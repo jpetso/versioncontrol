@@ -615,7 +615,7 @@ function _versioncontrol_fill_operation(&$operation, $include_unauthorized = FAL
  *   The VCS specific username (a string).
  * @param $additional_data
  *   An array of additional author information. Modules can fill this array
- *   by implementing hook_versioncontrol_extract_account_data().
+ *   by implementing hook_versioncontrol_account_submit().
  */
 function versioncontrol_insert_account($repository, $uid, $username, $additional_data = array()) {
   db_query(
@@ -663,7 +663,7 @@ function versioncontrol_insert_account($repository, $uid, $username, $additional
  *   The repository where the user has its VCS account.
  * @param $additional_data
  *   An array of additional author information. Modules can fill this array
- *   by implementing hook_versioncontrol_extract_account_data().
+ *   by implementing hook_versioncontrol_account_submit().
  */
 function versioncontrol_update_account($repository, $uid, $username, $additional_data = array()) {
   $old_username = versioncontrol_get_account_username_for_uid($repository['repo_id'], $uid, TRUE);

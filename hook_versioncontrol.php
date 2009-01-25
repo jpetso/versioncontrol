@@ -260,34 +260,32 @@ function hook_versioncontrol_write_access($operation, $operation_items) {
 
 
 /**
- * Extract repository data from the repository editing/adding form's
- * submitted values. This data will be passed to
- * hook_versioncontrol_repository() as part of the repository array.
+ * Extract repository data from the repository edit/add form's submitted
+ * values, and add it to the @p $repository array. Later, that array will be
+ * passed to hook_versioncontrol_repository() as part of the repository
+ * insert/update procedure.
  *
- * @param $form_values
- *   The form values that were submitted in the repository editing/adding form.
- *   If you altered this form ($form['#id'] == 'versioncontrol-repository-form')
- *   and added an additional form element then this parameter will also contain
- *   the value of this form element.
- *
- * @return
- *   An array of elements that will be merged into the repository array.
+ * @param $repository
+ *   The repository array which is being passed by reference so that it can be
+ *   written to.
+ * @param $form
+ *   The form array of the submitted repository edit/add form, with
+ *   $form['#id'] == 'versioncontrol-repository-form' (amongst others).
+ * @param $form_state
+ *   The form state of the submitted repository edit/add form.
+ *   If you altered this form and added an additional form element then
+ *   $form_state['values'] will also contain the value of this form element.
  *
  * @ingroup Repositories
  * @ingroup Form handling
  * @ingroup Target audience: All modules with repository specific settings
  */
-function hook_versioncontrol_extract_repository_data($form_values) {
+function hook_versioncontrol_repository_submit(&$repository, $form, $form_state) {
   // The user can specify multiple repository ponies, separated by whitespace.
   // So, split the string up into an array of ponies.
-  $ponies = trim($form_values['mymodule_ponies']);
+  $ponies = trim($form_state['values']['mymodule_ponies']);
   $ponies = empty($ponies) ? array() : explode(' ', $ponies);
-
-  return array(
-    'mymodule' => array(
-      'ponies' => $ponies,
-    ),
-  );
+  $repository['mymodule']['ponies'] = $ponies;
 }
 
 /**
@@ -322,7 +320,7 @@ function hook_versioncontrol_extract_repository_data($form_values) {
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
  *   - '???': Any other additions that modules added by implementing
- *        versioncontrol_extract_repository_data().
+ *        hook_versioncontrol_repository_submit().
  *
  * @ingroup Repositories
  * @ingroup Database change notification
@@ -484,18 +482,21 @@ function hook_versioncontrol_filter_accounts(&$accounts) {
 
 
 /**
- * Extract account data from the account editing/creating form's submitted
- * values. This data will be passed to hook_versioncontrol_account()
- * as part of the $additional_data parameter.
+ * Extract account data from the account  form's submitted
+ * values, and add it to the @p $additional_data array. Later, that array
+ * will be passed to hook_versioncontrol_account() as part of the account
+ * insert/update procedure.
  *
- * @param $form_values
- *   The form values that were submitted in the account editing/creating form.
- *   If you altered this form ($form['#id'] == 'versioncontrol-account-form')
- *   and added an additional form element then this parameter will also contain
- *   the value of this form element.
- *
- * @return
- *   An array of elements that will be merged into the $additional_data array.
+ * @param $additional_data
+ *   The additional account data array which is being passed by reference so
+ *   that it can be written to.
+ * @param $form
+ *   The form array of the submitted account edit/register form, with
+ *   $form['#id'] == 'versioncontrol-account-form' (amongst others).
+ * @param $form_state
+ *   The form state of the submitted account edit/register form.
+ *   If you altered this form and added an additional form element then
+ *   $form_state['values'] will also contain the value of this form element.
  *
  * @ingroup Accounts
  * @ingroup Form handling
@@ -503,15 +504,11 @@ function hook_versioncontrol_filter_accounts(&$accounts) {
  * @ingroup Target audience: Authorization control modules
  * @ingroup Target audience: All modules with account specific settings
  */
-function hook_versioncontrol_extract_account_data($form_values) {
-  if (empty($form_values['mymodule_karma'])) {
-    return array();
+function hook_versioncontrol_account_submit(&$additional_data, $form, $form_state) {
+  if (empty($form_state['values']['mymodule_karma'])) {
+    return;
   }
-  return array(
-    'mymodule' => array(
-      'karma' => $form_values['mymodule_karma'],
-    ),
-  );
+  $additional_data['mymodule']['karma'] = $form_state['values']['mymodule_karma'];
 }
 
 /**
@@ -529,7 +526,7 @@ function hook_versioncontrol_extract_account_data($form_values) {
  *   The repository where the user has its VCS account.
  * @param $additional_data
  *   An array of additional author information. Modules can fill this array
- *   by implementing hook_versioncontrol_extract_account_data().
+ *   by implementing hook_versioncontrol_account_submit().
  *
  * @ingroup Accounts
  * @ingroup Form handling

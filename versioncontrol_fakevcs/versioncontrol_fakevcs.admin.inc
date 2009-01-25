@@ -33,10 +33,7 @@ function versioncontrol_fakevcs_form_alter(&$form, $form_state, $form_id) {
 function versioncontrol_fakevcs_repository_admin_form_alter(&$form, $form_state, $form_id) {
   $repository = $form['#repository'];
 
-  $form['versioncontrol_fakevcs'] = array(
-    '#type' => 'value',
-    '#value' => TRUE,
-  );
+  $form['#versioncontrol_fakevcs'] = TRUE;
 
   $form['repository_information']['root']['#description'] = t(
     'The location of the repository\'s root directory. Examples: /path or ssh+fakevcs://path.'
@@ -57,19 +54,17 @@ function versioncontrol_fakevcs_repository_admin_form_alter(&$form, $form_state,
 }
 
 /**
- * Implementation of hook_versioncontrol_extract_repository_data():
- * Extract FakeVCS specific repository additions from the repository
- * editing/adding form's submitted values.
+ * Implementation of hook_versioncontrol_repository_submit():
+ * Extract repository data from the repository editing/adding form's
+ * submitted values, and add it to the @p $repository array. Later, that array
+ * will be passed to hook_versioncontrol_repository() as part of the repository
+ * insert/update procedure.
  */
-function versioncontrol_fakevcs_versioncontrol_extract_repository_data($form_values) {
-  if (!isset($form_values['versioncontrol_fakevcs'])) {
-    return array();
+function versioncontrol_fakevcs_versioncontrol_repository_submit(&$repository, $form, $form_state) {
+  if (!isset($form['#versioncontrol_fakevcs'])) {
+    return;
   }
-  return array(
-    'fakevcs_specific' => array(
-      'update_method' => $form_values['update_method'],
-    ),
-  );
+  $repository['fakevcs_specific']['update_method'] = $form_state['values']['update_method'];
 }
 
 /**
@@ -120,10 +115,7 @@ function versioncontrol_fakevcs_versioncontrol_alter_repository_list($vcs, $repo
  * Add FakeVCS specific elements to the edit/register user account form.
  */
 function versioncontrol_fakevcs_account_form_alter(&$form, $form_state, $form_id) {
-  $form['versioncontrol_fakevcs'] = array(
-    '#type' => 'value',
-    '#value' => TRUE,
-  );
+  $form['#versioncontrol_fakevcs'] = TRUE;
 
   if (empty($form['original_username']['#value'])) { // creating the account
     $description = t('Choose a password to access the FakeCVS repository with.');
@@ -137,7 +129,7 @@ function versioncontrol_fakevcs_account_form_alter(&$form, $form_state, $form_id
     '#description' => $description,
     '#weight' => 10,
   );
-  $form['#validate'][] = 'versioncontrol_fakevcs_account_form_validate'];
+  $form['#validate'][] = 'versioncontrol_fakevcs_account_form_validate';
 }
 
 /**
@@ -153,17 +145,15 @@ function versioncontrol_fakevcs_account_form_validate($form, &$form_state) {
 }
 
 /**
- * Implementation of hook_versioncontrol_extract_account_data():
- * Extract FakeVCS specific user account additions (say: the password)
- * from the edit/register user account form's submitted values.
+ * Implementation of hook_versioncontrol_account_submit():
+ * Extract account data from the account edit/register form's submitted
+ * values, and add it to the @p $additional_data array. Later, that array
+ * will be passed to hook_versioncontrol_account() as part of the account
+ * insert/update procedure.
  */
-function versioncontrol_fakevcs_versioncontrol_extract_account_data($form_values) {
-  if (!isset($form_values['versioncontrol_fakevcs']) || empty($form_values['account_password'])) {
-    return array();
+function versioncontrol_fakevcs_versioncontrol_account_submit(&$additional_data, $form, $form_state) {
+  if (!isset($form['#versioncontrol_fakevcs']) || empty($form_state['values']['account_password'])) {
+    return;
   }
-  return array(
-    'fakevcs_specific' => array(
-      'password' => crypt($form_values['account_password']),
-    ),
-  );
+  $additional_data['fakevcs_specific']['password'] = crypt($form_state['values']['account_password']);
 }
