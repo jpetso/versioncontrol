@@ -414,7 +414,7 @@ function versioncontrol_admin_account_import_form(&$form_state) {
  * Only actually validates that the repo backend is correctly configured.
  */
 function versioncontrol_admin_account_import_form_validate($form, &$form_state) {
-  if (empty(versioncontrol_get_repository($form_state['values']['repo_id']))) {
+  if (is_null(versioncontrol_get_repository($form_state['values']['repo_id']))) {
     form_error($form['data'], t('The selected repository could not be found.'));
   }
 }
