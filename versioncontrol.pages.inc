@@ -271,7 +271,7 @@ function versioncontrol_account_page($accounts, $url_repo_id = NULL, $url_userna
 
       foreach ($usernames as $key => $username) {
         if (isset($url_username) && $username != $url_username) {
-          unset($accounts[$uid][$repo_id][$key]);
+          unset($accounts[$uid][$repo_id]);
           continue; // disregard usernames that don't match the URL constraints
         }
         $any_repo_id = $repo_id;
@@ -535,7 +535,7 @@ function versioncontrol_account_edit_form_submit($form, &$form_state) {
   foreach (module_implements('versioncontrol_account_submit') as $module) {
     $function = $module .'_versioncontrol_account_submit';
     $function($additional_data, $form, $form_state);
-  );
+  }
 
   if (empty($form['#original_username'])) {
     versioncontrol_insert_account($repository, $uid, $username, $additional_data);
