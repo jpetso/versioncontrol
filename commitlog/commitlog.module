@@ -711,7 +711,7 @@ function theme_commitlog_operation_location($operation, $operation_items, $direc
 }
 
 function theme_commitlog_revision_identifier($operation, $format = 'html') {
-  $id = versioncontrol_format_revision_identifier($operation, 'short');
+  $id = versioncontrol_format_operation_revision_identifier($operation, 'short');
 
   if ($format == 'html') {
     if ($operation['type'] == VERSIONCONTROL_OPERATION_COMMIT) {
@@ -1098,7 +1098,7 @@ function theme_commitlog_item($repository, $item, $path_override = NULL, $format
 }
 
 function theme_commitlog_item_revision($repository, $item, $format = 'html') {
-  $revision = versioncontrol_format_item_revision($repository, $item, 'short');
+  $revision = versioncontrol_format_item_revision_identifier($repository, $item, 'short');
 
   if ($format == 'html' && !empty($revision)) {
     $view_url = versioncontrol_get_url_item_view($repository, $item);

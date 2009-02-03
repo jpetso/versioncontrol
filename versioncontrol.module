@@ -2577,7 +2577,7 @@ function _versioncontrol_get_repository_urls($repository) {
  *   If the commit identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_format_revision_identifier($operation, $format = 'full') {
+function versioncontrol_format_operation_revision_identifier($operation, $format = 'full') {
   if (empty($operation['revision'])) {
     return '#'. $operation['vc_op_id'];
   }
@@ -2607,7 +2607,7 @@ function versioncontrol_format_revision_identifier($operation, $format = 'full')
  *   If the revision identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_format_item_revision($repository, $item, $format = 'full') {
+function versioncontrol_format_item_revision_identifier($repository, $item, $format = 'full') {
   $vcs = $repository['vcs'];
   if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
     return _versioncontrol_call_backend(
