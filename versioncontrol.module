@@ -2941,7 +2941,7 @@ function versioncontrol_get_common_directory_path($items) {
   }
   $paths = _versioncontrol_get_item_paths($items);
 
-  $dirparts = explode('/', dirname(array_pop($paths)));
+  $dirparts = explode('/', dirname(array_shift($paths)));
 
   foreach ($paths as $path) {
     $new_dirparts = array();
@@ -2951,6 +2951,9 @@ function versioncontrol_get_common_directory_path($items) {
     for ($i = 0; $i < $mincount; $i++) {
       if ($dirparts[$i] == $current_dirparts[$i]) {
         $new_dirparts[] = $dirparts[$i];
+      }
+      else {
+        break;
       }
     }
     $dirparts = $new_dirparts;
