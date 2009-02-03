@@ -2584,10 +2584,37 @@ function versioncontrol_format_revision_identifier($operation, $format = 'full')
   $vcs = $operation['repository']['vcs'];
   if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
     return _versioncontrol_call_backend(
-      $vcs, 'format_revision_identifier', array($operation, $format)
+      $vcs, 'format_revision_identifier', array($operation['revision'], $format)
     );
   }
   return $operation['revision'];
+}
+
+/**
+ * Get the user-visible version of an item's revision identifier, as plaintext.
+ * By default, this function simply returns $item['revision'].
+ *
+ * Version control backends can, however, choose to implement their own version
+ * of this function, which for example makes it possible to cut the SHA-1 hash
+ * in distributed version control systems down to a readable length.
+ *
+ * @param $repository
+ *   The repository that the item is located in.
+ * @param $item
+ *   The item whose revision identifier should be themed.
+ * @param $format
+ *   Either 'full' for the original version, or 'short' for a more compact form.
+ *   If the revision identifier doesn't need to be shortened, the results can
+ *   be the same for both versions.
+ */
+function versioncontrol_format_item_revision($repository, $item, $format = 'full') {
+  $vcs = $repository['vcs'];
+  if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
+    return _versioncontrol_call_backend(
+      $vcs, 'format_revision_identifier', array($item['revision'], $format)
+    );
+  }
+  return $item['revision'];
 }
 
 
@@ -2757,32 +2784,6 @@ function versioncontrol_get_parallel_items($repository, $item, $label_type = NUL
                                             : $result['selected_label'];
   }
   return $items;
-}
-
-/**
- * Get the user-visible version of an item's revision identifier, as plaintext.
- * By default, this function simply returns $item['revision'].
- *
- * Version control backends can, however, choose to implement their own version
- * of this function, which for example makes it possible to cut the SHA-1 hash
- * in distributed version control systems down to a readable length.
- *
- * @param $repository
- *   The repository that the item is located in.
- * @param $item
- *   The item whose revision identifier should be themed.
- * @param $format
- *   Either 'full' for the original version, or 'short' for a more compact form.
- *   If the revision identifier doesn't need to be shortened, the results can
- *   be the same for both versions.
- */
-function versioncontrol_format_item_revision($repository, $item, $format = 'short') {
-  if ($format == 'short' && versioncontrol_backend_implements($repository['vcs'], 'format_short_revision_identifier')) {
-    return _versioncontrol_call_backend(
-      $repository['vcs'], 'format_short_revision_identifier', array($item['revision'])
-    );
-  }
-  return $item['revision'];
 }
 
 

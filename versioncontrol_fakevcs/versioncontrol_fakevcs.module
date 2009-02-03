@@ -145,26 +145,26 @@ function versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_spec
  * function, which for example makes it possible to cut the SHA-1 hash in
  * distributed version control systems down to a readable length.
  *
- * @param $operation
- *   The operation whose commit identifier should be themed.
+ * @param $revision
+ *   The commit identifier that should be themed.
  * @param $format
  *   Either 'full' for the original version, or 'short' for a more compact form.
  *   If the commit identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_fakevcs_format_revision_identifier($operation, $format = 'full') {
+function versioncontrol_fakevcs_format_revision_identifier($revision, $format = 'full') {
   switch ($format) {
     case 'full':
     case 'short':
     default:
       // Suppose we're a distributed VCS backend and have an SHA-1 hash:
-      // $operation['revision'] == '30581e4ec3347d1294ec05a91eec1a8588e5993c'
+      // $revision == '30581e4ec3347d1294ec05a91eec1a8588e5993c'
       // Let's return only the first 12 characters of the revision identifier,
       // like Mercurial (including hgweb) does by default.
-      return substr($operation['revision'], 0, 12);
+      return substr($revision, 0, 12);
 
       // SVN also wants to format revisions in a slightly custom way:
-      return 'r'. $operation['revision'];
+      return 'r'. $revision;
   }
 }
 
