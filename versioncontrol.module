@@ -2562,6 +2562,33 @@ function _versioncontrol_get_repository_urls($repository) {
 
 
 /**
+ * Get the user-visible version of a revision identifier (for an operation or
+ * an item), as plaintext. By default, this function simply returns $revision.
+ *
+ * Version control backends can, however, choose to implement their own version
+ * of this function, which for example makes it possible to cut the SHA-1 hash
+ * in distributed version control systems down to a readable length.
+ *
+ * @param $vcs
+ *   The unique string identifier of the version control system.
+ * @param $revision
+ *   The unformatted revision, as given in $operation['revision']
+ *   or $item['revision'] (or the respective table columns for those values).
+ * @param $format
+ *   Either 'full' for the original version, or 'short' for a more compact form.
+ *   If the revision identifier doesn't need to be shortened, the results can
+ *   be the same for both versions.
+ */
+function versioncontrol_format_revision_identifier($vcs, $revision, $format = 'full') {
+  if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
+    return _versioncontrol_call_backend(
+      $vcs, 'format_revision_identifier', array($revision, $format)
+    );
+  }
+  return $revision;
+}
+
+/**
  * Get the user-visible version of a commit identifier a.k.a. 'revision',
  * as plaintext. By default, this function returns the operation's revision
  * if that property exists, or its vc_op_id identifier as fallback.
@@ -2582,12 +2609,7 @@ function versioncontrol_format_operation_revision_identifier($operation, $format
     return '#'. $operation['vc_op_id'];
   }
   $vcs = $operation['repository']['vcs'];
-  if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
-    return _versioncontrol_call_backend(
-      $vcs, 'format_revision_identifier', array($operation['revision'], $format)
-    );
-  }
-  return $operation['revision'];
+  return versioncontrol_format_revision_identifier($vcs, $operation['revision']);
 }
 
 /**
@@ -2608,13 +2630,7 @@ function versioncontrol_format_operation_revision_identifier($operation, $format
  *   be the same for both versions.
  */
 function versioncontrol_format_item_revision_identifier($repository, $item, $format = 'full') {
-  $vcs = $repository['vcs'];
-  if (versioncontrol_backend_implements($vcs, 'format_revision_identifier')) {
-    return _versioncontrol_call_backend(
-      $vcs, 'format_revision_identifier', array($item['revision'], $format)
-    );
-  }
-  return $item['revision'];
+  return versioncontrol_format_revision_identifier($repository['vcs'], $item['revision']);
 }
 
 
