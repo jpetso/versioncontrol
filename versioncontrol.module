@@ -279,7 +279,7 @@ function versioncontrol_menu() {
   // Autocomplete callback for Drupal usernames that have access to
   // the repo_id given in arg(3). (No need to fetch the full repository,
   // as the callback uses a raw & safe database query anyways.)
-  $items['versioncontrol/user/autocomplete/%/%'] = array(
+  $items['versioncontrol/user/autocomplete'] = array(
     'title' => 'Version control user autocomplete',
     'page callback' => 'versioncontrol_user_autocomplete',
     'access callback' => 'versioncontrol_user_access',
@@ -3268,9 +3268,10 @@ function versioncontrol_block($op = 'list', $delta = 0) {
  * the given repository, formatted to be suitable for use with
  * JS autocomplete fields.
  */
-function versioncontrol_user_autocomplete($repo_id, $string) {
+function versioncontrol_user_autocomplete($repo_id, $string = '') {
   if (!is_numeric($repo_id) || empty($string)) {
-    return drupal_to_js(array());
+    drupal_json(array());
+    return;
   }
   $matches = array();
   $result = db_query_range("SELECT u.uid, u.name
@@ -3289,8 +3290,7 @@ function versioncontrol_user_autocomplete($repo_id, $string) {
       $matches[$user->name] = check_plain($user->name);
     }
   }
-  print drupal_to_js($matches);
-  exit();
+  drupal_json($matches);
 }
 
 
