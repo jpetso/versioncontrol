@@ -405,10 +405,10 @@ function _commitlog_query_attributes($constraints) {
         $values = array($values);
       }
       if (isset($constraint_request_map[$key]['single']) && count($values) == 1) {
-        $query_items[] = $constraint_request_map[$key]['single'] .'='. (string) reset($values);
+        $query_items[$constraint_request_map[$key]['single']] =  (string) reset($values);
       }
       else {
-        $query_items[] = $constraint_request_map[$key]['multiple'] .'='. implode(',', $values);
+        $query_items[$constraint_request_map[$key]['multiple']] =  implode(',', $values);
       }
     }
   }
