@@ -247,6 +247,7 @@ function versioncontrol_menu() {
       $items['admin/project/versioncontrol-accounts/export/%versioncontrol_repository'] = array(
         'title' => 'Export',
         'page callback' => 'versioncontrol_admin_account_export_page',
+        'page arguments' => array(4),
         'type' => MENU_CALLBACK,
       ) + $admin;
     }
