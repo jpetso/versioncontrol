@@ -302,7 +302,7 @@ function commitlog_account_tracker($user) {
   drupal_set_title($user->name);
 
   $constraints = _commitlog_get_constraints();
-  $constraints['uids'] = array($uid);
+  $constraints['uids'] = array($user->uid);
 
   return commitlog_operations($constraints);
 }
