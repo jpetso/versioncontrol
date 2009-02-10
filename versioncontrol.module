@@ -3013,6 +3013,19 @@ function versioncontrol_preg_item_match($path_regexp, $item) {
   return preg_match($path_regexp, $path);
 }
 
+/**
+ * Return TRUE if @p $parent_path is a parent directory path of @p $child_path.
+ */
+function versioncontrol_path_contains($parent_path, $child_path) {
+  if ($parent_path == $child_path) {
+    return TRUE;
+  }
+  if ($parent_path != '/') {
+    $parent_path .= '/';
+  }
+  return (strpos($child_path, $parent_path) === 0);
+}
+
 
 /**
  * Return a the username of a VCS account.
@@ -3230,6 +3243,7 @@ function versioncontrol_get_user_statistics($constraints, $order = 'by_date', $l
 function versioncontrol_block($op = 'list', $delta = 0) {
   if ($op == 'list') {
     $blocks[0]['info'] = t('Most active developers');
+    $blocks[0]['cache'] = BLOCK_NO_CACHE;
     return $blocks;
   }
   else if ($op == 'view') {
