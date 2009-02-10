@@ -889,12 +889,19 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
   $directory_item = _commitlog_affected_directory_item($operation, $operation_items);
 
   if (module_exists('versioncontrol_project')) {
-    $project = versioncontrol_project_get_project_for_item($operation['repository'], $directory_item['path']);
-    if (isset($project)) {
-      $directory_item = versioncontrol_get_parent_item(
-        $operation['repository'], $directory_item, $project['directory']
-      );
-      $project_string = theme('commitlog_project', $operation['repository'], $project, $format);
+    $op_projects = versioncontrol_project_get_projects(array(
+      'vc_op_ids' => array($operation['vc_op_id']),
+    ));
+    if (count($op_projects) == 1) {
+      $project = reset($op_projects);
+
+      if ($project['repo_id'] == $operation['repo_id']
+          && versioncontrol_path_contains($project['directory'], $directory_item['path'])) {
+        $directory_item = versioncontrol_get_parent_item(
+          $operation['repository'], $directory_item, $project['directory']
+        );
+        $project_string = theme('commitlog_project', $operation['repository'], $project, $format);
+      }
     }
   }
 
@@ -904,21 +911,22 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     if (module_exists('versioncontrol_project')) {
       // If all our items belong to the same project, don't try to find out
       // the project for this specific item.
-      if (isset($project)) {
+      if (isset($project_string)) {
         $item_project = NULL;
       }
       else {
-        $item_project = versioncontrol_project_get_project_for_item(
-          $operation['repository'], $item
-        );
+        $item_projects = versioncontrol_project_get_projects(array(
+          'item_revision_ids' => array($item['item_revision_id']),
+        ));
+        $item_project = empty($item_projects) ? NULL : reset($item_projects);
       }
     }
 
     // Determine how the item path should be displayed.
-    $offset = ($directory_item['path'] == '/') ? 0 : 1;
-    $item_path = drupal_substr(
-      $item['path'], drupal_strlen($directory_item['path']) + $offset
-    );
+    $item_path = ($directory_item['path'] == '/')
+      ? $item['path']
+      : drupal_substr($item['path'], drupal_strlen($directory_item['path']) + 1);
+
     if ($item['type'] == VERSIONCONTROL_ITEM_DIRECTORY) {
       $item_path = t('!path [directory]', array('!path' => $item_path));
     }
@@ -933,9 +941,10 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
 
       $olditems = array();
       foreach ($item['source_items'] as $source_item) {
-        $item_path = drupal_substr(
-          $source_item['path'], drupal_strlen($directory_item['path']) + $offset
-        );
+        $item_path = ($directory_item['path'] == '/')
+          ? $source_item['path']
+          : drupal_substr($source_item['path'], drupal_strlen($directory_item['path']) + 1);
+
         $olditems[] = theme('commitlog_item', $operation['repository'], $source_item, $item_path, $format);
       }
       $olditems_string = implode(', ', $olditems);
@@ -1001,17 +1010,16 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     }
 
     if ($format == 'html' && isset($item_project)) {
-      $project_string = isset($project_string)
-        ? $project_string
-        : theme('commitlog_project', $operation['repository'], $item_project, $format);
+      $item_project_string = theme('commitlog_project',
+        $operation['repository'], $item_project, $format
+      );
       $action_string = t('!project: !action', array(
-        '!project' => $project_string,
+        '!project' => $item_project_string,
         '!action' => $action_string,
       ));
     }
 
     $lines[] = strtr($action_string, array(
-      '!project'  => $project_string,
       '!item'     => $item_string,
       '!path'     => $item_path,
       '!oldrev'   => $oldrev_string,
@@ -1022,7 +1030,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
 
   $location = theme('commitlog_operation_location', $operation, $operation_items, $directory_item, $format);
 
-  if (isset($project)) {
+  if (isset($project_string)) {
     if ($format == 'html') {
       $location = '<span title="'. check_plain($project['directory']) .'">'.
                   $project_string .'</span>';
