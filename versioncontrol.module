@@ -56,6 +56,12 @@ define('VERSIONCONTROL_ACTION_OTHER',    8); // for example, SVN revprop-only ch
 define('VERSIONCONTROL_OPERATION_MEMBER_ITEM',          1);
 define('VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM', 2);
 
+// Allowed values for the 'cardinality' key in  constraint descriptions
+// provided by hook_versioncontrol_operation_constraint_info().
+define('VERSIONCONTROL_CONSTRAINT_MULTIPLE',           1); // default
+define('VERSIONCONTROL_CONSTRAINT_SINGLE',             2);
+define('VERSIONCONTROL_CONSTRAINT_SINGLE_OR_MULTIPLE', 3);
+
 // Used internally by the repository and account admin pages. Private constant.
 define('VERSIONCONTROL_FORM_CREATE', FALSE);
 
@@ -948,30 +954,43 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *   an empty array is returned.
  */
 function versioncontrol_get_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
-  // Interim measure until we allow altering the database query itself:
   // Let modules alter the query by transforming custom constraints into
   // stuff that Version Control API can understand.
-  // TODO: let modules alter the SQL query - say, versioncontrol_project should
-  //       be able to introduce a constraint for project node ids and filter
-  //       by joining with {versioncontrol_project_operations}.
-  //       Also see issue http://drupal.org/node/216373
-  foreach (module_implements('alter_operation_constraints') as $module) {
-    $function = $module .'_alter_operation_constraints';
-    $function($constraints);
+  drupal_alter('versioncontrol_operation_constraints', $constraints);
+
+  // Construct the actual query, and let other modules provide "native"
+  // custom constraints as well.
+  $tables = array(
+    'versioncontrol_operations' => array('alias' => 'op'),
+    'versioncontrol_repositories' => array(
+      'alias' => 'r',
+      'join_on' => 'op.repo_id = r.repo_id',
+    ),
+  );
+  $and_constraints = array();
+  $params = array();
+  $valid_constraints = _versioncontrol_construct_operation_query(
+    $constraints, $tables, $and_constraints, $params
+  );
+  if (!$valid_constraints) {
+    return array();
   }
 
-  list($and_constraints, $params, $joins) =
-    _versioncontrol_construct_operation_constraints($constraints);
+  $from = array();
+  foreach ($tables as $table_name => $table_info) {
+    $table_string = '{'. $table_name .'} '. $table_info['alias'];
+    if (isset($table_info['join_on'])) {
+      $table_string .= ' ON '. $table_info['join_on'] .' ';
+    }
+    $from[] = $table_string;
+  }
+  $from = 'FROM '. implode(' INNER JOIN ', $from);
 
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
-  $result = db_query('SELECT op.vc_op_id, op.type, op.date, op.uid, op.username,
-                             op.message, op.revision, r.repo_id, r.vcs
-                      FROM {versioncontrol_operations} op
-                       INNER JOIN {versioncontrol_repositories} r
-                        ON op.repo_id = r.repo_id
-                      '. $joins .'
-                      '. $where .'
+  $result = db_query('SELECT DISTINCT(op.vc_op_id), op.type, op.date, op.uid,
+                        op.username, op.message, op.revision, r.repo_id, r.vcs
+                      '. $from . $where .'
                       ORDER BY op.date DESC, op.vc_op_id DESC', $params);
 
   $ops = array();
@@ -980,11 +999,6 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
   $repo_ids = array();
 
   while ($row = db_fetch_object($result)) {
-    // Skip duplicates resulting from table joins.
-    if (isset($ops[$row->vc_op_id])) {
-      continue;
-    }
-
     // Remember which repositories and backends are being used for the
     // results of this query.
     if (!in_array($row->repo_id, $repo_ids)) {
@@ -1047,17 +1061,106 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
 }
 
 /**
- * Assemble a list of query constraints given as string array that's
- * supposed to be imploded with an SQL "AND", a $params array containing
- * the corresponding parameter values for all the '%d' and '%s' placeholders,
- * and a $joins string that contains additional table join statements
- * necessary for some of the queries.
+ * Assemble a list of query constraints from the given $constraints array.
+ * The @p $tables, @p $and_constraints and @p $params arguments are altered
+ * to contain all necessary tables (table name as key, along with 'alias'
+ * and 'join_on' elements for each table), the list of WHERE constraints that
+ * is supposed to be imploded with an SQL "AND", and the list of parameter
+ * values for all the '%d' and '%s' placeholders.
+ *
+ * @return
+ *   FALSE if the constraints were invalid or will return an empty result set
+ *   anyways. TRUE otherwise.
  */
-function _versioncontrol_construct_operation_constraints($constraints, $operations_table_alias = 'op', $repository_table_alias = 'r') {
-  $and_constraints = array();
-  $params = array();
-  $joins = array();
+function _versioncontrol_construct_operation_query($constraints, &$tables, &$and_constraints, &$params) {
+  $constraint_info = _versioncontrol_operation_constraint_info();
 
+  foreach ($constraints as $key => $constraint_value) {
+    if (!isset($constraint_info[$key])) {
+      return FALSE; // No such constraint -> empty result.
+    }
+
+    // Standardization: put everything into an array if it isn't already.
+    if ($constraint_info[$key]['cardinality'] == VERSIONCONTROL_CONSTRAINT_SINGLE) {
+      $constraints[$key] = array($constraints[$key]);
+    }
+    elseif ($constraint_info[$key]['cardinality'] == VERSIONCONTROL_CONSTRAINT_SINGLE_OR_MULTIPLE && !is_array($constraint_value)) {
+      $constraints[$key] = array($constraints[$key]);
+    }
+
+    if (empty($constraints[$key])) {
+      return FALSE; // Empty set of constraint options -> empty result.
+    }
+    // Single-value constraints get the originally provided constraint value.
+    // All others get the multiple-value constraint array.
+    if ($constraint_info[$key]['cardinality'] == VERSIONCONTROL_CONSTRAINT_SINGLE) {
+      $constraints[$key] = reset($constraints[$key]);
+    }
+
+    $function = $constraint_info[$key]['callback'];
+    $function($constraints[$key], $tables, $and_constraints, $params);
+  }
+  return TRUE;
+}
+
+/**
+ * Gather a list of all possible operation constraints.
+ * Each constraint is identified by its key which denotes the array key within
+ * the $constraints parameter that is given to versioncontrol_get_operations().
+ * The array value of each element is a description array containing the
+ * elements 'callback' and 'cardinality'.
+ */
+function _versioncontrol_operation_constraint_info() {
+  static $constraint_info = array();
+
+  if (empty($constraint_info)) {
+    foreach (module_implements('versioncontrol_operation_constraint_info') as $module) {
+      $function = $module .'_versioncontrol_operation_constraint_info';
+      $constraints = $function();
+
+      foreach ($constraints as $key => $info) {
+        $constraint_info[$key] = $info;
+        if (!isset($info['callback'])) {
+          $constraint_info[$key]['callback'] = $module .'_operation_constraint_'. $key;
+        }
+        if (!isset($info['cardinality'])) {
+          $constraint_info[$key]['cardinality'] = VERSIONCONTROL_CONSTRAINT_MULTIPLE;
+        }
+      }
+    }
+  }
+  return $constraint_info;
+}
+
+/**
+ * Implementation of hook_versioncontrol_operation_constraint_info().
+ */
+function versioncontrol_versioncontrol_operation_constraint_info() {
+  return array(
+    'vcs' => array(),
+    'vc_op_ids' => array(),
+    'revisions' => array(),
+    'repo_ids' => array(),
+    'date_lower' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE),
+    'date_upper' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE),
+    'uids' => array(),
+    'usernames' => array(),
+    'message' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE_OR_MULTIPLE),
+    'item_revision_ids' => array(),
+    'item_revisions' => array(),
+    'paths' => array(),
+    'labels' => array(),
+    'tags' => array(),
+    'branches' => array(),
+    'types' => array(),
+  );
+}
+
+/**
+ * Implementation of hook_versioncontrol_operation_constraints_alter():
+ * Include only operations for enabled backends in the query.
+ */
+function versioncontrol_versioncontrol_operation_constraints_alter($constraints) {
   // Filter out entries of which the corresponding backend is not enabled,
   // and handle the 'vcs' constraint at the same time.
   $backends = versioncontrol_get_backends();
@@ -1066,344 +1169,302 @@ function _versioncontrol_construct_operation_constraints($constraints, $operatio
   if (isset($constraints['vcs'])) {
     $vcses = array_intersect($vcses, $constraints['vcs']);
   }
-  if (empty($vcses)) {
-    // No backends are enabled of those that have been requested.
-    return _versioncontrol_false_constraint();
+  $constraints['vcs'] = $vcses;
+}
+
+/**
+ * Filter operations by their associated backend.
+ */
+function versioncontrol_operation_constraint_vcs($constraint, &$tables, &$and_constraints, &$params) {
+  $placeholders = array();
+  foreach ($constraint as $vcs) {
+    $placeholders[] = "'%s'";
+    $params[] = $vcs;
   }
-  else {
+  $and_constraints[] = $tables['versioncontrol_repositories']['alias'] .'.vcs
+                        IN ('. implode(',', $placeholders) .')';
+}
+
+/**
+ * Filter operations by their version control operation id.
+ */
+function versioncontrol_operation_constraint_vc_op_ids($constraint, &$tables, &$and_constraints, &$params) {
+  $placeholders = array();
+  foreach ($constraint as $vc_op_id) {
+    $placeholders[] = '%d';
+    $params[] = $vc_op_id;
+  }
+  $and_constraints[] = $tables['versioncontrol_operations']['alias'] .'.vc_op_id
+                        IN ('. implode(',', $placeholders) .')';
+}
+
+/**
+ * Filter operations by their revision identifier.
+ */
+function versioncontrol_operation_constraint_revisions($constraint, &$tables, &$and_constraints, &$params) {
+  $placeholders = array();
+  foreach ($constraint as $revision) {
+    $placeholders[] = "'%s'";
+    $params[] = $revision;
+  }
+  $and_constraints[] = $tables['versioncontrol_operations']['alias'] .'.revision
+                        IN ('. implode(',', $placeholders) .')';
+}
+
+/**
+ * Filter operations by their repository id.
+ */
+function versioncontrol_operation_constraint_repo_ids($constraint, &$tables, &$and_constraints, &$params) {
+  $placeholders = array();
+  foreach ($constraint as $repo_id) {
+    $placeholders[] = '%d';
+    $params[] = $repo_id;
+  }
+  $and_constraints[] = $tables['versioncontrol_repositories']['alias'] .'.repo_id
+                        IN ('. implode(',', $placeholders) .')';
+}
+
+/**
+ * Filter operations by a lower date bound.
+ */
+function versioncontrol_operation_constraint_date_lower($constraint, &$tables, &$and_constraints, &$params) {
+  $and_constraints[] = '('. $tables['versioncontrol_operations']['alias'] .'.date >= %d)';
+  $params[] = $constraint;
+}
+
+/**
+ * Filter operations by an upper date bound.
+ */
+function versioncontrol_operation_constraint_date_upper($constraint, &$tables, &$and_constraints, &$params) {
+  $and_constraints[] = '('. $tables['versioncontrol_operations']['alias'] .'.date <= %d)';
+  $params[] = $constraint;
+}
+
+/**
+ * Filter operations by their associated Drupal user id.
+ */
+function versioncontrol_operation_constraint_uids($constraint, &$tables, &$and_constraints, &$params) {
+  $placeholders = array();
+  foreach ($constraint as $uid) {
+    $placeholders[] = '%d';
+    $params[] = $uid;
+  }
+  $and_constraints[] = $tables['versioncontrol_operations']['alias'] .'.uid
+                        IN ('. implode(',', $placeholders) .')';
+}
+
+/**
+ * Filter operations by the VCS username of the operation author.
+ */
+function versioncontrol_operation_constraint_usernames($constraint, &$tables, &$and_constraints, &$params) {
+  $placeholders = array();
+  foreach ($constraint as $username) {
+    $placeholders[] = "'%s'";
+    $params[] = $username;
+  }
+  $and_constraints[] = $tables['versioncontrol_operations']['alias'] .'.username
+                        IN ('. implode(',', $placeholders) .')';
+}
+
+/**
+ * Filter operations by their log message.
+ */
+function versioncontrol_operation_constraint_message($constraint, &$tables, &$and_constraints, &$params) {
+  $or_constraints = array();
+  foreach ($constraint as $message_part) {
+    $or_constraints[] = $tables['versioncontrol_operations']['alias'] .".message LIKE '%s'";
+    $params[] = '%'. $message_part .'%';
+  }
+  $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+}
+
+/**
+ * Filter operations by item_revision_ids of associated items.
+ */
+function versioncontrol_operation_constraint_item_revision_ids($constraint, &$tables, &$and_constraints, &$params) {
+  versioncontrol_add_item_joins($tables, FALSE);
+  $or_constraints = array();
+
+  $placeholders = array();
+  foreach ($constraint as $item_revision_id) {
+    $placeholders[] = '%d';
+    $params[] = $item_revision_id;
+  }
+  $and_constraints[] = $tables['versioncontrol_operation_items']['alias'] .'.item_revision_id
+                        IN ('. implode(',', $placeholders) .')';
+
+  // Exact search for target items, no fuzzy source item path results.
+  $params[] = VERSIONCONTROL_OPERATION_MEMBER_ITEM;
+  $and_constraints[] = $tables['versioncontrol_operation_items']['alias'] .'.type = %d';
+}
+
+/**
+ * Filter operations by revision identifiers of associated items.
+ */
+function versioncontrol_operation_constraint_item_revisions($constraint, &$tables, &$and_constraints, &$params) {
+  versioncontrol_add_item_joins($tables);
+  $or_constraints = array();
+
+  $placeholders = array();
+  foreach ($constraint as $revision) {
+    $placeholders[] = "'%s'";
+    $params[] = $revision;
+  }
+  $and_constraints[] = $tables['versioncontrol_item_revisions']['alias'] .'.revision IN ('. implode(',', $placeholders) .')';
+
+  // Exact search for target items, no fuzzy source item path results.
+  $params[] = VERSIONCONTROL_OPERATION_MEMBER_ITEM;
+  $and_constraints[] = $tables['versioncontrol_operation_items']['alias'] .'.type = %d';
+}
+
+/**
+ * Filter operations by item paths of associated items.
+ */
+function versioncontrol_operation_constraint_paths($constraint, &$tables, &$and_constraints, &$params) {
+  versioncontrol_add_item_joins($tables);
+  $or_constraints = array();
+
+  foreach ($constraint as $path) {
+    $current_path = $path;
     $placeholders = array();
-    foreach ($vcses as $vcs) {
+
+    // Both the given path and all its parent directories are included in the query.
+    while (TRUE) {
       $placeholders[] = "'%s'";
-      $params[] = $vcs;
-    }
-    $and_constraints[] = $repository_table_alias .'.vcs
-                         IN ('. implode(',', $placeholders) .')';
-  }
+      $params[] = $current_path;
 
-  // Filter by commit, branch or tag ids.
-  if (isset($constraints['vc_op_ids'])) {
-    if (empty($constraints['vc_op_ids'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      $placeholders = array();
-      foreach ($constraints['vc_op_ids'] as $op_id) {
-        $placeholders[] = '%d';
-        $params[] = $op_id;
+      if ($current_path == dirname($current_path)) {
+        break; // we reached the root directory, '/'
       }
-      $and_constraints[] = $operations_table_alias .'.vc_op_id
-                           IN ('. implode(',', $placeholders) .')';
+      $current_path = dirname($current_path);
     }
+    $or_constraints[] = $tables['versioncontrol_item_revisions']['alias'] .'.path IN ('. implode(',', $placeholders) .')';
+
+    // Also include any children paths of the given one
+    // (will only yield results for directory paths).
+    $or_constraints[] = $tables['versioncontrol_item_revisions']['alias'] .".path LIKE '%s'";
+    $params[] = $path . (($path[strlen($path)-1] == '/') ? '%' : '/%');
   }
-
-  // Filter by revision identifiers.
-  if (isset($constraints['revisions'])) {
-    if (empty($constraints['revisions'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      $placeholders = array();
-      foreach ($constraints['revisions'] as $revision) {
-        $placeholders[] = "'%s'";
-        $params[] = $revision;
-      }
-      $and_constraints[] = $operations_table_alias .'.revision
-                           IN ('. implode(',', $placeholders) .')';
-    }
-  }
-
-  // Filter by repository ids.
-  if (isset($constraints['repo_ids'])) {
-    if (empty($constraints['repo_ids'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      $placeholders = array();
-      foreach ($constraints['repo_ids'] as $repo_id) {
-        $placeholders[] = '%d';
-        $params[] = $repo_id;
-      }
-      $and_constraints[] = $repository_table_alias .'.repo_id
-                           IN ('. implode(',', $placeholders) .')';
-    }
-  }
-
-  // Filter by lower and/or upper date bounds.
-  if (isset($constraints['date_lower'])) {
-    $and_constraints[] = '('. $operations_table_alias .'.date >= %d)';
-    $params[] = $constraints['date_lower'];
-  }
-  if (isset($constraints['date_upper'])) {
-    $and_constraints[] = '('. $operations_table_alias .'.date <= %d)';
-    $params[] = $constraints['date_upper'];
-  }
-
-  // Filter by Drupal user ids.
-  if (isset($constraints['uids'])) {
-    if (empty($constraints['uids'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      $placeholders = array();
-      foreach ($constraints['uids'] as $uid) {
-        $placeholders[] = '%d';
-        $params[] = $uid;
-      }
-      $and_constraints[] = $operations_table_alias .'.uid
-                           IN ('. implode(',', $placeholders) .')';
-    }
-  }
-  // Filter by VCS specific user names.
-  if (isset($constraints['usernames'])) {
-    if (empty($constraints['usernames'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      $placeholders = array();
-      foreach ($constraints['usernames'] as $username) {
-        $placeholders[] = "'%s'";
-        $params[] = $username;
-      }
-      $and_constraints[] = $operations_table_alias .'.username
-                           IN ('. implode(',', $placeholders) .')';
-    }
-  }
-
-  // Filter by log message.
-  if (isset($constraints['message'])) {
-    if (empty($constraints['message']) && !is_string($constraints['message'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      // Allow both array and string formats, for convenience and compatibility.
-      if (!is_array($constraints['message'])) {
-        $constraints['message'] = array($constraints['message']);
-      }
-      $or_constraints = array();
-      foreach ($constraints['message'] as $message_part) {
-        $or_constraints[] = $operations_table_alias .".message LIKE '%s'";
-        $params[] = '%'. $message_part .'%';
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
-    }
-  }
-
-  // Filter by item revision ids.
-  if (isset($constraints['item_revision_ids'])) {
-    if (empty($constraints['item_revision_ids'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      _versioncontrol_add_item_joins($joins, FALSE);
-      $or_constraints = array();
-
-      $placeholders = array();
-      foreach ($constraints['item_revision_ids'] as $item_revision_id) {
-        $placeholders[] = '%d';
-        $params[] = $item_revision_id;
-      }
-      $and_constraints[] = 'opitem.item_revision_id
-                            IN ('. implode(',', $placeholders) .')';
-
-      // Exact search for target items, no fuzzy source item path results.
-      $params[] = VERSIONCONTROL_OPERATION_MEMBER_ITEM;
-      $and_constraints[] = 'opitem.type = %d';
-    }
-  }
-
-  // Filter by item revisions.
-  if (isset($constraints['item_revisions'])) {
-    if (empty($constraints['item_revisions'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      _versioncontrol_add_item_joins($joins);
-      $or_constraints = array();
-
-      $placeholders = array();
-      foreach ($constraints['item_revisions'] as $revision) {
-        $placeholders[] = "'%s'";
-        $params[] = $revision;
-      }
-      $and_constraints[] = 'ir.revision IN ('. implode(',', $placeholders) .')';
-
-      // Exact search for target items, no fuzzy source item path results.
-      $params[] = VERSIONCONTROL_OPERATION_MEMBER_ITEM;
-      $and_constraints[] = 'opitem.type = %d';
-    }
-  }
-
-  // Filter by item paths.
-  if (isset($constraints['paths'])) {
-    if (empty($constraints['paths'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      _versioncontrol_add_item_joins($joins);
-      $or_constraints = array();
-
-      foreach ($constraints['paths'] as $path) {
-        $current_path = $path;
-        $placeholders = array();
-
-        // Both the given path and all its parent directories are included
-        // in the query.
-        while (TRUE) {
-          $placeholders[] = "'%s'";
-          $params[] = $current_path;
-
-          if ($current_path == dirname($current_path)) {
-            break; // we reached the root directory, '/'
-          }
-          $current_path = dirname($current_path);
-        }
-        $or_constraints[] = 'ir.path IN ('. implode(',', $placeholders) .')';
-
-        // Also include any children paths of the given one
-        // (will only yield results for directory paths).
-        $or_constraints[] = "ir.path LIKE '%s'";
-        $params[] = $path . (($path[strlen($path)-1] == '/') ? '%' : '/%');
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
-    }
-  }
-
-  // Filter by generic label names (both branches and tags).
-  if (isset($constraints['labels'])) {
-    if (empty($constraints['labels'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      _versioncontrol_add_label_joins($joins);
-      $or_constraints = array();
-      foreach ($constraints['labels'] as $label_name) {
-        $or_constraints[] = "label.name = '%s'";
-        $params[] = $label_name;
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
-    }
-  }
-  // Filter by tag names.
-  if (isset($constraints['tags'])) {
-    if (empty($constraints['tags'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      _versioncontrol_add_label_joins($joins);
-      $or_constraints = array();
-      foreach ($constraints['tags'] as $label_name) {
-        $or_constraints[] = "label.name = '%s'";
-        $params[] = $label_name;
-      }
-      $and_constraints[] = '(('. implode(' OR ', $or_constraints) .') AND label.type = %d)';
-      $params[] = VERSIONCONTROL_OPERATION_TAG;
-    }
-  }
-  // Filter by branch names. (Applies to both branch operations and commits).
-  if (isset($constraints['branches'])) {
-    if (empty($constraints['branches'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      _versioncontrol_add_label_joins($joins);
-      $or_constraints = array();
-      foreach ($constraints['branches'] as $label_name) {
-        $or_constraints[] = "label.name = '%s'";
-        $params[] = $label_name;
-      }
-      $and_constraints[] = '(('. implode(' OR ', $or_constraints) .') AND label.type = %d)';
-      $params[] = VERSIONCONTROL_OPERATION_BRANCH;
-    }
-  }
-
-  // Filter by operation type. As noted in the API documentation for
-  // versioncontrol_get_operations(), this filter is kinda smart and also
-  // includes commits for version control systems like Subversion when
-  // a branch or tag is affected by that commit.
-  if (isset($constraints['types'])) {
-    if (empty($constraints['types'])) {
-      return _versioncontrol_false_constraint();
-    }
-    else {
-      $or_constraints = array();
-
-      if (in_array(VERSIONCONTROL_OPERATION_COMMIT, $constraints['types'])) {
-        $or_constraints[] = $operations_table_alias .'.type = %d';
-        $params[] = VERSIONCONTROL_OPERATION_COMMIT;
-      }
-      if (in_array(VERSIONCONTROL_OPERATION_BRANCH, $constraints['types'])) {
-        _versioncontrol_add_label_joins($joins);
-        $or_constraints[] = '(oplabel.action <> %d AND label.type = %d)';
-        $params[] = VERSIONCONTROL_OPERATION_BRANCH; // label.type
-        // oplabel.action is != normal commits, we don't want those:
-        $params[] = VERSIONCONTROL_ACTION_MODIFIED;
-      }
-      if (in_array(VERSIONCONTROL_OPERATION_TAG, $constraints['types'])) {
-        _versioncontrol_add_label_joins($joins);
-        $or_constraints[] = '(oplabel.action <> %d AND label.type = %d)';
-        $params[] = VERSIONCONTROL_OPERATION_TAG; // label.type
-        // oplabel.action is != normal commits, we don't want those:
-        $params[] = VERSIONCONTROL_ACTION_MODIFIED;
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
-    }
-  }
-
-  $join_string = ' ';
-  foreach ($joins as $table_name => $join) {
-    $join_string .= 'INNER JOIN {'. $table_name .'} '. $join['alias']
-                    .' ON '. $join['on'] .' ';
-  }
-
-  return array($and_constraints, $params, $join_string);
+  $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
 }
 
 /**
- * Return value of _versioncontrol_construct_operation_constraints()
- * in case a constraint can never be met.
+ * Filter operations by associated label names (both branches and tags).
  */
-function _versioncontrol_false_constraint() {
-  return array(array('FALSE'), array(), '');
+function versioncontrol_operation_constraint_labels($constraint, &$tables, &$and_constraints, &$params) {
+  versioncontrol_add_label_joins($tables);
+  $or_constraints = array();
+  foreach ($constraint as $label_name) {
+    $or_constraints[] = $tables['versioncontrol_labels']['alias'] .".name = '%s'";
+    $params[] = $label_name;
+  }
+  $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
 }
 
 /**
- * Take an existing $joins array and add the joins for
- * {versioncontrol_operation_labels} (alias 'oplabel') and
- * {versioncontrol_labels} (alias 'label'). Only meant to be used
- * within the _versioncontrol_construct_operation_constraints() function.
+ * Filter operations by associated tag names.
  */
-function _versioncontrol_add_label_joins(&$joins) {
-  if (!isset($joins['versioncontrol_operation_labels'])) {
-    $joins['versioncontrol_operation_labels'] = array(
+function versioncontrol_operation_constraint_tags($constraint, &$tables, &$and_constraints, &$params) {
+  versioncontrol_add_label_joins($tables);
+  $or_constraints = array();
+  foreach ($constraint as $label_name) {
+    $or_constraints[] = $tables['versioncontrol_labels']['alias'] .".name = '%s'";
+    $params[] = $label_name;
+  }
+  $and_constraints[] = '(('. implode(' OR ', $or_constraints) .') AND '.
+    $tables['versioncontrol_labels']['alias'] .'.type = %d)';
+  $params[] = VERSIONCONTROL_OPERATION_TAG;
+}
+
+/**
+ * Filter operations by associated branch names.
+ * (Applies to both branch operations and commits).
+ */
+function versioncontrol_operation_constraint_branches($constraint, &$tables, &$and_constraints, &$params) {
+  versioncontrol_add_label_joins($tables);
+  $or_constraints = array();
+  foreach ($constraint as $label_name) {
+    $or_constraints[] = $tables['versioncontrol_labels']['alias'] .".name = '%s'";
+    $params[] = $label_name;
+  }
+  $and_constraints[] = '(('. implode(' OR ', $or_constraints) .') AND '.
+    $tables['versioncontrol_labels']['alias'] .'.type = %d)';
+  $params[] = VERSIONCONTROL_OPERATION_BRANCH;
+}
+
+/**
+ * Filter operations by their operation type. As noted in the API documentation
+ * for versioncontrol_get_operations(), this filter is kinda smart and also
+ * includes commits for version control systems like Subversion when a branch
+ * or tag is affected by that commit.
+ */
+function versioncontrol_operation_constraint_types($constraint, &$tables, &$and_constraints, &$params) {
+  $or_constraints = array();
+
+  if (in_array(VERSIONCONTROL_OPERATION_COMMIT, $constraint)) {
+    $or_constraints[] = $tables['versioncontrol_operations']['alias'] .'.type = %d';
+    $params[] = VERSIONCONTROL_OPERATION_COMMIT;
+  }
+  if (in_array(VERSIONCONTROL_OPERATION_BRANCH, $constraint)) {
+    versioncontrol_add_label_joins($tables);
+    $or_constraints[] = '('.
+      $tables['versioncontrol_labels']['alias'] .'.type = %d AND '.
+      $tables['versioncontrol_operation_labels']['alias'] .'.action <> %d
+    )';
+    $params[] = VERSIONCONTROL_OPERATION_BRANCH; // label.type
+    // oplabel.action is != normal commits, we don't want those:
+    $params[] = VERSIONCONTROL_ACTION_MODIFIED;
+  }
+  if (in_array(VERSIONCONTROL_OPERATION_TAG, $constraint)) {
+    versioncontrol_add_label_joins($tables);
+    $or_constraints[] = '('.
+      $tables['versioncontrol_labels']['alias'] .'.type = %d AND '.
+      $tables['versioncontrol_operation_labels']['alias'] .'.action <> %d
+    )';
+    $params[] = VERSIONCONTROL_OPERATION_TAG; // label.type
+    // oplabel.action is != normal commits, we don't want those:
+    $params[] = VERSIONCONTROL_ACTION_MODIFIED;
+  }
+  $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+}
+
+/**
+ * Take an existing @p $tables array and add the table joins for
+ * {versioncontrol_operation_labels} and {versioncontrol_labels}.
+ * Only meant to be used within a constraint construction callback.
+ */
+function versioncontrol_add_label_joins(&$tables) {
+  if (!isset($tables['versioncontrol_operation_labels'])) {
+    $tables['versioncontrol_operation_labels'] = array(
       'alias' => 'oplabel',
-      'on' => 'op.vc_op_id = oplabel.vc_op_id',
+      'join_on' => $tables['versioncontrol_operations']['alias'] .'.vc_op_id = oplabel.vc_op_id',
     );
-    $joins['versioncontrol_labels'] = array(
+    $tables['versioncontrol_labels'] = array(
       'alias' => 'label',
-      'on' => 'oplabel.label_id = label.label_id',
+      'join_on' => 'oplabel.label_id = label.label_id',
     );
   }
 }
 
 /**
- * Take an existing $joins array and add the joins for
- * {versioncontrol_operation_items} (alias 'opitem') and
- * {versioncontrol_item_revisions} (alias 'ir'). The latter can be left out by
- * passing FALSE for the @p $join_item_revision_table parameter. Only meant to
- * be used within the _versioncontrol_construct_operation_constraints() function.
+ * Take an existing @p $tables array and add the table joins for
+ * {versioncontrol_operation_items} and {versioncontrol_item_revisions}.
+ * The latter can be left out by passing FALSE for the
+ * @p $join_item_revision_table parameter.
+ * Only meant to be used within a constraint construction callback.
  */
-function _versioncontrol_add_item_joins(&$joins, $join_item_revision_table = TRUE) {
-  if (!isset($joins['versioncontrol_operation_labels'])) {
-    $joins['versioncontrol_operation_items'] = array(
+function versioncontrol_add_item_joins(&$tables, $join_item_revision_table = TRUE) {
+  if (!isset($tables['versioncontrol_operation_labels'])) {
+    $tables['versioncontrol_operation_items'] = array(
       'alias' => 'opitem',
-      'on' => 'op.vc_op_id = opitem.vc_op_id',
+      'join_on' => $tables['versioncontrol_operations']['alias'] .'.vc_op_id = opitem.vc_op_id',
     );
-    if ($join_item_revision_table) {
-      $joins['versioncontrol_item_revisions'] = array(
-        'alias' => 'ir',
-        'on' => 'opitem.item_revision_id = ir.item_revision_id',
-      );
-    }
+  }
+  if (!isset($tables['versioncontrol_item_revisions']) && $join_item_revision_table) {
+    $tables['versioncontrol_item_revisions'] = array(
+      'alias' => 'ir',
+      'join_on' => 'opitem.item_revision_id = ir.item_revision_id',
+    );
   }
 }
 

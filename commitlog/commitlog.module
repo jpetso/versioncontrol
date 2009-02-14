@@ -285,17 +285,6 @@ function commitlog_mail($key, &$message, $params) {
 
 
 /**
- * Page callback for the 'commitlog' menu path.
- */
-function commitlog_operations_page() {
-  if ($error_message = _commitlog_check_request()) {
-    return $error_message;
-  }
-  $constraints = _commitlog_get_constraints();
-  return commitlog_operations($constraints);
-}
-
-/**
  * Page callback for the 'track code' tab on the user page.
  */
 function commitlog_account_tracker($user) {
@@ -304,6 +293,21 @@ function commitlog_account_tracker($user) {
   $constraints = _commitlog_get_constraints();
   $constraints['uids'] = array($user->uid);
 
+  return commitlog_operations_page($constraints);
+}
+
+/**
+ * Page callback for the 'commitlog' menu path, also usable by other modules
+ * as commit log page with additional constraints.
+ *
+ * @param $additional_constraints
+ *   A fixed set of operation constraints that will be used in addition to
+ *   the constraints given by the user in the URL's query attributes.
+ *   If a constraint is given both in the @p $additional_constraints array
+ *   and as the query attribute then the latter is discarded.
+ */
+function commitlog_operations_page($additional_constraints = array()) {
+  $constraints = $additional_constraints + _commitlog_get_constraints();
   return commitlog_operations($constraints);
 }
 
@@ -319,31 +323,11 @@ function commitlog_operations($constraints) {
  * Page callback for the 'commitlog/feed' menu path.
  */
 function commitlog_operations_rss() {
-  if ($error_message = _commitlog_check_request()) {
-    exit();
-  }
   $constraints = _commitlog_get_constraints();
 
   drupal_set_header('Content-Type: application/rss+xml; charset=utf-8');
   print theme('commitlog_rss', $constraints);
   exit();
-}
-
-/**
- * Check the $_REQUEST variable if it contains elements that can't be processed
- * in the current Drupal configuration.
- *
- * @return
- *   A string containing the appropriate error message, or NULL if everything
- *   can proceed as planned.
- */
-function _commitlog_check_request() {
-  if (isset($_REQUEST['nids']) || isset($_REQUEST['maintainers'])) {
-    if (!module_exists('versioncontrol_project')) {
-      return '<p>'. t('The given commit constraints can\'t be applied as the Version Control / Project Node Integration module is not enabled. In order to use the "nids" or "maintainer_uids" constraints, please enable this module.') .'</p>';
-    }
-  }
-  return NULL;
 }
 
 
