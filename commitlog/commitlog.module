@@ -399,29 +399,6 @@ function _commitlog_query_attributes($constraints) {
   return $query_items;
 }
 
-/**
- * Return an array of operations retrieved by versioncontrol_get_operations().
- * Paging is also used by emulating pager_query().
- */
-function commitlog_get_paged_operations($constraints, $limit = NULL, $element = 0) {
-  global $pager_page_array, $pager_total, $pager_total_items;
-  $page = isset($_GET['page']) ? $_GET['page'] : '';
-  $pager_page_array = explode(',', $page);
-  $page = empty($pager_page_array[$element]) ? 0 : $pager_page_array[$element];
-
-  if (!isset($limit)) {
-    $limit = variable_get('commitlog_pager', 10);
-  }
-  $operations = versioncontrol_get_operations($constraints, $result_count, $page, $limit);
-
-  // Emulate pager_query() in order to get a proper theme('pager').
-  $pager_total_items[$element] = $result_count;
-  $pager_total[$element] = ceil($pager_total_items[$element] / $limit);
-  $pager_page_array[$element] = max(0, min((int)$pager_page_array[$element], ((int)$pager_total[$element]) - 1));
-
-  return $operations;
-}
-
 
 /**
  * Return a formatted date string for the creation date of the given operation.
@@ -435,7 +412,10 @@ function commitlog_operation_date($operation) {
  * Return formatted output for displaying the given operations on an HTML page.
  */
 function theme_commitlog_operations_page($constraints) {
-  $operations = commitlog_get_paged_operations($constraints);
+  $operations = versioncontrol_get_operations($constraints, array(
+    'query_type' => 'pager',
+    'count' => variable_get('commitlog_pager', 10),
+  ));
 
   if (empty($operations)) {
     return '<div class="commitlog"><p>'. t('No log messages found.') .'</p></div>';
@@ -475,8 +455,11 @@ function theme_commitlog_operations_page($constraints) {
 function theme_commitlog_rss($constraints) {
   global $base_url, $locale;
 
-  $limit = variable_get('feed_default_items', 10);
-  $operations = versioncontrol_get_operations($constraints, $result_count, 0, $limit);
+  $operations = versioncontrol_get_operations($constraints, array(
+    'query_type' => 'range',
+    'from' => 0,
+    'count' => variable_get('feed_default_items', 10),
+  ));
   $namespaces = array('xmlns:dc="http://purl.org/dc/elements/1.1/"');
   $items = '';
 

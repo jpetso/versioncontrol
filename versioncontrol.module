@@ -784,12 +784,12 @@ function _versioncontrol_amend_repositories($repositories_by_backend, $backends,
  * (so only commits are returned). Parameters and result array are the same
  * as those from versioncontrol_get_operations().
  */
-function versioncontrol_get_commit_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+function versioncontrol_get_commit_operations($constraints = array(), $options = array()) {
   if (isset($constraints['types']) && !in_array(VERSIONCONTROL_OPERATION_COMMIT, $constraints['types'])) {
     return array(); // no commits in the original constraints, intersects to empty
   }
   $constraints['types'] = array(VERSIONCONTROL_OPERATION_COMMIT);
-  return versioncontrol_get_operations($constraints, $result_count, $page, $limit);
+  return versioncontrol_get_operations($constraints, $options);
 }
 
 /**
@@ -799,12 +799,12 @@ function versioncontrol_get_commit_operations($constraints = array(), &$result_c
  * are returned). Parameters and result array are the same as those
  * from versioncontrol_get_operations().
  */
-function versioncontrol_get_branch_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+function versioncontrol_get_branch_operations($constraints = array(), $options = array()) {
   if (isset($constraints['types']) && !in_array(VERSIONCONTROL_OPERATION_BRANCH, $constraints['types'])) {
     return array(); // no branches in the original constraints, intersects to empty
   }
   $constraints['types'] = array(VERSIONCONTROL_OPERATION_BRANCH);
-  return versioncontrol_get_operations($constraints, $result_count, $page, $limit);
+  return versioncontrol_get_operations($constraints, $options);
 }
 
 /**
@@ -814,12 +814,12 @@ function versioncontrol_get_branch_operations($constraints = array(), &$result_c
  * Parameters and result array are the same as those
  * from versioncontrol_get_operations().
  */
-function versioncontrol_get_tag_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+function versioncontrol_get_tag_operations($constraints = array(), $options = array()) {
   if (isset($constraints['types']) && !in_array(VERSIONCONTROL_OPERATION_TAG, $constraints['types'])) {
     return array(); // no tags in the original constraints, intersects to empty
   }
   $constraints['types'] = array(VERSIONCONTROL_OPERATION_TAG);
-  return versioncontrol_get_operations($constraints, $result_count, $page, $limit);
+  return versioncontrol_get_operations($constraints, $options);
 }
 
 /**
@@ -881,16 +881,21 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *        array('dww', 'jpetso'). If given, the result set will only contain
  *        operations that were performed by any of the specified users.
  *
- * @param $result_count
- *   This variable will be set to the overall number of operations that matched
- *   the constraints. You're likely to need this if you use paging, in all
- *   other cases this will be the same value as count($operations).
- * @param $page
- *   If given, this function only return a subset of the result, where
- *   $page == 0 would return the first $limit matching operations,
- *   $page == 1 would return the second set, and so on.
- * @param $limit
- *   The number of query results to return per page.
+ * @param $options
+ *   An optional array of additional options for retrieving the operations.
+ *   The following array keys are supported:
+ *
+ *   - 'query_type': If unset, the standard db_query() function is used to
+ *        retrieve all operations that match the given constraints.
+ *        Can be set to 'range' or 'pager' to use the db_query_range()
+ *        or pager_query() functions instead. Additional options are required
+ *        in this case.
+ *   - 'count': Required for both 'range' and 'pager' as 'query_type'.
+ *        Specifies the number of operations to be returned by this function.
+ *   - 'from': Required for 'range' as 'query_type'. Specifies the first
+ *        result row to return.
+ *   - 'pager_element': Optional for 'pager' as 'query_type'. An optional
+ *        integer to distinguish between multiple pagers on one page.
  *
  * @return
  *   An array of operations, reversely sorted by the time of the operation.
@@ -953,7 +958,7 @@ function versioncontrol_get_tag_operations($constraints = array(), &$result_coun
  *   If not a single operation matches these constraints,
  *   an empty array is returned.
  */
-function versioncontrol_get_operations($constraints = array(), &$result_count = NULL, $page = NULL, $limit = 10) {
+function versioncontrol_get_operations($constraints = array(), $options = array()) {
   // Let modules alter the query by transforming custom constraints into
   // stuff that Version Control API can understand.
   drupal_alter('versioncontrol_operation_constraints', $constraints);
@@ -984,14 +989,23 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
     }
     $from[] = $table_string;
   }
-  $from = 'FROM '. implode(' INNER JOIN ', $from);
 
-  $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
+  $query = 'SELECT DISTINCT(op.vc_op_id), op.type, op.date, op.uid,
+            op.username, op.message, op.revision, r.repo_id, r.vcs
+            FROM '. implode(' INNER JOIN ', $from) .
+            (empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints)) .'
+            ORDER BY op.date DESC, op.vc_op_id DESC';
 
-  $result = db_query('SELECT DISTINCT(op.vc_op_id), op.type, op.date, op.uid,
-                        op.username, op.message, op.revision, r.repo_id, r.vcs
-                      '. $from . $where .'
-                      ORDER BY op.date DESC, op.vc_op_id DESC', $params);
+  if (isset($options['query_type']) && $options['query_type'] == 'pager') {
+    $element = isset($options['pager_element']) ? $options['pager_element'] : 0;
+    $result = pager_query($query, $options['count'], $element, NULL, $params);
+  }
+  elseif (isset($options['query_type']) && $options['query_type'] == 'range') {
+    $result = db_query_range($query, $params, $options['from'], $options['count']);
+  }
+  else {
+    $result = db_query($query, $params);
+  }
 
   $ops = array();
   $op_id_placeholders = array();
@@ -1024,8 +1038,6 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
   if (empty($ops)) {
     return array();
   }
-  // Set the by-reference result count parameter.
-  $result_count = count($ops);
 
   // Add the corresponding repository array to each operation.
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
@@ -1052,10 +1064,6 @@ function versioncontrol_get_operations($constraints = array(), &$result_count = 
       'type' => $row->type,
       'action' => $row->action,
     );
-  }
-
-  if (isset($page)) {
-    return _versioncontrol_page_operations($ops, $page, $limit);
   }
   return $ops;
 }
