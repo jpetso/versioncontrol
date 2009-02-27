@@ -724,7 +724,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
  * remaining temporary files before returning.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_file_copy')
+ * with versioncontrol_backend_implements($repository['vcs'], 'export_file')
  * if the particular backend actually implements it.
  *
  * @param $repository
@@ -738,7 +738,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
  *   TRUE if the file was successfully created, FALSE if not.
  *   The API module ensures that the passed item is a file item.
  */
-function versioncontrol_fakevcs_get_file_copy($repository, $file_item, $destination) {
+function versioncontrol_fakevcs_export_file($repository, $file_item, $destination) {
   exec('fakevcs cat '. $repository['root'] . $file_item['path'] .' > '. $destination,
        $output, $return_code);
 

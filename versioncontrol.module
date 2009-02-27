@@ -2938,7 +2938,7 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
  * That requirement might change in the future though.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_file_copy')
+ * with versioncontrol_backend_implements($repository['vcs'], 'export_file')
  * if the particular backend actually implements it.
  *
  * @param $repository
@@ -2951,14 +2951,14 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
  *   NULL is returned if the given item is not under version control,
  *   or was not under version control at the time of the given revision.
  */
-function versioncontrol_get_file_copy($repository, $file_item) {
+function versioncontrol_export_file($repository, $file_item) {
   if (!versioncontrol_is_file_item($file_item)) {
     return NULL;
   }
   $filename = basename($file_item['path']);
   $destination = file_directory_temp() .'/versioncontrol-'. mt_rand() .'-'. $filename;
   $success = _versioncontrol_call_backend(
-    $repository['vcs'], 'get_file_copy', array($repository, $file_item, $destination)
+    $repository['vcs'], 'export_file', array($repository, $file_item, $destination)
   );
   if ($success) {
     return $destination;
