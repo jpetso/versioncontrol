@@ -170,10 +170,11 @@ function versioncontrol_account_register_form(&$form_state, $register_uid, $repo
 
   $form['#id'] = 'vcs-account-indirection-form';
 
-  $message = variable_get(
-    'versioncontrol_registration_message_authorized',
-    $presets['versioncontrol_registration_message_authorized']
-  );
+  $message = variable_get('versioncontrol_registration_message_authorized', FALSE);
+  if ($message == FALSE) {
+    $presets = _versioncontrol_get_string_presets();
+    $message = $presets['versioncontrol_registration_message_authorized'];
+  }
   if (!empty($message)) {
     $form['overview'] = array(
       '#type' => 'fieldset',
