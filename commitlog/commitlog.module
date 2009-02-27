@@ -439,7 +439,7 @@ function theme_commitlog_operations_page($constraints) {
       <div class="commitlog-messages">'. theme('table', $header, $rows) .'</div>';
   }
 
-  if ($pager = theme('pager', NULL, variable_get('commitlog_pager', 10), 0, $attributes)) {
+  if ($pager = theme('pager', NULL, variable_get('commitlog_pager', 10), 0)) {
     $output .= $pager;
   }
   $output .= '</div>';
@@ -862,7 +862,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     if (count($op_projects) == 1) {
       $project = reset($op_projects);
 
-      if ($project['repo_id'] == $operation['repo_id']
+      if ($project['repo_id'] == $operation['repository']['repo_id']
           && versioncontrol_path_contains($project['directory'], $directory_item['path'])) {
         $directory_item = versioncontrol_get_parent_item(
           $operation['repository'], $directory_item, $project['directory']
@@ -989,9 +989,9 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
     $lines[] = strtr($action_string, array(
       '!item'     => $item_string,
       '!path'     => $item_path,
-      '!oldrev'   => $oldrev_string,
-      '!olditems' => $olditems_string,
-      '!diff'     => $diff_string,
+      '!oldrev'   => isset($oldrev_string) ? $oldrev_string : '',
+      '!olditems' => isset($olditems_string) ? $olditems_string : '',
+      '!diff'     => isset($diff_string) ? $diff_string : '',
     ));
   }
 
@@ -1017,7 +1017,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
       $output .= '<div class="items">'. theme('item_list', $lines) ."</div>\n";
     }
     else {
-      $output .= '<div class="items">'. $item_header .' '. reset($lines) ."</div>\n";
+      $output = '<div class="items">'. $item_header .' '. reset($lines) ."</div>\n";
     }
     return $output;
   }
@@ -1092,8 +1092,9 @@ function theme_commitlog_diff_link($operation, $item) {
   // Also, a diff only makes sense if the item was actually modified.
   if (in_array($item['action'], array(VERSIONCONTROL_ACTION_MODIFIED, VERSIONCONTROL_ACTION_MERGED))) {
     // Ok, everything's alright, let's get that diff link.
+    $source_item = reset($item['source_items']);
     $diff_url = versioncontrol_get_url_diff(
-      $operation['repository'], $item, $item['source_items'][0]
+      $operation['repository'], $item, $source_item
     );
     if (!empty($diff_url)) {
       return l(t('diff'), $diff_url);

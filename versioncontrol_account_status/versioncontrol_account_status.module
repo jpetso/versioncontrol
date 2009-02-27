@@ -934,7 +934,9 @@ function versioncontrol_account_status_versioncontrol_account($op, $uid, $userna
     case 'insert':
     case 'update':
       // Recap: if form_alter() wasn't applied, our array element is not set.
-      $additional_data = $additional_data['versioncontrol_account_status'];
+      $additional_data = isset($additional_data['versioncontrol_account_status'])
+        ? $additional_data['versioncontrol_account_status']
+        : NULL;
 
       if (!isset($additional_data)) {
         // Auto-approve the account if it was inserted programmatically and

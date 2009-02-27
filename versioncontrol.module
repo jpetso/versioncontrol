@@ -323,7 +323,7 @@ function versioncontrol_user_access($account = NULL) {
  * wildcard returns.)
  */
 function versioncontrol_private_account_access($vcs_accounts, $account = NULL) {
-  $viewed_uid = array_shift(array_keys($vcs_accounts));
+  $viewed_uid = key($vcs_accounts);
   if (!$viewed_uid) {
     return FALSE;
   }
@@ -391,7 +391,7 @@ function versioncontrol_user_accounts_title_callback($accounts) {
   }
   if (count($vcses) == 1) {
     $backends = versioncontrol_get_backends();
-    $vcs = array_shift(array_keys($vcses));
+    $vcs = key($vcses);
     return check_plain($backends[$vcs]['name']);
   }
   return t('Repository accounts');
@@ -1007,7 +1007,7 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
     $result = db_query($query, $params);
   }
 
-  $ops = array();
+  $operations = array();
   $op_id_placeholders = array();
   $op_ids = array();
   $repo_ids = array();
@@ -1020,7 +1020,7 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
     }
 
     // Construct the operation array - nearly done already.
-    $ops[$row->vc_op_id] = array(
+    $operations[$row->vc_op_id] = array(
       'vc_op_id'   => $row->vc_op_id,
       'type'       => $row->type,
       'repo_id'    => $row->repo_id,
@@ -1035,15 +1035,15 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
     $op_ids[] = $row->vc_op_id;
     $op_id_placeholders[] = '%d';
   }
-  if (empty($ops)) {
+  if (empty($operations)) {
     return array();
   }
 
   // Add the corresponding repository array to each operation.
   $repositories = versioncontrol_get_repositories(array('repo_ids' => $repo_ids));
-  foreach ($ops as $op_id => $op) {
-    $ops[$op_id]['repository'] = $repositories[$op['repo_id']];
-    unset($operations[$op_id]['repo_id']);
+  foreach ($operations as $vc_op_id => $operation) {
+    $operations[$vc_op_id]['repository'] = $repositories[$operation['repo_id']];
+    unset($operations[$vc_op_id]['repo_id']);
   }
 
   // Add the corresponding labels to each operation.
@@ -1058,14 +1058,14 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
                         ('. implode(',', $op_id_placeholders) .')', $op_ids);
 
   while ($row = db_fetch_object($result)) {
-    $ops[$row->vc_op_id]['labels'][] = array(
+    $operations[$row->vc_op_id]['labels'][] = array(
       'label_id' => $row->label_id,
       'name' => $row->name,
       'type' => $row->type,
       'action' => $row->action,
     );
   }
-  return $ops;
+  return $operations;
 }
 
 /**
@@ -2932,11 +2932,10 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
 }
 
 /**
- * Retrieve a copy of the contents of a given item in the repository.
+ * Retrieve a copy of the contents of a given file item in the repository.
  * (You won't get the original because repositories can often be remote.)
  * The caller should make sure to delete the file when it's not needed anymore.
- * (That requirement might change in the future though, say, in Drupal 6 when
- * temporary files are a lot easier to track.)
+ * That requirement might change in the future though.
  *
  * This function is optional for VCS backends to implement, be sure to check
  * with versioncontrol_backend_implements($repository['vcs'], 'get_file_copy')
