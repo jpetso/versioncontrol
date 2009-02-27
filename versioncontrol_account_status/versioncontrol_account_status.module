@@ -916,8 +916,12 @@ function versioncontrol_account_status_versioncontrol_account_submit(&$additiona
   $additional_data['versioncontrol_account_status'] = array(
     'status_data' => $status_data,
     'admin_message' => array(
-      'is_send' => $form_state['values']['send_admin_message'],
-      'contents' => $form_state['values']['admin_message'],
+      'is_send' => isset($form_state['values']['send_admin_message'])
+        ? $form_state['values']['send_admin_message']
+        : FALSE,
+      'contents' => isset($form_state['values']['admin_message'])
+        ? $form_state['values']['admin_message']
+        : '',
     ),
     'is_reapplication' => !empty($form['#is_reapplication']),
     'send_application_mails' => $form['#send_application_mails'],
