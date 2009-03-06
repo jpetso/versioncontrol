@@ -809,7 +809,7 @@ function versioncontrol_admin_repository_edit_validate($form, &$form_state) {
     'names' => array($form_state['values']['repo_name']),
   ));
   if (!empty($same_repositories)) {
-    form_error($form['repo_name'],
+    form_error($form['repository_information']['repo_name'],
       t('The repository name %reponame is already in use, please assign a different one.',
         array('%reponame' => $form_state['values']['repo_name']))
     );
