@@ -901,7 +901,7 @@ function theme_commitlog_operation_items($operation, $operation_items, $format =
 
     // See if there have been one or more previous versions of this item, and
     // make a displayable string out of those.
-    if (isset($item['source_items'])) {
+    if (!empty($item['source_items'])) {
       $oldrev_string = theme('commitlog_item_revision',
         $operation['repository'], reset($item['source_items']), $format
       );
