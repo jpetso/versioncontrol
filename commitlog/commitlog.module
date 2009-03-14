@@ -446,7 +446,6 @@ function theme_commitlog_operations_page($constraints) {
 
   // The feed icon, with reconstructed query attributes.
   $feed_url = url('commitlog/feed', array('query' => _commitlog_query_attributes($constraints)));
-  $output .= theme('feed_icon', $feed_url, t('Commit messages RSS feed'));
   drupal_add_feed($feed_url, t('Commit messages'));
 
   return $output;
