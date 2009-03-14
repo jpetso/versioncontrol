@@ -3325,7 +3325,7 @@ function versioncontrol_block($op = 'list', $delta = 0) {
           INNER JOIN {users} u
             ON op.uid = u.uid AND op.uid != 0 AND op.date > %d
         WHERE op.type = %d
-        GROUP BY op.uid ORDER BY count DESC',
+        GROUP BY op.uid, u.name ORDER BY count DESC',
         array(time() - $interval, VERSIONCONTROL_OPERATION_COMMIT), // placeholders
         0, $length // query range arguments: 'from' and 'count'
       );
