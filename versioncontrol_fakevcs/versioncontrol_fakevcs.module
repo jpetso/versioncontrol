@@ -403,7 +403,7 @@ function versioncontrol_fakevcs_get_item($repository, $path, $revision = '') {
  *   The repository that the item is located in.
  * @param $item
  *   The item whose parallel sibling should be retrieved.
- * @param $label_type
+ * @param $label_type_filter
  *   If unset, siblings will be retrieved both on branches and tags.
  *   If set to VERSIONCONTROL_OPERATION_BRANCH or VERSIONCONTROL_OPERATION_TAG,
  *   results are limited to just that label type.
@@ -411,8 +411,8 @@ function versioncontrol_fakevcs_get_item($repository, $path, $revision = '') {
  * @return
  *   A structured item array of parallel items on all branches and tags,
  *   possibly including the original item itself (if appropriate for the given
- *   @p $label_type).  Array keys do not convey any specific meaning, the
- *   corresponding values are again structured arrays, each with a pair of
+ *   @p $label_type_filter).  Array keys do not convey any specific meaning,
+ *   the corresponding values are again structured arrays, each with a pair of
  *   'item' and 'selected_label' elements as follows.
  *
  *   - 'item': An item array, consisting of the following elements:
@@ -446,7 +446,7 @@ function versioncontrol_fakevcs_get_item($repository, $path, $revision = '') {
  *   An empty array is returned if the item is valid, but no parallel sibling
  *   items can be found for the given @p $label_type.
  */
-function versioncontrol_get_parallel_items($repository, $item, $label_type = NULL) {
+function versioncontrol_fakevcs_get_parallel_items($repository, $item, $label_type_filter = NULL) {
   // How CVS would probably do it, if for example
   // $item['path'] == '/contributions/modules/versioncontrol/versioncontrol.module':
   return array(

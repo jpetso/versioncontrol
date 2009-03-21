@@ -2827,8 +2827,8 @@ function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL)
  * @return
  *   An item array of parallel items on all branches and tags, possibly
  *   including the original item itself (if appropriate for the given
- *   @p $label_type). Array keys do not convey any specific meaning, item
- *   values are again structured arrays and consist of elements with the
+ *   @p $label_type_filter). Array keys do not convey any specific meaning,
+ *   item values are again structured arrays and consist of elements with the
  *   following keys:
  *
  *   - 'type': Specifies the item type, which should be the same as the type
@@ -2847,19 +2847,14 @@ function versioncontrol_get_parent_item($repository, $item, $parent_path = NULL)
  *   An empty array is returned if the item is valid, but no parallel sibling
  *   items can be found for the given @p $label_type.
  */
-function versioncontrol_get_parallel_items($repository, $item, $label_type = NULL) {
-  if (is_array($label_type)) { // not documented, but just to make sure
-    $label_types = $label_type;
-  }
-  else {
-    $label_types = isset($label_types)
-      ? array($label_type)
-      : array(VERSIONCONTROL_OPERATION_BRANCH, VERSIONCONTROL_OPERATION_TAG);
-  }
+function versioncontrol_get_parallel_items($repository, $item, $label_type_filter = NULL) {
   $results = _versioncontrol_call_backend(
     $repository['vcs'], 'get_parallel_items',
-    array($repository, $item, $label_types)
+    array($repository, $item, $label_type_filter)
   );
+  if (is_null($results)) {
+    return NULL;
+  }
   $items = array();
 
   foreach ($results as $key => $result) {
