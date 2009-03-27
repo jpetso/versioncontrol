@@ -593,7 +593,8 @@ function versioncontrol_admin_repository_list(&$form_state) {
     $rows_by_repo_id = array();
     foreach ($vcs_repositories as $repo_id => $repository) {
       $rows_by_repo_id[$repo_id] = array(
-        check_plain($repository['name']), check_plain($repository['root']),
+        'name' => check_plain($repository['name']),
+        'root' => check_plain($repository['root']),
       );
     }
     // Provide a possibility for backends and other modules to modify the list.
@@ -614,7 +615,7 @@ function versioncontrol_admin_repository_list(&$form_state) {
           'href' => 'admin/project/versioncontrol-repositories/delete/'. $repo_id,
         ),
       );
-      $rows_by_repo_id[$repo_id][] = theme('links', $links);
+      $rows_by_repo_id[$repo_id]['links'] = theme('links', $links);
     }
     // We don't want the repository ids in the final $rows array.
     $rows = array_values($rows_by_repo_id);
