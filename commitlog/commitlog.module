@@ -23,6 +23,13 @@ function commitlog_menu() {
     'access arguments' => array($view_access),
     'type' => MENU_SUGGESTED_ITEM,
   );
+  $items['commitlog/%/%'] = array(
+    'title' => 'Commit messages',
+    'page callback' => 'commitlog_operations_filtered_page',
+    'page arguments' => array(1, 2),
+    'access arguments' => array($view_access),
+    'type' => MENU_CALLBACK,
+  );
   $items['commitlog/feed'] = array(
     'title' => 'Commit messages',
     'page callback' => 'commitlog_operations_rss',
@@ -297,6 +304,21 @@ function commitlog_account_tracker($user) {
 }
 
 /**
+ * Page callback for the more targeted 'commitlog/%/%' menu path.
+ */
+function commitlog_operations_filtered_page($constraint_name, $constraint_value) {
+  $constraints = array();
+  $constraint_request_map = module_invoke_all('commitlog_constraints');
+
+  foreach ($constraint_request_map as $constraint => $request) {
+    if (isset($request['single']) && $request['single'] == $constraint_name) {
+      $constraints[$constraint][] = $constraint_value;
+    }
+  }
+  return commitlog_operations($constraints);
+}
+
+/**
  * Page callback for the 'commitlog' menu path, also usable by other modules
  * as commit log page with additional constraints.
  *
@@ -336,14 +358,10 @@ function commitlog_operations_rss() {
  * $_REQUEST variable.
  *
  * @return
- *   An array($constraints, $attributes) where $constraints is an array of
- *   commit constraints supposed to be passed to versioncontrol_get_operations(),
- *   and $attributes is an associative array of the processed arguments
- *   from $_REQUEST.
+ *   A versioncontrol_get_operations() compatible $constraints array.
  */
 function _commitlog_get_constraints() {
   $constraints = array();
-  $attributes = array();
   $constraint_request_map = module_invoke_all('commitlog_constraints');
 
   // Transform query string into commit constraints. We use $_REQUEST because
