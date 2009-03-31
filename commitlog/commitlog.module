@@ -311,6 +311,9 @@ function commitlog_operations_filtered_page($constraint_name, $constraint_value)
   $constraint_request_map = module_invoke_all('commitlog_constraints');
 
   foreach ($constraint_request_map as $constraint => $request) {
+    if (isset($request['multiple']) && $request['multiple'] == $constraint_name) {
+      $constraints[$constraint] = explode(',', $constraint_value);
+    }
     if (isset($request['single']) && $request['single'] == $constraint_name) {
       $constraints[$constraint][] = $constraint_value;
     }
