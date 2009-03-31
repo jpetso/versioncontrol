@@ -9,60 +9,98 @@
  * Copyright 2007, 2008, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
-// VCS operations, a.k.a. stuff that is recorded for display purposes.
+/**
+ * @name VCS operations
+ * a.k.a. stuff that is recorded for display purposes.
+ */
+//@{
 define('VERSIONCONTROL_OPERATION_COMMIT', 1);
 define('VERSIONCONTROL_OPERATION_BRANCH', 2);
 define('VERSIONCONTROL_OPERATION_TAG',    3);
+//@}
 
-// Optional capabilities that backend modules can provide.
+/**
+ * @name backend capabilities
+ * Optional capabilities that backend modules can provide.
+ */
+//@{
 define('VERSIONCONTROL_CAPABILITY_ATOMIC_COMMITS',          1);
 define('VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS',     2);
 define('VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS', 3);
 define('VERSIONCONTROL_CAPABILITY_DIRECTORY_REVISIONS',     4);
+//@}
 
-// Flags that backends can set to specify if Version Control API
-// should do work for them.
+/**
+ * @name VCS backend flags
+ * Flags that backends can set to specify if Version Control API
+ * should do work for them.
+ */
+//@{
 define('VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES',      1);
+//@}
 
-// VCS item types.
+/**
+ * @name VCS item types.
+ */
+//@{
 define('VERSIONCONTROL_ITEM_FILE',              1);
 define('VERSIONCONTROL_ITEM_DIRECTORY',         2);
-// "Deleted" item types are only used for items that don't exist in the
-// repository (anymore), at least not in the given revision. That is mostly
-// the case with items that were deleted by a commit and are returned as result
-// by versioncontrol_get_operation_items(). A "deleted file" can also be
-// returned by directory listings for CVS, representing "dead files".
+/**
+ * @name VCS "Deleted" item types. 
+ * Only used for items that don't exist in the repository (anymore), at least
+ * not in the given revision. That is mostly the case with items that were
+ * deleted by a commit and are returned as result by
+ * versioncontrol_get_operation_items(). A "deleted file" can also be returned
+ * by directory listings for CVS, representing "dead files".
+ */
+//@{
 define('VERSIONCONTROL_ITEM_FILE_DELETED',      3);
 define('VERSIONCONTROL_ITEM_DIRECTORY_DELETED', 4);
+//@}
+//@}
 
-// VCS actions for a single item (file or directory) in a commit,
-// or for branches and tags.
+/**
+ * @name VCS actions
+ * for a single item (file or directory) in a commit, or for branches and tags.
+ */
+//@{
 define('VERSIONCONTROL_ACTION_ADDED',    1);
 define('VERSIONCONTROL_ACTION_MODIFIED', 2);
-define('VERSIONCONTROL_ACTION_MOVED',    3); // == renamed
+define('VERSIONCONTROL_ACTION_MOVED',    3); //< == renamed
 define('VERSIONCONTROL_ACTION_COPIED',   4);
 define('VERSIONCONTROL_ACTION_MERGED',   5);
 define('VERSIONCONTROL_ACTION_DELETED',  6);
 define('VERSIONCONTROL_ACTION_REPLACED', 7);
-define('VERSIONCONTROL_ACTION_OTHER',    8); // for example, SVN revprop-only changes
+define('VERSIONCONTROL_ACTION_OTHER',    8); //< for example, SVN revprop-only changes
+//@}
 
-// The flag for operation item database entries, specifying whether an item
-// is actually a direct "member" item of that operation or just a cached
-// source item that speeds up operation queries. (Background: we want some
-// source items to be considered when the caller passes a 'paths' constraint,
-// but joining those is unnecessarily inefficient. Therefore, searched source
-// items get directly included in the {versioncontrol_operation_items} table.)
-// This is an implementation detail, the API user won't get to see this. Ever.
+/**
+ * @name VCS flag for operation item database entries
+ * The flag for operation item database entries, specifying whether an item
+ * is actually a direct "member" item of that operation or just a cached
+ * source item that speeds up operation queries. (Background: we want some
+ * source items to be considered when the caller passes a 'paths' constraint,
+ * but joining those is unnecessarily inefficient. Therefore, searched source
+ * items get directly included in the {versioncontrol_operation_items} table.)
+ * This is an implementation detail, the API user won't get to see this. Ever.
+ */
+//@{
 define('VERSIONCONTROL_OPERATION_MEMBER_ITEM',          1);
 define('VERSIONCONTROL_OPERATION_CACHED_AFFECTED_ITEM', 2);
+//@}
 
-// Allowed values for the 'cardinality' key in  constraint descriptions
-// provided by hook_versioncontrol_operation_constraint_info().
+/**
+ * @name Constraint 'cardinality' key
+ * Allowed values for the 'cardinality' key in constraint descriptions
+ * provided by hook_versioncontrol_operation_constraint_info().
+ */
+//@{
 define('VERSIONCONTROL_CONSTRAINT_MULTIPLE',           1); // default
 define('VERSIONCONTROL_CONSTRAINT_SINGLE',             2);
 define('VERSIONCONTROL_CONSTRAINT_SINGLE_OR_MULTIPLE', 3);
+//@}
 
-// Used internally by the repository and account admin pages. Private constant.
+/** Used internally by the repository and account admin pages. Private constant. */
 define('VERSIONCONTROL_FORM_CREATE', FALSE);
 
 
