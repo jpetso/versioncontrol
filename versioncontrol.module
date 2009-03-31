@@ -2098,7 +2098,7 @@ function versioncontrol_get_item_selected_label($repository, &$item) {
     if (isset($selected_label['action'])) {
       unset($selected_label['action']);
     }
-    $item['selected_label']->label = _versioncontrol_ensure_label($repository, $selected_label);
+    $item['selected_label']->label = versioncontrol_ensure_label($repository, $selected_label);
   }
   else {
     $item['selected_label']->label = FALSE;
@@ -2117,13 +2117,27 @@ function versioncontrol_get_item_selected_label($repository, &$item) {
  * Insert a label entry into the {versioncontrol_labels} table,
  * or retrieve the same one that's already there.
  *
+ * @param $repository
+ *   The repository where the label is located.
+ * @param $label
+ *   A structured array describing the branch or tag that should be inserted
+ *   into the database. A label array contains (at least) the following keys:
+ *
+ *   - 'name': The branch or tag name (a string).
+ *   - 'type': Whether this label is a branch (indicated by the
+ *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *        (VERSIONCONTROL_OPERATION_TAG).
+ *   - 'label_id': Optional - if it doesn't exist yet, it will afterwards.
+ *        The label identifier (a simple integer), used for unique
+ *        identification of branches and tags in the database.
+ *
  * @return
  *   The @p $label variable, enhanced with the newly added property 'label_id'
  *   specifying the database identifier for that label. There may be labels
  *   with a similar 'name' but different 'type' properties, those are considered
  *   to be different and will both go into the database side by side.
  */
-function _versioncontrol_ensure_label($repository, $label) {
+function versioncontrol_ensure_label($repository, $label) {
   if (!empty($label['label_id'])) { // already in the database
     return $label;
   }

@@ -269,7 +269,7 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
 
   // Insert labels that are attached to the operation.
   foreach ($operation['labels'] as $key => $label) {
-    $label = _versioncontrol_ensure_label($operation['repository'], $label);
+    $label = versioncontrol_ensure_label($operation['repository'], $label);
     _versioncontrol_insert_operation_label($operation, $label);
     $operation['labels'][$key] = $label; // because it now has a 'label_id'
   }
