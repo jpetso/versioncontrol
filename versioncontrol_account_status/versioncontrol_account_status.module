@@ -168,7 +168,7 @@ function versioncontrol_account_status_set($status_data) {
  * @return
  *   TRUE if the account is authorized, or FALSE if it's not.
  */
-function versioncontrol_account_status_versioncontrol_is_account_authorized($uid, $repository) {
+function versioncontrol_account_status_versioncontrol_is_account_authorized($repository, $uid) {
   if ($repository['authorization_method'] != 'versioncontrol_account_status_repository') {
     return TRUE;
   }

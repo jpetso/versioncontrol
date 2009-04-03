@@ -1034,6 +1034,47 @@ function versioncontrol_fakevcs_repository($op, $repository) {
 
 
 /**
+ * Implementation of [versioncontrol_backend]_account_username_suggestion():
+ * Return the most accurate guess on what the VCS username for a Drupal user
+ * might look like in the given repository.
+ *
+ * @param $repository
+ *   The repository where the the VCS account exists or will be located.
+ * @param $user
+ *  The Drupal user who wants to register an account.
+ */
+function versioncontrol_fakevcs_account_username_suggestion($repository, $user) {
+  // For distributed version control systems, the user's email address might be
+  // a more appropriate username than the actual nick - it guarantees unique
+  // identification (= uid association for operations), even though it might
+  // need to be replaced by or amended with the full name on page display.
+  return $user->mail;
+}
+
+/**
+ * Implementation of [versioncontrol_backend]_is_account_username_valid():
+ * Determine if the given repository allows a username to exist.
+ *
+ * This function is optional for backend modules to implement. If it's not
+ * implemented, only usernames will be accepted that consist solely of
+ * alphanumeric characters.
+ *
+ * @param $repository
+ *   The repository where the the VCS account exists or will be located.
+ * @param $username
+ *  The username to check. It is passed by reference so if the username is
+ *  valid but needs minor adaptions (such as cutting away unneeded parts) then
+ *  it the backend can modify it before returning the result.
+ *
+ * @return
+ *   TRUE if the username is valid, FALSE if not.
+ */
+function versioncontrol_fakevcs_is_account_username_valid($repository, &$username) {
+  // Continuing the email-style username example from above.
+  return valid_email_address($username);
+}
+
+/**
  * Implementation of [vcs_backend]_import_accounts():
  * Import accounts into a repository, given text data from the accounts file.
  * No accounts are deleted, new accounts are inserted, and existing accounts

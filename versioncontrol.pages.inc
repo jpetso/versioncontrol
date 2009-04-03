@@ -64,7 +64,7 @@ function versioncontrol_account_register_page($register_uid = FALSE, $register_a
   $repository_names = array();
   foreach ($repositories as $repo_id => $repository) {
     if (isset($account_usernames[$repo_id])
-        && versioncontrol_is_account_authorized($register_uid, $repository)) {
+        && versioncontrol_is_account_authorized($repository, $register_uid)) {
       // We only want repositories in the list of repositories that are open
       // for registrations where no (authorized) account exists yet.
       continue;
@@ -264,7 +264,7 @@ function versioncontrol_account_page($accounts, $url_repo_id = NULL, $url_userna
     $uid = $only_uid;
 
     foreach ($usernames_by_repository as $repo_id => $username) {
-      if (isset($url_repository) && $repo_id != $url_repo_id) {
+      if (isset($url_repo_id) && $repo_id != $url_repo_id) {
         unset($accounts[$uid][$repo_id]);
         continue; // disregard repositories that don't match the URL constraints
       }
@@ -424,9 +424,7 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $vcs_
   if ($create_account || $admin_access) {
     if ($create_account) {
       // Have a nice default value for the new VCS username.
-      $vcs_username = strtr(drupal_strtolower($user->name),
-        array(' ' => '', '@' => '', '.' => '', '-' => '', '_' => '', '.' => '')
-      );
+      $vcs_username = versioncontrol_account_username_suggestion($repository, $user);
     }
 
     if ($admin_access) { // the admin version
@@ -486,7 +484,7 @@ function versioncontrol_account_edit_form_validate($form, &$form_state) {
 
   if (!isset($repository)) { // admin deletes repo while user fills in form
     form_set_error('account',
-      t('The repository has been deleted.', array('@vcs' => $vcs_name))
+      t('The repository has been deleted.')
     );
     return;
   }
@@ -497,12 +495,18 @@ function versioncontrol_account_edit_form_validate($form, &$form_state) {
     );
   }
   else {
-    // Check for unallowed characters. (Only alphanumeric ones are allowed.)
-    if (ereg("[^[:alnum:]]", $username)) {
+    // Check for username validity - done by the backend, but with a fallback
+    // for alphanum-only characters.
+    if (!versioncontrol_is_account_username_valid($repository, $username)) {
       form_set_error('account_name',
         t('The specified @vcs username is invalid.', array('@vcs' => $vcs_name))
       );
     }
+    // The username is passed by reference and might have changed. That's a bit
+    // uncomfortable as a caller API, but more convenient for the backends.
+    // (Plus it makes sense anyways since we have trimmed the username too.)
+    $form_state['values']['account_name'] = $username;
+
     // Check for duplicates.
     $existing_uid = versioncontrol_get_account_uid_for_username($repository['repo_id'], $username, TRUE);
     if ($existing_uid && $uid != $existing_uid) {
@@ -526,7 +530,7 @@ function versioncontrol_account_edit_form_validate($form, &$form_state) {
 function versioncontrol_account_edit_form_submit($form, &$form_state) {
   // Reconstruct the user data from the $form_state that was passed.
   $uid = $form['#uid'];
-  $username = trim($form_state['values']['account_name']);
+  $username = $form_state['values']['account_name'];
   $repository = $form['#repository'];
   $vcs_name = $form['#vcs_name'];
   $vcs_specific = NULL;

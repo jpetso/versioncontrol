@@ -2377,7 +2377,7 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
   foreach ($account_rows as $account) {
     // Only include approved accounts, except in case the caller said otherwise.
     if ($include_unauthorized
-        || versioncontrol_is_account_authorized($account->uid, $repositories[$account->repo_id])) {
+        || versioncontrol_is_account_authorized($repositories[$account->repo_id], $account->uid)) {
       if (!isset($accounts[$account->uid])) {
         $accounts[$account->uid] = array();
       }
@@ -2414,7 +2414,7 @@ function versioncontrol_get_account_uid_for_username($repo_id, $username, $inclu
   while ($account = db_fetch_object($result)) {
     $repository = versioncontrol_get_repository($account->repo_id);
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $repository)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($repository, $account->uid)) {
       return $account->uid;
     }
   }
@@ -2448,7 +2448,7 @@ function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_un
   while ($account = db_fetch_object($result)) {
     $repository = versioncontrol_get_repository($account->repo_id);
     // Only include approved accounts, except in case the caller said otherwise.
-    if ($include_unauthorized || versioncontrol_is_account_authorized($account->uid, $repository)) {
+    if ($include_unauthorized || versioncontrol_is_account_authorized($repository, $account->uid)) {
       return $account->username;
     }
   }
@@ -2456,18 +2456,61 @@ function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_un
 }
 
 /**
- * Returns TRUE if the account is authorized to commit to the given
+ * Return the most accurate guess on what the VCS username for a Drupal user
+ * might look like in the given repository.
+ *
+ * @param $repository
+ *   The repository where the the VCS account exists or will be located.
+ * @param $user
+ *  The Drupal user who wants to register an account.
+ */
+function versioncontrol_account_username_suggestion($repository, $user) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'account_username_suggestion')) {
+    return _versioncontrol_call_backend($repository['vcs'], 'account_username_suggestion', $repository, $user);
+  }
+  return strtr(drupal_strtolower($user->name),
+    array(' ' => '', '@' => '', '.' => '', '-' => '', '_' => '', '.' => '')
+  );
+}
+
+/**
+ * Determine if the given repository allows a username to exist.
+ *
+ * @param $vcs
+ *   The repository where the the VCS account exists or will be located.
+ * @param $username
+ *  The username to check. It is passed by reference so if the username is
+ *  valid but needs minor adaptions (such as cutting away unneeded parts) then
+ *  it the backend can modify it before returning the result.
+ *
+ * @return
+ *   TRUE if the username is valid, FALSE if not.
+ */
+function versioncontrol_is_account_username_valid($repository, &$username) {
+  if (versioncontrol_backend_implements($repository['vcs'], 'is_account_username_valid')) {
+    // Because $username is a by-reference argument, make it a direct call.
+    $function = $repository['vcs'] .'is_account_username_valid';
+    return $function($repository, $username);
+  }
+  else if (!preg_match('/^[a-zA-Z0-9]+$/', $username)) {
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Return TRUE if the account is authorized to commit to the given
  * repository, or FALSE otherwise. Only call this function on existing
  * accounts or uid 0, the return value for all other
  * uid/repository combinations is undefined.
  *
- * @param $uid
- *   The user id of the checked account.
  * @param $repository
  *   The repository where the status should be checked. (Note that the user's
  *   authorization status may differ for each repository.)
+ * @param $uid
+ *   The user id of the checked account.
  */
-function versioncontrol_is_account_authorized($uid, $repository) {
+function versioncontrol_is_account_authorized($repository, $uid) {
   if (!$uid || !isset($repository)) {
     return FALSE;
   }
@@ -2476,9 +2519,9 @@ function versioncontrol_is_account_authorized($uid, $repository) {
   foreach (module_implements('versioncontrol_is_account_authorized') as $module) {
     $function = $module .'_versioncontrol_is_account_authorized';
 
-    // If at least one hook_versioncontrol_is_account_authorized returns FALSE,
-    // the account is assumed not to be approved.
-    if ($function($uid, $repository) === FALSE) {
+    // If at least one hook_versioncontrol_is_account_authorized()
+    // returns FALSE, the account is assumed not to be approved.
+    if ($function($repository, $uid) === FALSE) {
       return FALSE;
     }
   }
@@ -3416,7 +3459,7 @@ function versioncontrol_user_autocomplete($repo_id, $string = '') {
     if (!isset($repository)) {
       $repository = versioncontrol_get_repository($repo_id);
     }
-    if (versioncontrol_is_account_authorized($user->uid, $repository)) {
+    if (versioncontrol_is_account_authorized($repository, $user->uid)) {
       $matches[$user->name] = check_plain($user->name);
     }
   }
