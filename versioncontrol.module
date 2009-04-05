@@ -1761,6 +1761,9 @@ function versioncontrol_fetch_source_items($repository, &$items) {
       $item_keys[$item['item_revision_id']] = $key;
     }
   }
+  if (empty($ids)) {
+    return;
+  }
 
   $result = db_query(
     'SELECT sit.item_revision_id, sit.source_item_revision_id, sit.action,
