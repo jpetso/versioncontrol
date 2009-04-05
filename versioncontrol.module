@@ -1500,7 +1500,7 @@ function versioncontrol_add_label_joins(&$tables) {
  * Only meant to be used within a constraint construction callback.
  */
 function versioncontrol_add_item_joins(&$tables, $join_item_revision_table = TRUE) {
-  if (!isset($tables['versioncontrol_operation_labels'])) {
+  if (!isset($tables['versioncontrol_operation_items'])) {
     $tables['versioncontrol_operation_items'] = array(
       'alias' => 'opitem',
       'join_on' => $tables['versioncontrol_operations']['alias'] .'.vc_op_id = opitem.vc_op_id',
