@@ -129,6 +129,72 @@ function hook_versioncontrol_operation($op, $operation, $operation_items) {
   }
 }
 
+/**
+ * Act on database changes when operation labels change or a given operation.
+ *
+ * @param $op
+ *   'insert' when the operation along with its label associations has just
+ *   been recorded and inserted into the database, 'update' when the set of
+ *   operation labels changes, or 'delete' if the operation along with its
+ *   label associations. Note that updating or deleting an operation label
+ *   does not automatically trigger deletion of the label itself in the
+ *   database, just the association of the operation to the label.
+ *
+ * @param $operation
+ *   An operation array containing basic information about the commit, branch
+ *   or tag operation. This is the same operation array format as is passed
+ *   to hook_versioncontrol_operation() (and other functions), see the
+ *   API documentation there for an exact description of its properties.
+ *
+ *   The operation array holds the labels' state *before* the action is being
+ *   performed. That means when @p $op is 'insert', $operation['labels'] is an
+ *   empty array, whereas with @p $op being 'update' or 'delete',
+ *   $operation['labels'] holds the previous set of operation labels (which may
+ *   also be empty of course).
+ *
+ * @param $labels
+ *   The new set of operation labels - an array of branches or tags that were
+ *   affected by the given operation. When @p $op is 'delete', this is an empty
+ *   array, whereas with @p $op being 'insert' or 'update', @p $labels holds
+ *   the new set of operation labels (which may also be empty of course).
+ *   Same format as $operation['labels'].
+ *
+ * @ingroup Operations
+ * @ingroup Database change notification
+ */
+function hook_versioncontrol_operation_labels($op, $operation, $labels) {
+  // This crude example tracks which labels are being added and removed, and
+  // adjusts a counter accordingly. Untested, don't assume this actually works.
+  $old_label_ids = $new_label_ids = array();
+  $adjustment_operators = array();
+
+  foreach ($operation['labels'] as $label) {
+    $old_label_ids[] = $label['label_id'];
+  }
+  foreach ($labels as $label) {
+    if (!in_array($label['label_id'], $old_label_ids)) {
+      $adjustment_operators[$label['label_id']] = '+';
+    }
+    $new_label_ids[] = $label['label_id'];
+  }
+  foreach ($old_label_ids as $old_label_id) {
+    if (!in_array($old_label_id, $new_label_ids)) {
+      $adjustment_operators[$old_label_id] = '-';
+    }
+  }
+
+  foreach ($adjustment_operators as $label_id => $operator) {
+    $result = db_query('SELECT label_id FROM {mymodule_label_activity}');
+    if (!db_result($result)) { // does not yet exist in the database
+      db_query("INSERT INTO {mymodule_label_activity} (label_id, activity)
+                VALUES (%d, 0)", $label_id);
+    }
+    db_query("UPDATE {mymodule_label_activity}
+              SET activity = activity $operator 1
+              WHERE label_id = %d", $label_id);
+  }
+}
+
 
 /**
  * Restrict, ignore or explicitly allow a commit, branch or tag operation

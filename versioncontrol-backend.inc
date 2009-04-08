@@ -268,11 +268,7 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
   // drupal_write_record() has now added the 'vc_op_id' to the $operation array.
 
   // Insert labels that are attached to the operation.
-  foreach ($operation['labels'] as $key => $label) {
-    $label = versioncontrol_ensure_label($operation['repository'], $label);
-    _versioncontrol_insert_operation_label($operation, $label);
-    $operation['labels'][$key] = $label; // because it now has a 'label_id'
-  }
+  $operation['labels'] = _versioncontrol_set_operation_labels($operation, $operation['labels']);
 
   $vcs = $operation['repository']['vcs'];
 
@@ -355,6 +351,15 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
     'insert', $operation, $operation_items
   );
 
+  // This one too, as there is also an update function & hook for it.
+  // Pretend that the labels didn't exist beforehand.
+  $labels = $operation['labels'];
+  $operation['labels'] = array();
+  module_invoke_all('versioncontrol_operation_labels',
+    'insert', $operation, $labels
+  );
+  $operation['labels'] = $labels;
+
   // Rules integration, because we like to enable people to be flexible.
   if (module_exists('rules')) {
     rules_invoke_event('versioncontrol_operation_insert', array(
@@ -367,18 +372,41 @@ function versioncontrol_insert_operation($operation, &$operation_items) {
 }
 
 /**
- * Insert a label entry into the {versioncontrol_operation_labels} table.
- * The label is expected to have a 'label_id' property already.
+ * Write @p $labels to the database as set of affected labels of the
+ * given @p $operation. Label ids are not required to exist yet.
+ *
+ * @return
+ *   The set of labels, all of them with 'label_id' filled in.
  */
-function _versioncontrol_insert_operation_label($operation, $label) {
-  // Before inserting that item entry, make sure it doesn't exist already.
+function _versioncontrol_set_operation_labels($operation, $labels) {
   db_query("DELETE FROM {versioncontrol_operation_labels}
-            WHERE vc_op_id = %d AND label_id = %d",
-            $operation['vc_op_id'], $label['label_id']);
+            WHERE vc_op_id = %d", $operation['vc_op_id']);
 
-  db_query("INSERT INTO {versioncontrol_operation_labels}
-            (vc_op_id, label_id, action) VALUES (%d, %d, %d)",
-            $operation['vc_op_id'], $label['label_id'], $label['action']);
+  foreach ($labels as &$label) {
+    $label = versioncontrol_ensure_label($operation['repository'], $label);
+    db_query("INSERT INTO {versioncontrol_operation_labels}
+              (vc_op_id, label_id, action) VALUES (%d, %d, %d)",
+              $operation['vc_op_id'], $label['label_id'], $label['action']);
+  }
+  return $labels;
+}
+
+/**
+ * Replace the set of affected labels of the given @p $operation with the one
+ * in @p $labels. If any of the given labels does not yet exist in the
+ * database, a database entry (including new 'label_id' array element) will
+ * be written as well.
+ *
+ * @return
+ *   The updated operation, containing the new set of labels
+ *   in $operation['labels'].
+ */
+function versioncontrol_update_operation_labels($operation, $labels) {
+  module_invoke_all('versioncontrol_operation_labels',
+    'update', $operation, $labels
+  );
+  $operation['labels'] = _versioncontrol_set_operation_labels($operation, $labels);
+  return $operation;
 }
 
 /**
@@ -539,6 +567,10 @@ function _versioncontrol_insert_source_revision($item, $source_item, $action) {
 function versioncontrol_delete_operation($operation) {
   $operation_items = versioncontrol_get_operation_items($operation);
 
+  // As versioncontrol_update_operation_labels() provides an update hook for
+  // operation labels, we should also have a delete hook for completeness.
+  module_invoke_all('versioncontrol_operation_labels',
+                    'delete', $operation, array());
   // Announce deletion of the operation before anything has happened.
   // Calls hook_versioncontrol_commit(), hook_versioncontrol_branch_operation()
   // or hook_versioncontrol_tag_operation().
