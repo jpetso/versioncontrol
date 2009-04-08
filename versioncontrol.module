@@ -2250,6 +2250,98 @@ function versioncontrol_is_deleted_item($item) {
 
 
 /**
+ * Retrieve known branches and/or tags in a repository as a set of label arrays.
+ *
+ * @param $repository
+ *   The repository of which the labels should be retrieved.
+ * @param $constraints
+ *   An optional array of constraints. If no constraints are given, all known
+ *   labels for a repository will be returned. Possible array elements are:
+ *
+ *   - 'label_ids': An array of label ids. If given, only labels with one of
+ *        these identifiers will be returned.
+ *   - 'type': Either VERSIONCONTROL_OPERATION_BRANCH or
+ *        VERSIONCONTROL_OPERATION_TAG. If given, only labels of this type
+ *        will be returned.
+ *   - 'names': An array of label names to search for. If given, only labels
+ *        matching one of these names will be returned. Matching is done with
+ *        SQL's LIKE operator, which means you can use the percentage sign
+ *        as wildcard.
+ *
+ * @return
+ *   An array of label arrays, where a label array consists of the following
+ *   array elements:
+ *
+ *   - 'label_id': The label identifier (a simple integer), used for unique
+ *        identification of branches and tags in the database.
+ *   - 'name': The branch or tag name (a string).
+ *   - 'type': Whether this label is a branch (indicated by the
+ *        VERSIONCONTROL_OPERATION_BRANCH constant) or a tag
+ *        (VERSIONCONTROL_OPERATION_TAG).
+ *
+ *   If not a single known label in the given repository matches these
+ *   constraints, an empty array is returned.
+ */
+function versioncontrol_get_labels($repository, $constraints = array()) {
+  $and_constraints = array('repo_id = %d');
+  $params = array($repository['repo_id']);
+
+  // Filter by label id.
+  if (isset($constraints['label_ids'])) {
+    if (empty($constraints['label_ids'])) {
+      return array();
+    }
+    $or_constraints = array();
+    foreach ($constraints['label_ids'] as $label_id) {
+      $or_constraints[] = 'label_id = %d';
+      $params[] = $label_id;
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  }
+
+  // Filter by label name.
+  if (isset($constraints['names'])) {
+    if (empty($constraints['names'])) {
+      return array();
+    }
+    $or_constraints = array();
+    foreach ($constraints['names'] as $name) {
+      $or_constraints[] = "name LIKE '%s'";
+      // Escape the percentage sign in order to get it to appear as '%' in the
+      // actual query, as db_query() uses the single '%' also for replacements
+      // like '%d' and '%s'.
+      $params[] = str_replace('%', '%%', $name);
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  }
+
+  // Filter by type.
+  if (isset($constraints['type'])) {
+    // There are only two types of labels (branches and tags), so a list of
+    // types doesn't make a lot of sense for this constraint. So, this one is
+    // simpler than the other ones.
+    $and_constraints[] = 'type = %d';
+    $params[] = $constraints['type'];
+  }
+
+  // All the constraints have been gathered, assemble them to a WHERE clause.
+  $and_constraints = implode(' AND ', $and_constraints);
+
+  // Execute the query.
+  $result = db_query('SELECT label_id, name, type FROM {versioncontrol_labels}
+                      WHERE '. $and_constraints .'
+                      ORDER BY uid', $params);
+
+  // Assemble the return value.
+  $labels = array();
+  while ($label = db_fetch_array($result)) {
+    $labels[] = $label;
+  }
+  return $labels;
+}
+
+
+/**
  * Retrieve a set of Drupal uid / VCS username mappings
  * that match the given constraints.
  *
