@@ -2460,7 +2460,9 @@ function versioncontrol_get_account_username_for_uid($repo_id, $uid, $include_un
  */
 function versioncontrol_account_username_suggestion($repository, $user) {
   if (versioncontrol_backend_implements($repository['vcs'], 'account_username_suggestion')) {
-    return _versioncontrol_call_backend($repository['vcs'], 'account_username_suggestion', $repository, $user);
+    return _versioncontrol_call_backend($repository['vcs'],
+      'account_username_suggestion', array($repository, $user)
+    );
   }
   return strtr(drupal_strtolower($user->name),
     array(' ' => '', '@' => '', '.' => '', '-' => '', '_' => '', '.' => '')
@@ -2483,7 +2485,7 @@ function versioncontrol_account_username_suggestion($repository, $user) {
 function versioncontrol_is_account_username_valid($repository, &$username) {
   if (versioncontrol_backend_implements($repository['vcs'], 'is_account_username_valid')) {
     // Because $username is a by-reference argument, make it a direct call.
-    $function = $repository['vcs'] .'is_account_username_valid';
+    $function = 'versioncontrol_'. $repository['vcs'] .'_is_account_username_valid';
     return $function($repository, $username);
   }
   else if (!preg_match('/^[a-zA-Z0-9]+$/', $username)) {
