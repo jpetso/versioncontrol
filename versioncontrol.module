@@ -2286,77 +2286,68 @@ function versioncontrol_get_accounts($constraints = array(), $include_unauthoriz
   // Filter by Drupal user id.
   if (isset($constraints['uids'])) {
     if (empty($constraints['uids'])) {
-      $and_constraints[] = 'FALSE';
+      return array();
     }
-    else {
-      $or_constraints = array();
-      foreach ($constraints['uids'] as $uid) {
-        $or_constraints[] = 'uid = %d';
-        $params[] = $uid;
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    $or_constraints = array();
+    foreach ($constraints['uids'] as $uid) {
+      $or_constraints[] = 'uid = %d';
+      $params[] = $uid;
     }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
   // Filter by repository id.
   if (isset($constraints['repo_ids'])) {
     if (empty($constraints['repo_ids'])) {
-      $and_constraints[] = 'FALSE';
+      return array();
     }
-    else {
-      $or_constraints = array();
-      foreach ($constraints['repo_ids'] as $repo_id) {
-        $or_constraints[] = 'repo_id = %d';
-        $params[] = $repo_id;
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    $or_constraints = array();
+    foreach ($constraints['repo_ids'] as $repo_id) {
+      $or_constraints[] = 'repo_id = %d';
+      $params[] = $repo_id;
     }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
   // Filter by VCS username.
   if (isset($constraints['usernames'])) {
     if (empty($constraints['usernames'])) {
-      $and_constraints[] = 'FALSE';
+      return array();
     }
-    else {
-      $or_constraints = array();
-      foreach ($constraints['usernames'] as $username) {
-        $or_constraints[] = "username = '%s'";
-        $params[] = $username;
-      }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+    $or_constraints = array();
+    foreach ($constraints['usernames'] as $username) {
+      $or_constraints[] = "username = '%s'";
+      $params[] = $username;
     }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
   }
 
   // Filter by usernames-by-repository.
   if (isset($constraints['usernames_by_repository'])) {
     if (empty($constraints['usernames_by_repository'])) {
-      $and_constraints[] = 'FALSE';
+      return array();
     }
-    else {
-      $or_constraints = array();
-      foreach ($usernames_by_repository as $repo_id => $usernames) {
-        $repo_constraint = 'repo_id = %d';
-        $params[] = $repo_id;
+    $or_constraints = array();
+    foreach ($usernames_by_repository as $repo_id => $usernames) {
+      $repo_constraint = 'repo_id = %d';
+      $params[] = $repo_id;
 
-        $username_constraints = array();
-        foreach ($usernames as $username) {
-          $username_constraints[] = "username = '%s'";
-          $params[] = $username;
-        }
-
-        $or_constraints[] = '('. $repo_constraint
-                            .' AND ('. implode(' OR ', $username_constraints) .'))';
+      $username_constraints = array();
+      foreach ($usernames as $username) {
+        $username_constraints[] = "username = '%s'";
+        $params[] = $username;
       }
-      $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
-    }
-  }
 
-  // Execute the query.
+      $or_constraints[] = '('. $repo_constraint
+                          .' AND ('. implode(' OR ', $username_constraints) .'))';
+    }
+    $and_constraints[] = '('. implode(' OR ', $or_constraints) .')';
+  }
 
   // All the constraints have been gathered, assemble them to a WHERE clause.
   $where = empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints);
 
+  // Execute the query.
   $result = db_query('SELECT uid, repo_id, username
                       FROM {versioncontrol_accounts}
                       '. $where .'
