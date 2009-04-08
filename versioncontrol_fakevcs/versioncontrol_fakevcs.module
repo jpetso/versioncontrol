@@ -584,7 +584,7 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
         'revision'  => '502',
       ),
       'selected_label' => NULL,
-    )
+    ),
     '/trunk/contributions/modules/versioncontrol/versioncontrol.module' => array(
       'item' => array(
         'type'      => VERSIONCONTROL_ITEM_FILE,
@@ -1161,7 +1161,7 @@ function versioncontrol_fakevcs_export_accounts($repository, $accounts) {
 
   $data = '';
   foreach ($accounts_flat as $uid => $account) {
-    $data .= '# '. url('user/'. $uid, array('absolute' => TRUE))) ."\n";
+    $data .= '# '. url('user/'. $uid, array('absolute' => TRUE)) ."\n";
     $data .= $account['username'] .':'. $account['password'] ."\n";
   }
   return $data;
