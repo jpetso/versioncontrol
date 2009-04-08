@@ -537,7 +537,7 @@ function _versioncontrol_insert_source_revision($item, $source_item, $action) {
  *   the operation that should be deleted.
  */
 function versioncontrol_delete_operation($operation) {
-  $operation_details = versioncontrol_get_operation_items($operation);
+  $operation_items = versioncontrol_get_operation_items($operation);
 
   // Announce deletion of the operation before anything has happened.
   // Calls hook_versioncontrol_commit(), hook_versioncontrol_branch_operation()
