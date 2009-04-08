@@ -2898,10 +2898,21 @@ function versioncontrol_format_item_revision_identifier($repository, $item, $for
  *   The repository that the item is located in.
  * @param $path
  *   The path of the requested item.
- * @param $revision
- *   A specific revision for the requested item (as interpreted by the
- *   VCS backend), or NULL if any revision is good enough - preferably,
- *   the most recent one.
+ * @param $constraints
+ *   An optional array specifying one of two possible array keys which specify
+ *   the exact revision of the item:
+ *
+ *   - 'revision': A specific revision for the requested item, in the same
+ *        VCS-specific format as $item['revision']. A repository/path/revision
+ *        combination is always unique, so no additional information is needed.
+ *   - 'label': A label array with at least 'name' and 'type' elements
+ *        filled in. If a label is provided, it should be incorporated into the
+ *        result item as 'selected_label' (see return value docs), and will
+ *        cause the most recent item on the label to be fetched. If the label
+ *        includes an additional 'date' property holding a Unix timestamp, the
+ *        item at that point of time will be retrieved instead of the most
+ *        recent one. (For tag labels, there is only one item anyways, so
+ *        nevermind the "most recent" part in that case.)
  *
  * @return
  *   If the item with the given path and revision cannot be retrieved, NULL is
@@ -2922,9 +2933,9 @@ function versioncontrol_format_item_revision_identifier($repository, $item, $for
  *   'item_revision_id' database identifier might also be filled in
  *   (optionally, depending on the VCS backend).
  */
-function versioncontrol_get_item($repository, $path, $revision = NULL) {
+function versioncontrol_get_item($repository, $path, $constraints = array()) {
   $info = _versioncontrol_call_backend(
-    $repository['vcs'], 'get_item', array($repository, $path, $revision)
+    $repository['vcs'], 'get_item', array($repository, $path, $constraints)
   );
   if (empty($info)) {
     return NULL;
@@ -3111,7 +3122,9 @@ function versioncontrol_get_directory_contents($repository, $directory_item, $re
 
 /**
  * Retrieve a copy of the contents of a given file item in the repository.
+ *
  * (You won't get the original because repositories can often be remote.)
+ *
  * The caller should make sure to delete the file when it's not needed anymore.
  * That requirement might change in the future though.
  *
@@ -3141,7 +3154,58 @@ function versioncontrol_export_file($repository, $file_item) {
   if ($success) {
     return $destination;
   }
+  @unlink($destination);
   return NULL;
+}
+
+/**
+ * Retrieve a copy of the given directory item in the repository.
+ *
+ * (You won't get the original because repositories can often be remote.)
+ *
+ * The caller should make sure to delete the directory when it's not needed
+ * anymore.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'export_directory')
+ * if the particular backend actually implements it.
+ *
+ * @param $repository
+ *   The repository that the directory item is located in.
+ * @param $directory_item
+ *   The directory item whose contents should be exported.
+ * @param $destination_dirpath
+ *   The path of the directory that will receive the contents of the exported
+ *   repository item. If that directory already exists, it will be replaced.
+ *   If that directory doesn't yet exist, it will be created by the backend.
+ *   (This directory will directly correspond to the @p $directory_item - there
+ *   are no artificial subdirectories, even if the @p $destination_dirpath has
+ *   a different basename than the original path of the @p $directory_item.)
+ *
+ * @return
+ *   TRUE if successful, or FALSE if not.
+ *   FALSE can be returned if the given item is not under version control,
+ *   or was not under version control at the time of the given revision,
+ *   or simply cannot be exported to the destination directory for any reason.
+ */
+function versioncontrol_export_directory($repository, $directory_item, $destination_dirpath) {
+  if (!versioncontrol_is_directory_item($directory_item)) {
+    return FALSE;
+  }
+  // Unless file.inc provides a nice function for recursively deleting
+  // directories, let's just go for the straightforward portable method.
+  $rm = (strtoupper(substr(PHP_OS, 0, 3)) == 'WIN') ? 'rd /s' : 'rm -rf';
+  exec("$rm $destination_dirpath");
+
+  $success = _versioncontrol_call_backend(
+    $repository['vcs'], 'export_directory',
+    array($repository, $directory_item, $destination_dirpath)
+  );
+  if (!$success) {
+    exec("$rm $destination_dirpath");
+    return FALSE;
+  }
+  return TRUE;
 }
 
 /**

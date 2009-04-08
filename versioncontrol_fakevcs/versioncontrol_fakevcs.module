@@ -317,7 +317,7 @@ function versioncontrol_fakevcs_get_selected_label_from_other_item($repository, 
 }
 
 /**
- * Implementation of [vcs_backend]_get_item():
+ * Implementation of [versioncontrol_backend]_get_item():
  * Try to retrieve a given item in a repository.
  *
  * This function is optional for VCS backends to implement, be sure to check
@@ -328,10 +328,21 @@ function versioncontrol_fakevcs_get_selected_label_from_other_item($repository, 
  *   The repository that the item is located in.
  * @param $path
  *   The path of the requested item.
- * @param $revision
- *   A specific revision for the requested item (as interpreted by the
- *   VCS backend), or NULL if any revision is good enough - preferably,
- *   the most recent one.
+ * @param $constraints
+ *   An optional array specifying one of two possible array keys which specify
+ *   the exact revision of the item:
+ *
+ *   - 'revision': A specific revision for the requested item, in the same
+ *        VCS-specific format as $item['revision']. A repository/path/revision
+ *        combination is always unique, so no additional information is needed.
+ *   - 'label': A label array with at least 'name' and 'type' elements
+ *        filled in. If a label is provided, it should be incorporated into the
+ *        result item as 'selected_label' (see return value docs), and will
+ *        cause the most recent item on the label to be fetched. If the label
+ *        includes an additional 'date' property holding a Unix timestamp, the
+ *        item at that point of time will be retrieved instead of the most
+ *        recent one. (For tag labels, there is only one item anyways, so
+ *        nevermind the "most recent" part in that case.)
  *
  * @return
  *   If the item with the given path and revision cannot be retrieved, NULL is
@@ -371,12 +382,11 @@ function versioncontrol_fakevcs_get_selected_label_from_other_item($repository, 
  *        will be a small performance improvement as the label doesn't need to
  *        be compared to and loaded from the database anymore.
  */
-function versioncontrol_fakevcs_get_item($repository, $path, $revision = '') {
+function versioncontrol_fakevcs_get_item($repository, $path, $constraints = array()) {
   // Slightly adapted version of the SVN backend's implementation.
-  if (empty($revision)) {
-    $revision = 'HEAD';
-  }
+
   // Wherever you get your item info from.
+  $revision = empty($constraints['revision']) ? 'HEAD' : $constraints['revision'];
   $info = fakevcs_item_info($repository, $path, $revision);
 
   $item = array(
@@ -716,12 +726,10 @@ function versioncontrol_fakevcs_get_directory_contents($repository, $directory_i
 }
 
 /**
- * Implementation of [versioncontrol_backend]_open_file_handle():
+ * Implementation of [versioncontrol_backend]_export_file():
  * Retrieve a copy of the contents of a given item in the repository.
- * (You won't get the original because repositories can often be remote.)
  *
- * If a file could not be created, backends should take care to delete any
- * remaining temporary files before returning.
+ * (You won't get the original because repositories can often be remote.)
  *
  * This function is optional for VCS backends to implement, be sure to check
  * with versioncontrol_backend_implements($repository['vcs'], 'export_file')
@@ -743,7 +751,47 @@ function versioncontrol_fakevcs_export_file($repository, $file_item, $destinatio
        $output, $return_code);
 
   if ($return_code != 0) {
-    @unlink($destination);
+    return FALSE;
+  }
+  return TRUE;
+}
+
+/**
+ * Implementation of [versioncontrol_backend]_export_directory():
+ * Retrieve a copy of the given directory item in the repository.
+ *
+ * (You won't get the original because repositories can often be remote.)
+ * The caller should make sure to delete the directory when it's not needed
+ * anymore.
+ *
+ * This function is optional for VCS backends to implement, be sure to check
+ * with versioncontrol_backend_implements($repository['vcs'], 'export_directory')
+ * if the particular backend actually implements it.
+ *
+ * @param $repository
+ *   The repository that the directory item is located in.
+ * @param $directory_item
+ *   The directory item whose contents should be exported.
+ * @param $destination_dirpath
+ *   The path of the directory that will receive the contents of the exported
+ *   repository item. Version Control API makes sure that this directory does
+ *   not exist when this function is called. (If it does exist, it will be
+ *   deleted.) This directory will directly correspond to the
+ *   @p $directory_item - there are no artificial subdirectories, even if the
+ *   @p $destination_dirpath has a different basename than the original path of
+ *   the @p $directory_item.
+ *
+ * @return
+ *   TRUE if successful, or FALSE if not.
+ *   FALSE can be returned if the given item is not under version control,
+ *   or was not under version control at the time of the given revision,
+ *   or simply cannot be exported to the destination directory for any reason.
+ */
+function versioncontrol_fakevcs_export_directory($repository, $directory_item, $destination_dirpath) {
+  exec('fakevcs export '. $repository['root'] . $directory_item['path']
+        .' '. $destination_dirpath, $output, $return_code);
+
+  if ($return_code != 0) {
     return FALSE;
   }
   return TRUE;
