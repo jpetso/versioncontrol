@@ -145,14 +145,17 @@ function versioncontrol_fakevcs_alter_repositories(&$repositories, $fakevcs_spec
  * function, which for example makes it possible to cut the SHA-1 hash in
  * distributed version control systems down to a readable length.
  *
+ * @param $repository
+ *   The repository array for the repository where the revision is located.
  * @param $revision
- *   The commit identifier that should be themed.
+ *   The unformatted revision, as given in $operation['revision']
+ *   or $item['revision'] (or the respective table columns for those values).
  * @param $format
  *   Either 'full' for the original version, or 'short' for a more compact form.
  *   If the commit identifier doesn't need to be shortened, the results can
  *   be the same for both versions.
  */
-function versioncontrol_fakevcs_format_revision_identifier($revision, $format = 'full') {
+function versioncontrol_fakevcs_format_revision_identifier($repository, $revision, $format = 'full') {
   switch ($format) {
     case 'full':
     case 'short':
@@ -406,7 +409,7 @@ function versioncontrol_fakevcs_get_item($repository, $path, $constraints = arra
  * different branches and/or tags where the item exists.
  *
  * This function is optional for VCS backends to implement, be sure to check
- * with versioncontrol_backend_implements($repository['vcs'], 'get_directory_contents')
+ * with versioncontrol_backend_implements($repository['vcs'], 'get_parallel_items')
  * if the particular backend actually implements it.
  *
  * @param $repository
