@@ -689,7 +689,7 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
 
   $result = db_query('SELECT registration_message
                       FROM {versioncontrol_repository_metadata}
-                      WHERE repo_id = %d', $repo_id);
+                      WHERE repo_id = %d', $repository['repo_id']);
   while ($row = db_fetch_object($result)) {
     $current_registration_message = $row->registration_message;
   }
@@ -718,7 +718,7 @@ function versioncontrol_admin_repository_edit(&$form_state, $repository, $vcs = 
   $form['account_registration']['repository_messages'] = array(
     '#type' => 'fieldset',
     '#title' => t('Account registration form strings'),
-    '#description' => t('The following message is shown on the !account-registration-page for this repository.', array('!account-registration-page' => l(t('account registration page'), 'versioncontrol/register/demo/'. $repo_id))),
+    '#description' => t('The following message is shown on the !account-registration-page for this repository.', array('!account-registration-page' => l(t('account registration page'), 'versioncontrol/register/demo/'. $repository['repo_id']))),
     '#collapsible' => TRUE,
     '#collapsed' => FALSE,
     '#weight' => 2,
@@ -886,7 +886,7 @@ function versioncontrol_admin_repository_delete_confirm(&$form_state, $repositor
 
   $form = confirm_form($form,
     t('Are you sure you want to delete %name?', array('%name' => $repository['name'])),
-    $_GET['destination'] ? $_GET['destination'] : 'admin/project/versioncontrol-repositories',
+    !empty($_GET['destination']) ? $_GET['destination'] : 'admin/project/versioncontrol-repositories',
     t('Mind that by deleting the repository, all associated data such as commits and account associations will be deleted as well.'),
     t('Delete'), t('Cancel')
   );
