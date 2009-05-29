@@ -100,6 +100,16 @@ define('VERSIONCONTROL_CONSTRAINT_SINGLE',             2);
 define('VERSIONCONTROL_CONSTRAINT_SINGLE_OR_MULTIPLE', 3);
 //@}
 
+/**
+ * @name User relation constraints
+ * Allowed values for use with the 'user_relation' constraint in
+ * versioncontrol_get_operations() queries.
+ */
+//@{
+define('VERSIONCONTROL_USER_ASSOCIATED',        1);
+define('VERSIONCONTROL_USER_ASSOCIATED_ACTIVE', 2);
+//@}
+
 /** Used internally by the repository and account admin pages. Private constant. */
 define('VERSIONCONTROL_FORM_CREATE', FALSE);
 
@@ -918,6 +928,10 @@ function versioncontrol_get_tag_operations($constraints = array(), $options = ar
  *        version control systems themselves get to see), like
  *        array('dww', 'jpetso'). If given, the result set will only contain
  *        operations that were performed by any of the specified users.
+ *   - 'user_relation': If set to VERSIONCONTROL_USER_ASSOCIATED, only
+ *        operations whose authors can be associated to Drupal users will be
+ *        returned. If set to VERSIONCONTROL_USER_ASSOCIATED_ACTIVE, only users
+ *        will be considered that are not blocked.
  *
  * @param $options
  *   An optional array of additional options for retrieving the operations.
@@ -928,10 +942,10 @@ function versioncontrol_get_tag_operations($constraints = array(), $options = ar
  *        Can be set to 'range' or 'pager' to use the db_query_range()
  *        or pager_query() functions instead. Additional options are required
  *        in this case.
- *   - 'count': Required for both 'range' and 'pager' as 'query_type'.
+ *   - 'count': Required if 'query_type' is either 'range' or 'pager'.
  *        Specifies the number of operations to be returned by this function.
- *   - 'from': Required for 'range' as 'query_type'. Specifies the first
- *        result row to return.
+ *   - 'from': Required if 'query_type' is 'range'. Specifies the first
+ *        result row to return. (Usually you want to pass 0 for this one.)
  *   - 'pager_element': Optional for 'pager' as 'query_type'. An optional
  *        integer to distinguish between multiple pagers on one page.
  *
@@ -997,12 +1011,6 @@ function versioncontrol_get_tag_operations($constraints = array(), $options = ar
  *   an empty array is returned.
  */
 function versioncontrol_get_operations($constraints = array(), $options = array()) {
-  // Let modules alter the query by transforming custom constraints into
-  // stuff that Version Control API can understand.
-  drupal_alter('versioncontrol_operation_constraints', $constraints);
-
-  // Construct the actual query, and let other modules provide "native"
-  // custom constraints as well.
   $tables = array(
     'versioncontrol_operations' => array('alias' => 'op'),
     'versioncontrol_repositories' => array(
@@ -1010,39 +1018,30 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
       'join_on' => 'op.repo_id = r.repo_id',
     ),
   );
-  $and_constraints = array();
-  $params = array();
-  $valid_constraints = _versioncontrol_construct_operation_query(
-    $constraints, $tables, $and_constraints, $params
+  // Construct the actual query, and let other modules provide "native"
+  // custom constraints as well.
+  $query_info = _versioncontrol_construct_operation_query(
+    $constraints, $tables
   );
-  if (!$valid_constraints) {
+  if (empty($query_info)) {
     return array();
-  }
-
-  $from = array();
-  foreach ($tables as $table_name => $table_info) {
-    $table_string = '{'. $table_name .'} '. $table_info['alias'];
-    if (isset($table_info['join_on'])) {
-      $table_string .= ' ON '. $table_info['join_on'] .' ';
-    }
-    $from[] = $table_string;
   }
 
   $query = 'SELECT DISTINCT(op.vc_op_id), op.type, op.date, op.uid,
             op.username, op.message, op.revision, r.repo_id, r.vcs
-            FROM '. implode(' INNER JOIN ', $from) .
-            (empty($and_constraints) ? '' : ' WHERE '. implode(' AND ', $and_constraints)) .'
+            FROM '. $query_info['from'] .
+            (empty($query_info['where']) ? '' : ' WHERE '. $query_info['where']) .'
             ORDER BY op.date DESC, op.vc_op_id DESC';
 
   if (isset($options['query_type']) && $options['query_type'] == 'pager') {
     $element = isset($options['pager_element']) ? $options['pager_element'] : 0;
-    $result = pager_query($query, $options['count'], $element, NULL, $params);
+    $result = pager_query($query, $options['count'], $element, NULL, $query_info['params']);
   }
   elseif (isset($options['query_type']) && $options['query_type'] == 'range') {
-    $result = db_query_range($query, $params, $options['from'], $options['count']);
+    $result = db_query_range($query, $query_info['params'], $options['from'], $options['count']);
   }
   else {
-    $result = db_query($query, $params);
+    $result = db_query($query, $query_info['params']);
   }
 
   $operations = array();
@@ -1107,23 +1106,170 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
 }
 
 /**
- * Assemble a list of query constraints from the given $constraints array.
- * The @p $tables, @p $and_constraints and @p $params arguments are altered
- * to contain all necessary tables (table name as key, along with 'alias'
- * and 'join_on' elements for each table), the list of WHERE constraints that
- * is supposed to be imploded with an SQL "AND", and the list of parameter
- * values for all the '%d' and '%s' placeholders.
+ * Retrieve the number of operations that match the given constraints,
+ * plus some details about the first and last matching operation.
+ *
+ * @param $constraints
+ *   An optional array of constraints. This array has the same format as the
+ *   one in versioncontrol_get_operations(), see the API documentation of that
+ *   function for a detailed list of possible constraints.
+ * @param $group_options
+ *   An optional array of further options that change the returned value.
+ *   All of these are only used if the 'group_by' element is set.
+ *   The following array keys are recognized:
+ *
+ *   - 'group_by': If given, the result will be a list of statistics grouped by
+ *        the given {versioncontrol_operations} columns instead of a single
+ *        statistics object, with the grouping columns as array keys.
+ *        (In case multiple grouping columns are given, they will be
+ *        concatenated with "\t" to make up the array key.)
+ *        For example, if a non-grouped function call returned a single
+ *        statistics object, a call specifying array('uid') for this option
+ *        will return an array of multiple statistics objects with the Drupal
+ *        user id as array key. You can also group by columns from other
+ *        tables. In order to do that, an array needs to be passed instead of a
+ *        simple column name, containing the keys 'table', 'column' and
+ *        'join callback' - the latter being a join callback like the ones
+ *        in hook_versioncontrol_operation_constraint_info().
+ *   - 'order_by': An array of columns to sort on. Allowed columns are
+ *        'total_operations', 'first_operation_date', 'last_operation_date'
+ *        as well as any of the columns given in @p $group_by.
+ *   - 'order_ascending': The default is to sort with DESC if sort columns
+ *        are given, but ASC sorting will be used if this is set to TRUE.
+ *   - 'limit': Specifies that only the first N statistics should should be
+ *        returned, sorting is taken into account. Passing 0 for this option
+ *        has the same outcome as leaving it unset - in both cases, all
+ *        resulting statistics will be returned.
  *
  * @return
- *   FALSE if the constraints were invalid or will return an empty result set
- *   anyways. TRUE otherwise.
+ *   A statistics object with integers for the keys 'total_operations',
+ *   'first_operation_date' and 'last_operation_date' (the latter two being
+ *   Unix timestamps). If grouping columns were given, an array of such
+ *   statistics objects is returned, with the grouping columns' values as
+ *   additional properties for each object.
  */
-function _versioncontrol_construct_operation_query($constraints, &$tables, &$and_constraints, &$params) {
+function versioncontrol_get_operation_statistics($constraints = array(), $group_options = array()) {
+  $calculated_columns = array(
+    'total_operations', 'first_operation_date', 'last_operation_date'
+  );
+  $tables = array(
+    'versioncontrol_operations' => array('alias' => 'op'),
+  );
+  $qualified_group_by = array();
+
+  // Resolve table aliases for the group-by and sort-by columns.
+  if (!empty($group_options['group_by'])) {
+    foreach ($group_options['group_by'] as &$column) {
+      $table = is_string($column) ? 'versioncontrol_operations' : $column['table'];
+
+      if (is_array($column)) {
+        $table_callback = $column['join callback'];
+        $table_callback($tables);
+        $column = $column['column'];
+      }
+      $qualified_group_by[] = $tables[$table]['alias'] .'.'. $column;
+    }
+    if (!empty($group_options['order_by'])) {
+      foreach ($group_options['order_by'] as &$column) {
+        if (in_array($column, $calculated_columns)) {
+          continue; // We don't want to prefix those with "op.".
+        }
+        $table = is_string($column) ? 'versioncontrol_operations' : $column['table'];
+        $column = $tables[$table]['alias'] .'.'.
+          (is_string($column) ? $column : $column['column']);
+      }
+    }
+  }
+
+  // Construct the actual query, and let other modules provide "native"
+  // custom constraints as well.
+  $query_info = _versioncontrol_construct_operation_query(
+    $constraints, $tables
+  );
+  if (empty($query_info)) { // query won't yield any results
+    return empty($group_options['group_by'])
+      ? (object) array_fill_keys($calculated_columns, 0)
+      : array();
+  }
+
+  $group_by_select = '';
+  $group_by_clause = '';
+  $order_by_clause = '';
+  if (!empty($group_options['group_by'])) {
+    $group_by_select = implode(', ', $qualified_group_by) .', ';
+    $group_by_clause = ' GROUP BY '. implode(', ', $qualified_group_by);
+
+    if (!empty($group_options['order_by'])) {
+      $order_by_clause = ' ORDER BY '. implode(', ', $group_options['order_by'])
+        . (empty($group_options['order_ascending']) ? ' DESC' : ' ASC');
+    }
+  }
+
+  $query = '
+    SELECT '. $group_by_select .'COUNT(op.vc_op_id) AS total_operations,
+    MIN(op.date) AS first_operation_date, MAX(op.date) AS last_operation_date
+    FROM '. $query_info['from'] .
+    (empty($query_info['where']) ? '' : ' WHERE '. $query_info['where'])
+    . $group_by_clause . $order_by_clause;
+
+  // The query has been built, now execute it.
+  if (!empty($group_options['limit'])) {
+    $result = db_query_range($query, $query_info['params'], 0, $group_options['limit']);
+  }
+  else {
+    $result = db_query($query, $query_info['params']);
+  }
+
+  $statistics = array();
+
+  // Construct the result value.
+  while ($row = db_fetch_object($result)) {
+    if ($row->total_operations == 0) {
+      $row->first_operation_date = 0;
+      $row->last_operation_date = 0;
+    }
+    if (empty($group_options['group_by'])) {
+      $statistics = $row;
+      break; // Without grouping, it's just one result row anyways.
+    }
+    else {
+      $group_values = array();
+      foreach ($group_options['group_by'] as $column) {
+        $group_values[$column] = $row->$column;
+      }
+      $key = implode("\t", $group_values);
+      $statistics[$key] = $row;
+    }
+  }
+  return $statistics;
+}
+
+/**
+ * Assemble a list of query constraints from the given @p $constraints and
+ * @p $tables arrays. Both of these are likely to be altered to match the
+ * actual query, although in practice you probably won't need them anymore.
+ *
+ * @return
+ *   A query information array with keys 'from', 'where' and 'params', or an
+ *   empty array if the constraints were invalid or will return an empty result
+ *   set anyways. The 'from' and 'where' elements are strings to be used inside
+ *   an SQL query (but don't include the actual FROM and WHERE keywords),
+ *   and the 'params' element is an array with query parameter values for the
+ *   returned WHERE clause.
+ */
+function _versioncontrol_construct_operation_query(&$constraints, &$tables) {
+  // Let modules alter the query by transforming custom constraints into
+  // stuff that Version Control API can understand.
+  drupal_alter('versioncontrol_operation_constraints', $constraints);
+
+  $and_constraints = array();
+  $params = array();
   $constraint_info = _versioncontrol_operation_constraint_info();
+  $join_callbacks = array();
 
   foreach ($constraints as $key => $constraint_value) {
     if (!isset($constraint_info[$key])) {
-      return FALSE; // No such constraint -> empty result.
+      return array(); // No such constraint -> empty result.
     }
 
     // Standardization: put everything into an array if it isn't already.
@@ -1135,7 +1281,7 @@ function _versioncontrol_construct_operation_query($constraints, &$tables, &$and
     }
 
     if (empty($constraints[$key])) {
-      return FALSE; // Empty set of constraint options -> empty result.
+      return array(); // Empty set of constraint options -> empty result.
     }
     // Single-value constraints get the originally provided constraint value.
     // All others get the multiple-value constraint array.
@@ -1143,10 +1289,39 @@ function _versioncontrol_construct_operation_query($constraints, &$tables, &$and
       $constraints[$key] = reset($constraints[$key]);
     }
 
+    // If the constraint unconditionally requires extra tables, add them to
+    // the $tables array by calling the join callback.
+    if (!empty($constraint_info[$key]['join callback'])) {
+      $function = $constraint_info[$key]['join callback'];
+
+      if (!isset($join_callbacks[$function])) { // no need to call it twice
+        $join_callbacks[$function] = TRUE;
+        $function($tables);
+      }
+    }
+
     $function = $constraint_info[$key]['callback'];
     $function($constraints[$key], $tables, $and_constraints, $params);
   }
-  return TRUE;
+
+  // Now that we have all the information, let's construct some usable query parts.
+  $from = array();
+  foreach ($tables as $table_name => $table_info) {
+    if (!empty($table_info['real_table'])) {
+      $table_name = $table_info['real_table'];
+    }
+    $table_string = '{'. $table_name .'} '. $table_info['alias'];
+    if (isset($table_info['join_on'])) {
+      $table_string .= ' ON '. $table_info['join_on'] .' ';
+    }
+    $from[] = $table_string;
+  }
+
+  return array(
+    'from' => implode(' INNER JOIN ', $from),
+    'where' => '('. implode(' AND ', $and_constraints) .')',
+    'params' => $params,
+  );
 }
 
 /**
@@ -1183,21 +1358,22 @@ function _versioncontrol_operation_constraint_info() {
  */
 function versioncontrol_versioncontrol_operation_constraint_info() {
   return array(
-    'vcs' => array(),
+    'vcs' => array('join callback' => 'versioncontrol_table_repositories_join'),
     'vc_op_ids' => array(),
     'revisions' => array(),
-    'repo_ids' => array(),
+    'repo_ids' => array('join callback' => 'versioncontrol_table_repositories_join'),
     'date_lower' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE),
     'date_upper' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE),
     'uids' => array(),
     'usernames' => array(),
+    'user_relation' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE),
     'message' => array('cardinality' => VERSIONCONTROL_CONSTRAINT_SINGLE_OR_MULTIPLE),
-    'item_revision_ids' => array(),
-    'item_revisions' => array(),
-    'paths' => array(),
-    'labels' => array(),
-    'tags' => array(),
-    'branches' => array(),
+    'item_revision_ids' => array('join callback' => 'versioncontrol_table_operation_items_join'),
+    'item_revisions' => array('join callback' => 'versioncontrol_table_item_revisions_join'),
+    'paths' => array('join callback' => 'versioncontrol_table_item_revisions_join'),
+    'labels' => array('join callback' => 'versioncontrol_table_labels_join'),
+    'tags' => array('join callback' => 'versioncontrol_table_labels_join'),
+    'branches' => array('join callback' => 'versioncontrol_table_labels_join'),
     'types' => array(),
   );
 }
@@ -1313,6 +1489,18 @@ function versioncontrol_operation_constraint_usernames($constraint, &$tables, &$
 }
 
 /**
+ * Filter operations by associated Drupal user status of the operation author.
+ */
+function versioncontrol_operation_constraint_user_relation($constraint, &$tables, &$and_constraints, &$params) {
+  $and_constraints[] = $tables['versioncontrol_operations']['alias'] .'.uid <> 0';
+
+  if ($constraint == VERSIONCONTROL_USER_ASSOCIATED_ACTIVE) {
+    versioncontrol_table_users_join($tables);
+    $and_constraints[] = $tables['users']['alias'] .'.status = 1';
+  }
+}
+
+/**
  * Filter operations by their log message.
  */
 function versioncontrol_operation_constraint_message($constraint, &$tables, &$and_constraints, &$params) {
@@ -1328,7 +1516,6 @@ function versioncontrol_operation_constraint_message($constraint, &$tables, &$an
  * Filter operations by item_revision_ids of associated items.
  */
 function versioncontrol_operation_constraint_item_revision_ids($constraint, &$tables, &$and_constraints, &$params) {
-  versioncontrol_add_item_joins($tables, FALSE);
   $or_constraints = array();
 
   $placeholders = array();
@@ -1348,7 +1535,6 @@ function versioncontrol_operation_constraint_item_revision_ids($constraint, &$ta
  * Filter operations by revision identifiers of associated items.
  */
 function versioncontrol_operation_constraint_item_revisions($constraint, &$tables, &$and_constraints, &$params) {
-  versioncontrol_add_item_joins($tables);
   $or_constraints = array();
 
   $placeholders = array();
@@ -1367,7 +1553,6 @@ function versioncontrol_operation_constraint_item_revisions($constraint, &$table
  * Filter operations by item paths of associated items.
  */
 function versioncontrol_operation_constraint_paths($constraint, &$tables, &$and_constraints, &$params) {
-  versioncontrol_add_item_joins($tables);
   $or_constraints = array();
 
   foreach ($constraint as $path) {
@@ -1398,7 +1583,6 @@ function versioncontrol_operation_constraint_paths($constraint, &$tables, &$and_
  * Filter operations by associated label names (both branches and tags).
  */
 function versioncontrol_operation_constraint_labels($constraint, &$tables, &$and_constraints, &$params) {
-  versioncontrol_add_label_joins($tables);
   $or_constraints = array();
   foreach ($constraint as $label_name) {
     $or_constraints[] = $tables['versioncontrol_labels']['alias'] .".name = '%s'";
@@ -1411,7 +1595,6 @@ function versioncontrol_operation_constraint_labels($constraint, &$tables, &$and
  * Filter operations by associated tag names.
  */
 function versioncontrol_operation_constraint_tags($constraint, &$tables, &$and_constraints, &$params) {
-  versioncontrol_add_label_joins($tables);
   $or_constraints = array();
   foreach ($constraint as $label_name) {
     $or_constraints[] = $tables['versioncontrol_labels']['alias'] .".name = '%s'";
@@ -1427,7 +1610,6 @@ function versioncontrol_operation_constraint_tags($constraint, &$tables, &$and_c
  * (Applies to both branch operations and commits).
  */
 function versioncontrol_operation_constraint_branches($constraint, &$tables, &$and_constraints, &$params) {
-  versioncontrol_add_label_joins($tables);
   $or_constraints = array();
   foreach ($constraint as $label_name) {
     $or_constraints[] = $tables['versioncontrol_labels']['alias'] .".name = '%s'";
@@ -1452,7 +1634,7 @@ function versioncontrol_operation_constraint_types($constraint, &$tables, &$and_
     $params[] = VERSIONCONTROL_OPERATION_COMMIT;
   }
   if (in_array(VERSIONCONTROL_OPERATION_BRANCH, $constraint)) {
-    versioncontrol_add_label_joins($tables);
+    versioncontrol_table_labels_join($tables);
     $or_constraints[] = '('.
       $tables['versioncontrol_labels']['alias'] .'.type = %d AND '.
       $tables['versioncontrol_operation_labels']['alias'] .'.action <> %d
@@ -1462,7 +1644,7 @@ function versioncontrol_operation_constraint_types($constraint, &$tables, &$and_
     $params[] = VERSIONCONTROL_ACTION_MODIFIED;
   }
   if (in_array(VERSIONCONTROL_OPERATION_TAG, $constraint)) {
-    versioncontrol_add_label_joins($tables);
+    versioncontrol_table_labels_join($tables);
     $or_constraints[] = '('.
       $tables['versioncontrol_labels']['alias'] .'.type = %d AND '.
       $tables['versioncontrol_operation_labels']['alias'] .'.action <> %d
@@ -1475,11 +1657,39 @@ function versioncontrol_operation_constraint_types($constraint, &$tables, &$and_
 }
 
 /**
+ * Take an existing @p $tables array and add the table join for
+ * {versioncontrol_repositories}. Only meant to be used within a
+ * constraint construction callback.
+ */
+function versioncontrol_table_repositories_join(&$tables) {
+  if (!isset($tables['versioncontrol_repositories'])) {
+    $tables['versioncontrol_repositories'] = array(
+      'alias' => 'r',
+      'join_on' => 'op.repo_id = r.repo_id',
+    );
+  }
+}
+
+/**
+ * Take an existing @p $tables array and add the table join for {users} on
+ * {versioncontrol_operations}.uid. Only meant to be used within a
+ * constraint construction callback.
+ */
+function versioncontrol_table_users_join(&$tables) {
+  if (!isset($tables['users'])) {
+    $tables['users'] = array(
+      'alias' => 'user',
+      'join_on' => 'op.uid = user.uid',
+    );
+  }
+}
+
+/**
  * Take an existing @p $tables array and add the table joins for
  * {versioncontrol_operation_labels} and {versioncontrol_labels}.
  * Only meant to be used within a constraint construction callback.
  */
-function versioncontrol_add_label_joins(&$tables) {
+function versioncontrol_table_labels_join(&$tables) {
   if (!isset($tables['versioncontrol_operation_labels'])) {
     $tables['versioncontrol_operation_labels'] = array(
       'alias' => 'oplabel',
@@ -1493,20 +1703,28 @@ function versioncontrol_add_label_joins(&$tables) {
 }
 
 /**
- * Take an existing @p $tables array and add the table joins for
- * {versioncontrol_operation_items} and {versioncontrol_item_revisions}.
- * The latter can be left out by passing FALSE for the
- * @p $join_item_revision_table parameter.
+ * Take an existing @p $tables array and add the table join for
+ * {versioncontrol_operation_items}.
  * Only meant to be used within a constraint construction callback.
  */
-function versioncontrol_add_item_joins(&$tables, $join_item_revision_table = TRUE) {
+function versioncontrol_table_operation_items_join(&$tables) {
   if (!isset($tables['versioncontrol_operation_items'])) {
     $tables['versioncontrol_operation_items'] = array(
       'alias' => 'opitem',
       'join_on' => $tables['versioncontrol_operations']['alias'] .'.vc_op_id = opitem.vc_op_id',
     );
   }
-  if (!isset($tables['versioncontrol_item_revisions']) && $join_item_revision_table) {
+}
+
+/**
+ * Take an existing @p $tables array and add the table joins for
+ * {versioncontrol_operation_labels} and {versioncontrol_labels}.
+ * Only meant to be used within a constraint construction callback.
+ */
+function versioncontrol_table_item_revisions_join(&$tables) {
+  if (!isset($tables['versioncontrol_item_revisions'])) {
+    versioncontrol_table_operation_items_join(&$tables);
+
     $tables['versioncontrol_item_revisions'] = array(
       'alias' => 'ir',
       'join_on' => 'opitem.item_revision_id = ir.item_revision_id',
@@ -3359,7 +3577,7 @@ function versioncontrol_path_contains($parent_path, $child_path) {
  */
 function theme_versioncontrol_account_username($uid, $username, $repository, $prefer_drupal_username = TRUE, $format = 'html') {
   if ($uid && $prefer_drupal_username) {
-    $user = user_load(array('uid' => $uid));
+    $user = user_load($uid);
 
     if ($user && $prefer_drupal_username) {
       return ($format == 'html') ? theme('username', $user) : $user->name;
@@ -3368,180 +3586,57 @@ function theme_versioncontrol_account_username($uid, $username, $repository, $pr
 
   if ($format == 'html') {
     return module_exists('commitlog')
-            ? commitlog_account_url($repository, $username)
-            : check_plain($username);
+            ? commitlog_get_account_link($repository, $username)
+            : t('!user @ !repository', array(
+                '!user' => $username,
+                '!repository' => $repository['name'],
+              ));
   }
   return $username;
 }
 
 /**
- * Print a list of contributors for the specified project.
- * The parameters are directly relayed to versioncontrol_get_user_statistics()
- * and determine how and for which commits the statistics are displayed.
- * @see versioncontrol_get_user_statistics()
+ * Print a list of contributors for the specified constraints.
+ * The required information is retrieved by calling
+ * versioncontrol_get_operation_statistics(), and all parameters are passed
+ * verbatim to that function - except $group_options['group_by'], which is
+ * unchangeably fixed by this function.
  */
-function theme_versioncontrol_user_statistics($constraints, $order = 'by_date', $limit = NULL) {
-  $statistics = versioncontrol_get_user_statistics($constraints, $order, $limit);
+function theme_versioncontrol_user_statistics($constraints, $group_options = array()) {
+  $group_options['group_by'] = array('uid', 'repo_id', 'username');
+  $statistics = versioncontrol_get_operation_statistics($constraints, $group_options);
+
   $header = array(t('User'), t('Last commit'), t('First commit'), t('Commits'));
   $rows = array();
 
   foreach ($statistics as $user_stats) {
-    $uid = $user_stats['uid'];
-
     $last_commit = t('!time ago', array(
-      '!time' => format_interval(time() - $user_stats['last_commit']['date'], 1))
-    );
+      '!time' => format_interval(time() - $user_stats->last_operation_date, 1),
+    ));
     $first_commit = t('!time ago', array(
-      '!time' => format_interval(time() - $user_stats['first_commit']['date'], 1))
-    );
+      '!time' => format_interval(time() - $user_stats->first_operation_date, 1),
+    ));
     $number_commits = format_plural(
-      $user_stats['number_commits'], '1 commit', '@count commits'
+      $user_stats->total_operations, '1 commit', '@count commits'
     );
 
-    if (module_exists('commitlog')) {
-      $last_commit = theme('commitlog_vc_op_id',
-        $user_stats['last_commit']['vc_op_id'], $last_commit
-      );
-      $first_commit = theme('commitlog_vc_op_id',
-        $user_stats['first_commit']['vc_op_id'], $first_commit
-      );
-      $number_commits = l($number_commits, 'user/'. $uid .'/track/code');
+    if (isset($constraints) && module_exists('commitlog')) {
+      $constraints['repo_ids'] = array($user_stats->repo_id);
+      $constraints['usernames'] = array($user_stats->username);
+      $number_commits = l($number_commits, commitlog_get_url($constraints));
     }
 
     $rows[] = array(
-      // $user_stats contains 'uid' and 'name', which is enough for theming
-      theme('username', (object) $user_stats),
+      theme('versioncontrol_account_username',
+        $user_stats->uid, $user_stats->username,
+        versioncontrol_get_repository($user_stats->repo_id)
+      ),
       $last_commit,
       $first_commit,
       $number_commits,
     );
   }
   return theme('table', $header, $rows);
-}
-
-/**
- * Retrieve statistics about users from a set of operations.
- *
- * @param $constraints
- *   The constraints (as passed to versioncontrol_get_operations()) that define
- *   which operations are taken into consideration for the statistics.
- * @param $order
- *   Determines how the result array is ordered:
- *   - 'by_date' for descending order of the last operation's date (in other
- *        words, the first item corresponds to the most recent committer).
- *   - 'by_quantity' for descending order of the operation count (in other
- *        words, the first item corresponds to the most active committer).
- * @param $limit
- *   If given, only the n most active users (in terms of operations)
- *   will be included in the result.
- *
- * @return
- *   An array of information about the projects. Each element contains
- *   one user's statistics and consists of the following elements:
- *   - 'uid': The Drupal user id to which these statistics correspond.
- *   - 'name': The respective Drupal username.
- *   - 'number_operations': The number of operations by this user
- *        (out of the selected operations).
- *   - 'first_operation': The operation array of the first operation
- *        by this user (out of the selected operations).
- *   - 'last_operation': The operation array of the last operation
- *        by this user (out of the selected operations).
- *
- *   The order of the items in this array is determined by the
- *   $order parameter. If no operations matching the given constraints
- *   can be found, an empty array is returned.
- */
-function versioncontrol_get_user_statistics($constraints, $order = 'by_date', $limit = NULL) {
-  $uids = array();
-  $first_ops = array();
-  $last_ops = array();
-
-  $operations = versioncontrol_get_operations($constraints);
-
-  // Find out which projects are affected, and how active they have been.
-  $i = 0;
-  foreach ($operations as $operation) {
-    $uid = $operation['uid'];
-    $uids[] = $uid;
-
-    // Write the first operation for each iteration, the last one encountered
-    // is the oldest one. ($operations is sorted reverse chronologically.)
-    $first_ops[$uid] = $operation;
-
-    // Similar for the most recent op which is the first one that we get to see.
-    if (!isset($last_ops[$uid])) {
-      $last_ops[$uid] = $operation;
-    }
-  }
-
-  // Sort by operation count.
-  $op_counts = array_count_values($uids);
-  arsort($op_counts);
-
-  // Default sorting: Put users with more recent operations first.
-  if ($order == 'by_date') {
-    $limited_uids = array();
-    $i = 0;
-    foreach (array_unique($uids) as $uid) {
-      $limited_uids[] = $uid;
-      ++$i;
-      if (isset($limit) && $i >= $limit) {
-        break;
-      }
-    }
-    $uids = $limited_uids;
-  }
-  // Alternative sorting: Put users with the most operations first.
-  else { // if ($order == 'by_quantity') {
-    $limited_op_counts = array();
-    $i = 0;
-    foreach ($op_counts as $uid => $count) {
-      $limited_op_counts[$uid] = $count;
-      ++$i;
-      if (isset($limit) && $i >= $limit) {
-        break;
-      }
-    }
-    $uids = array_unique(array_keys($limited_op_counts));
-    $op_counts = $limited_op_counts;
-  }
-
-  // No projects in the result, so we can return right now.
-  if (empty($uids)) {
-    return array();
-  }
-
-  // Ok, now construct a query and get the desired node titles
-  $placeholders = array();
-  foreach ($uids as $uid) {
-    $placeholders[] = '%d';
-  }
-  $result = db_query('SELECT uid, name FROM {users}
-                      WHERE uid IN ('. implode(',', $placeholders) .')',
-                      $uids);
-  $sorted_statistics = array();
-
-  while ($user = db_fetch_object($result)) {
-    $statistics[$user->uid] = array(
-      'uid' => $user->uid,
-      'name' => $user->name,
-      'number_operations' => $op_counts[$user->uid],
-      'first_operation' => $first_ops[$user->uid],
-      'last_operation' => $last_ops[$user->uid],
-    );
-  }
-
-  if (empty($statistics)) {
-    return array();
-  }
-
-  $sorted_statistics = array();
-  foreach ($uids as $uid) { // the $uids array is already in the right order
-    if (isset($statistics[$uid])) {
-      $sorted_statistics[] = $statistics[$uid];
-    }
-  }
-  return $sorted_statistics;
 }
 
 

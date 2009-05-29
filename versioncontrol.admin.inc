@@ -155,14 +155,12 @@ function versioncontrol_admin_account_list_form(&$form_state) {
   }
 
   // Retrieve total, first and last commits of each user.
-  $params[] = VERSIONCONTROL_OPERATION_COMMIT;
-  $result = db_query('SELECT uid, COUNT(vc_op_id) AS number_commits,
-                       MIN(date) AS first_commit_date, MAX(date) AS last_commit_date,
-                       MIN(vc_op_id) AS first_commit_id, MAX(vc_op_id) AS last_commit_id
-                      FROM {versioncontrol_operations}
-                      WHERE type = %d
-                       AND uid IN ('. implode(',', $placeholders) .')
-                      GROUP BY uid', $params);
+  $statistics = versioncontrol_get_operation_statistics(array(
+    'types' => array(VERSIONCONTROL_OPERATION_COMMIT),
+    'uids' => array_keys($users),
+  ), array(
+    'group_by' => array('uid'),
+  ));
 
   $number_commits = array();
   $first_commits = array();
@@ -179,10 +177,6 @@ function versioncontrol_admin_account_list_form(&$form_state) {
     if (module_exists('commitlog')) {
       $number_commits[$statistics->uid] =
         l($number_commits[$statistics->uid], 'user/'. $statistics->uid .'/track/code');
-      $first_commits[$statistics->uid] =
-        theme('commitlog_vc_op_id', $statistics->first_commit_id, $first_commits[$statistics->uid]);
-      $last_commits[$statistics->uid] =
-        theme('commitlog_vc_op_id', $statistics->last_commit_id, $last_commits[$statistics->uid]);
     }
   }
 

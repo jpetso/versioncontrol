@@ -400,7 +400,26 @@ function commitlog_commitlog_constraints() {
   );
 }
 
-function _commitlog_query_attributes($constraints) {
+/**
+ * Retrieve the Commit Log URL for the given @p $constraints. Some constraints
+ * might not be able to be reconstructed to query attributes, in which case the
+ * resulting log will include more operations than specified.
+ *
+ * @param $constraints
+ *   An array of operation constraints, as passed to versioncontrol_get_operations().
+ * @param $which
+ *   Either 'page' for the browser-viewable HTML version of the commit log,
+ *   or 'rss' for the RSS version.
+ */
+function commitlog_get_url($constraints, $which = 'page') {
+  $path = ($which == 'rss') ? 'commitlog/feed' : 'commitlog';
+  return url($path, array(
+    'query' => _commitlog_query_attributes_for_constraints($constraints),
+    'absolute' => TRUE,
+  ));
+}
+
+function _commitlog_query_attributes_for_constraints($constraints) {
   $query_items = array();
   $constraint_request_map = module_invoke_all('commitlog_constraints');
 
@@ -410,7 +429,7 @@ function _commitlog_query_attributes($constraints) {
         $values = array($values);
       }
       if (isset($constraint_request_map[$key]['single']) && count($values) == 1) {
-        $query_items[$constraint_request_map[$key]['single']] =  (string) reset($values);
+        $query_items[$constraint_request_map[$key]['single']] = (string) reset($values);
       }
       else {
         $query_items[$constraint_request_map[$key]['multiple']] =  implode(',', $values);
@@ -466,8 +485,7 @@ function theme_commitlog_operations_page($constraints) {
   $output .= '</div>';
 
   // The feed icon, with reconstructed query attributes.
-  $feed_url = url('commitlog/feed', array('query' => _commitlog_query_attributes($constraints)));
-  drupal_add_feed($feed_url, t('Commit messages'));
+  drupal_add_feed(commitlog_get_url($constraints, 'rss'), t('Commit messages'));
 
   return $output;
 }
@@ -540,12 +558,10 @@ function theme_commitlog_rss($constraints) {
     $title = t('@site commits', array('@site' => $site_name));
   }
 
-  $query_items = _commitlog_query_attributes($constraints);
-
   $channel = array(
     'version'     => '2.0',
     'title'       => $title,
-    'link'        => url('commitlog', array('query' => $query_items, 'absolute' => TRUE)),
+    'link'        => commitlog_get_url($constraints),
     'description' => t('Commit messages for @site', array('@site' => $site_name)),
     'language'    => $locale,
   );
@@ -642,8 +658,12 @@ function theme_commitlog_operation_plaintext($variables) {
 /**
  * Return the commitlog URL for the log history of a given account.
  */
-function commitlog_account_url($repository, $username) {
-  return l($username, 'commitlog', array(
+function commitlog_get_account_link($repository, $username) {
+  $user_label = t('!user @ !repository', array(
+    '!user' => $username,
+    '!repository' => $repository['name'],
+  ));
+  return l($user_label, 'commitlog', array(
     'query' => array('username' => $username, 'repo' => $repository['repo_id']),
   ));
 }
