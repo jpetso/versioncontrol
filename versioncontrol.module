@@ -3551,39 +3551,50 @@ function versioncontrol_get_user_statistics($constraints, $order = 'by_date', $l
  */
 function versioncontrol_block($op = 'list', $delta = 0) {
   if ($op == 'list') {
-    $blocks[0]['info'] = t('Most active developers');
-    $blocks[0]['cache'] = BLOCK_NO_CACHE;
+    $blocks = array();
+    $blocks['versioncontrol_site_active_developers'] = array(
+      'info' => t('Version Control API: Most active developers'),
+      'cache' => BLOCK_CACHE_GLOBAL,
+    );
     return $blocks;
   }
   else if ($op == 'view') {
-    if ($delta == 0) {
-      $interval = 7 * 24 * 60 * 60;
-      $length = 15;
-
-      $result = db_query_range('
-        SELECT COUNT(op.vc_op_id) AS count, op.uid, u.name
-        FROM {versioncontrol_operations} op
-          INNER JOIN {users} u
-            ON op.uid = u.uid AND op.uid != 0 AND op.date > %d
-        WHERE op.type = %d
-        GROUP BY op.uid, u.name ORDER BY count DESC',
-        array(time() - $interval, VERSIONCONTROL_OPERATION_COMMIT), // placeholders
-        0, $length // query range arguments: 'from' and 'count'
-      );
-
-      $usernames = array();
-      while ($user = db_fetch_object($result)) {
-        $usernames[] = theme('username', $user);
-      }
-      if (!empty($usernames)) {
-        $block = array(
-          'subject' => t('Most active developers'),
-          'content' => theme('item_list', $usernames),
-        );
-        return $block;
-      }
+    if ($delta == 'versioncontrol_site_active_developers') {
+      return versioncontrol_block_site_active_developers();
     }
   }
+}
+
+/**
+ * Implementation of hook_block($op='view') for the "active developers" block.
+ */
+function versioncontrol_block_site_active_developers() {
+  $block = array();
+  $interval = 7 * 24 * 60 * 60;
+  $length = 15;
+
+  $result = db_query_range('
+    SELECT COUNT(op.vc_op_id) AS count, op.uid, u.name
+    FROM {versioncontrol_operations} op
+      INNER JOIN {users} u
+        ON op.uid = u.uid AND op.uid != 0 AND op.date > %d
+    WHERE op.type = %d
+    GROUP BY op.uid, u.name ORDER BY count DESC',
+    array(time() - $interval, VERSIONCONTROL_OPERATION_COMMIT), // placeholders
+    0, $length // query range arguments: 'from' and 'count'
+  );
+
+  $usernames = array();
+  while ($user = db_fetch_object($result)) {
+    $usernames[] = theme('username', $user);
+  }
+  if (!empty($usernames)) {
+    $block = array(
+      'subject' => t('Most active developers'),
+      'content' => theme('item_list', $usernames),
+    );
+  }
+  return $block;
 }
 
 

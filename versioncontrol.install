@@ -567,3 +567,15 @@ function versioncontrol_update_6100() {
 
   return $ret;
 }
+
+/**
+ * Update 6101 (from 6.x-1.0-rc1 to rc2):
+ * String deltas for the "active developers" block.
+ */
+function versioncontrol_update_6101() {
+  $ret = array();
+  $ret[] = update_sql("
+    UPDATE {blocks} SET delta = 'versioncontrol_site_active_developers'
+    WHERE delta = '0' AND module = 'versioncontrol'");
+  return $ret;
+}
