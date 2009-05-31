@@ -132,7 +132,7 @@ function versioncontrol_theme() {
     'arguments' => array('uid', 'username', 'repository', 'prefer_drupal_username' => TRUE, 'format' => 'html'),
   );
   $theme['versioncontrol_user_statistics'] = array(
-    'arguments' => array('constraints', 'order' => 'by_date', 'limit' => NULL),
+    'arguments' => array('constraints', 'group_options' => NULL),
   );
   return $theme;
 }
