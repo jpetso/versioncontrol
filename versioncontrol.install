@@ -575,7 +575,7 @@ function versioncontrol_update_6100() {
 function versioncontrol_update_6101() {
   $ret = array();
   $ret[] = update_sql("
-    UPDATE {blocks} SET delta = 'versioncontrol_site_active_developers'
+    UPDATE {blocks} SET delta = 'site_active_developers'
     WHERE delta = '0' AND module = 'versioncontrol'");
   return $ret;
 }

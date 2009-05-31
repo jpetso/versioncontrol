@@ -3647,14 +3647,14 @@ function theme_versioncontrol_user_statistics($constraints, $group_options = arr
 function versioncontrol_block($op = 'list', $delta = 0) {
   if ($op == 'list') {
     $blocks = array();
-    $blocks['versioncontrol_site_active_developers'] = array(
+    $blocks['site_active_developers'] = array(
       'info' => t('Version Control API: Most active developers'),
       'cache' => BLOCK_CACHE_GLOBAL,
     );
     return $blocks;
   }
   else if ($op == 'view') {
-    if ($delta == 'versioncontrol_site_active_developers') {
+    if ($delta == 'site_active_developers') {
       return versioncontrol_block_site_active_developers();
     }
   }
