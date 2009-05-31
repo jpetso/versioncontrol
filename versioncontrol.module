@@ -3596,7 +3596,7 @@ function theme_versioncontrol_account_username($uid, $username, $repository, $pr
 }
 
 /**
- * Print a list of contributors for the specified constraints.
+ * Print a list of contributors for the specified constraints and options.
  * The required information is retrieved by calling
  * versioncontrol_get_operation_statistics(), and all parameters are passed
  * verbatim to that function - except $group_options['group_by'], which is
@@ -3610,20 +3610,20 @@ function theme_versioncontrol_user_statistics($constraints, $group_options = arr
   $rows = array();
 
   foreach ($statistics as $user_stats) {
-    $last_commit = t('!time ago', array(
+    $last_operation_date = t('!time ago', array(
       '!time' => format_interval(time() - $user_stats->last_operation_date, 1),
     ));
-    $first_commit = t('!time ago', array(
+    $first_operation_date = t('!time ago', array(
       '!time' => format_interval(time() - $user_stats->first_operation_date, 1),
     ));
-    $number_commits = format_plural(
+    $total_operations = format_plural(
       $user_stats->total_operations, '1 commit', '@count commits'
     );
 
     if (isset($constraints) && module_exists('commitlog')) {
       $constraints['repo_ids'] = array($user_stats->repo_id);
       $constraints['usernames'] = array($user_stats->username);
-      $number_commits = l($number_commits, commitlog_get_url($constraints));
+      $total_operations = l($total_operations, commitlog_get_url($constraints));
     }
 
     $rows[] = array(
@@ -3631,9 +3631,9 @@ function theme_versioncontrol_user_statistics($constraints, $group_options = arr
         $user_stats->uid, $user_stats->username,
         versioncontrol_get_repository($user_stats->repo_id)
       ),
-      $last_commit,
-      $first_commit,
-      $number_commits,
+      $last_operation_date,
+      $first_operation_date,
+      $total_operations,
     );
   }
   return theme('table', $header, $rows);
