@@ -1,0 +1,12 @@
+/* $Id$ */
+
+.versioncontrol-committer-item {
+  line-height: 120%;
+}
+
+.versioncontrol-commit-times {
+  margin-top: 3px;
+  color: #9d9d93;
+  font-size: .8em;
+  line-height: 110%;
+}

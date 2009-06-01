@@ -257,7 +257,8 @@ function commitlog_user_notification_mail($account, $operation, $operation_items
  */
 function _commitlog_notification_mail($mailto, $operation, $operation_items, $language, $send) {
   $username = theme('versioncontrol_account_username',
-    $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
+    $operation['uid'], $operation['username'], $operation['repository'],
+    array('format' => 'plaintext')
   );
   $admin_mail = variable_get('versioncontrol_email_address', 'versioncontrol@example.com');
   $from = "$username <$admin_mail>";
@@ -510,7 +511,8 @@ function theme_commitlog_rss($constraints) {
     $title = theme('commitlog_operation_subject', $variables, array('format' => 'plaintext'));
 
     $plain_username = theme('versioncontrol_account_username',
-      $operation['uid'], $operation['username'], $operation['repository'], TRUE, 'plaintext'
+      $operation['uid'], $operation['username'], $operation['repository'],
+      array('format' => 'plaintext')
     );
 
     $link = url('commitlog', array(
@@ -610,7 +612,8 @@ function commitlog_operation($operation, $operation_items, $options = array()) {
   }
   else {
     $variables['username'] = theme('versioncontrol_account_username',
-      $operation['uid'], $operation['username'], $operation['repository'], TRUE, $format
+      $operation['uid'], $operation['username'], $operation['repository'],
+      array('format' => $options['format'])
     );
   }
   $variables['operation'] = $operation;
@@ -658,12 +661,8 @@ function theme_commitlog_operation_plaintext($variables) {
 /**
  * Return the commitlog URL for the log history of a given account.
  */
-function commitlog_get_account_link($repository, $username) {
-  $user_label = t('!user @ !repository', array(
-    '!user' => $username,
-    '!repository' => $repository['name'],
-  ));
-  return l($user_label, 'commitlog', array(
+function commitlog_get_account_url($repository, $username) {
+  return url('commitlog', array(
     'query' => array('username' => $username, 'repo' => $repository['repo_id']),
   ));
 }

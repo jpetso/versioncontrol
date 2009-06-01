@@ -129,10 +129,16 @@ function versioncontrol_init() {
 function versioncontrol_theme() {
   $theme = array();
   $theme['versioncontrol_account_username'] = array(
-    'arguments' => array('uid', 'username', 'repository', 'prefer_drupal_username' => TRUE, 'format' => 'html'),
+    'arguments' => array('uid', 'username', 'repository', 'options' => NULL),
   );
-  $theme['versioncontrol_user_statistics'] = array(
-    'arguments' => array('constraints', 'group_options' => NULL),
+  $theme['versioncontrol_user_statistics_table'] = array(
+    'arguments' => array('statistics', 'options'),
+  );
+  $theme['versioncontrol_user_statistics_item_list'] = array(
+    'arguments' => array('statistics', 'more_link'),
+  );
+  $theme['versioncontrol_user_statistics_account'] = array(
+    'arguments' => array('user_stats'),
   );
   return $theme;
 }
@@ -1033,16 +1039,7 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
             (empty($query_info['where']) ? '' : ' WHERE '. $query_info['where']) .'
             ORDER BY op.date DESC, op.vc_op_id DESC';
 
-  if (isset($options['query_type']) && $options['query_type'] == 'pager') {
-    $element = isset($options['pager_element']) ? $options['pager_element'] : 0;
-    $result = pager_query($query, $options['count'], $element, NULL, $query_info['params']);
-  }
-  elseif (isset($options['query_type']) && $options['query_type'] == 'range') {
-    $result = db_query_range($query, $query_info['params'], $options['from'], $options['count']);
-  }
-  else {
-    $result = db_query($query, $query_info['params']);
-  }
+  $result = _versioncontrol_query($query, $query_info['params'], $options);
 
   $operations = array();
   $op_id_placeholders = array();
@@ -1136,10 +1133,11 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
  *        as well as any of the columns given in @p $group_by.
  *   - 'order_ascending': The default is to sort with DESC if sort columns
  *        are given, but ASC sorting will be used if this is set to TRUE.
- *   - 'limit': Specifies that only the first N statistics should should be
- *        returned, sorting is taken into account. Passing 0 for this option
- *        has the same outcome as leaving it unset - in both cases, all
- *        resulting statistics will be returned.
+ *   - 'query_type', 'count', 'from' and 'pager_element': Specifies different
+ *        query types to execute and their associated options. The set of
+ *        allowed values for these options is the same as in the $options array
+ *        of versioncontrol_get_operations(), see the API documentation of that
+ *        function for a detailed description.
  *
  * @return
  *   A statistics object with integers for the keys 'total_operations',
@@ -1147,6 +1145,8 @@ function versioncontrol_get_operations($constraints = array(), $options = array(
  *   Unix timestamps). If grouping columns were given, an array of such
  *   statistics objects is returned, with the grouping columns' values as
  *   additional properties for each object.
+ *
+ * @see versioncontrol_get_operations()
  */
 function versioncontrol_get_operation_statistics($constraints = array(), $group_options = array()) {
   $calculated_columns = array(
@@ -1213,13 +1213,7 @@ function versioncontrol_get_operation_statistics($constraints = array(), $group_
     . $group_by_clause . $order_by_clause;
 
   // The query has been built, now execute it.
-  if (!empty($group_options['limit'])) {
-    $result = db_query_range($query, $query_info['params'], 0, $group_options['limit']);
-  }
-  else {
-    $result = db_query($query, $query_info['params']);
-  }
-
+  $result = _versioncontrol_query($query, $query_info['params'], $group_options);
   $statistics = array();
 
   // Construct the result value.
@@ -1242,6 +1236,25 @@ function versioncontrol_get_operation_statistics($constraints = array(), $group_
     }
   }
   return $statistics;
+}
+
+/**
+ * Execute a query with either db_query(), db_query_range() or pager_query().
+ * Which one of those is called, and with which parameters, is specified by the
+ * @p $options array, see versioncontrol_get_operations() for a description of
+ * possible array keys and option values.
+ */
+function _versioncontrol_query($query, $params, $options) {
+  if (isset($options['query_type']) && $options['query_type'] == 'pager') {
+    $element = isset($options['pager_element']) ? $options['pager_element'] : 0;
+    return pager_query($query, $options['count'], $element, NULL, $params);
+  }
+  elseif (isset($options['query_type']) && $options['query_type'] == 'range') {
+    return db_query_range($query, $params, $options['from'], $options['count']);
+  }
+  else {
+    return db_query($query, $params);
+  }
 }
 
 /**
@@ -3565,17 +3578,28 @@ function versioncontrol_path_contains($parent_path, $child_path) {
  *   The VCS username for the account.
  * @param $repository
  *   The repository where this account is registered.
- * @param $prefer_drupal_username
- *   If TRUE (which is the default), this function tries to get the
- *   corresponding Drupal user for the supplied uid and returns the "real"
- *   username rather than the given one.
- *   If FALSE, the given VCS username is always returned.
- * @param $format
- *   If 'html', the username will be linked to the user page (if possible)
- *   or to the commit log page containing the user's commits.
- *   If 'plaintext', the username will be returned without markup.
+ * @param $options
+ *   An array of options that further influence the output format:
+ *
+ *   - 'prefer_drupal_username': By default, this function tries to get the
+ *        corresponding Drupal user for the supplied uid and returns the
+ *        "real" username rather than the given one. If this is set to FALSE,
+ *        the given VCS username is always returned.
+ *   - 'format': By default, the username will be linked to the user page
+ *        (for Drupal users) or to the commit log page containing the user's
+ *        commits (for unassociated accounts). If 'plaintext', the username
+ *        will be returned without markup.
+ *   - 'include_repository_name': By default, an account that is not associated
+ *        to a Drupal user will get the repository name appended in order to
+ *        make for a unique account descriptor. If this option is set to TRUE,
+ *        the repository name will be suppressed anyways.
  */
-function theme_versioncontrol_account_username($uid, $username, $repository, $prefer_drupal_username = TRUE, $format = 'html') {
+function theme_versioncontrol_account_username($uid, $username, $repository, $options = array()) {
+  $prefer_drupal_username = isset($options['prefer_drupal_username'])
+    ? $options['prefer_drupal_username']
+    : TRUE;
+  $format = isset($options['format']) ? $options['format'] : 'html';
+
   if ($uid && $prefer_drupal_username) {
     $user = user_load($uid);
 
@@ -3584,28 +3608,33 @@ function theme_versioncontrol_account_username($uid, $username, $repository, $pr
     }
   }
 
-  if ($format == 'html') {
-    return module_exists('commitlog')
-            ? commitlog_get_account_link($repository, $username)
-            : t('!user @ !repository', array(
-                '!user' => $username,
-                '!repository' => $repository['name'],
-              ));
+  if (!empty($options['include_repository_name'])) {
+    $username = t('!user @ !repository', array(
+      '!user' => $username,
+      '!repository' => $repository['name'],
+    ));
+  }
+  if ($format == 'html' && module_exists('commitlog')) {
+    return l($username, commitlog_get_account_url($repository, $username));
   }
   return $username;
 }
 
 /**
- * Print a list of contributors for the specified constraints and options.
- * The required information is retrieved by calling
- * versioncontrol_get_operation_statistics(), and all parameters are passed
- * verbatim to that function - except $group_options['group_by'], which is
- * unchangeably fixed by this function.
+ * Return a table of contributors for the specified per-user statistics.
+ *
+ * @param $statistics
+ *   An array of statistics objects as returned by
+ *   versioncontrol_get_operation_statistics(), grouped by at least uid and
+ *   optionally repo_id/username columns.
+ * @param $options
+ *   An array of optional further options. Currently, the only supported
+ *   array key is 'constraints' which contains the operation constraints used
+ *   to determine these statistics. If given, the "Commits" column in the table
+ *   will link to the contributor's commits in addition to displaying the
+ *   commit count.
  */
-function theme_versioncontrol_user_statistics($constraints, $group_options = array()) {
-  $group_options['group_by'] = array('uid', 'repo_id', 'username');
-  $statistics = versioncontrol_get_operation_statistics($constraints, $group_options);
-
+function theme_versioncontrol_user_statistics_table($statistics, $options = array()) {
   $header = array(t('User'), t('Last commit'), t('First commit'), t('Commits'));
   $rows = array();
 
@@ -3620,23 +3649,89 @@ function theme_versioncontrol_user_statistics($constraints, $group_options = arr
       $user_stats->total_operations, '1 commit', '@count commits'
     );
 
-    if (isset($constraints) && module_exists('commitlog')) {
-      $constraints['repo_ids'] = array($user_stats->repo_id);
-      $constraints['usernames'] = array($user_stats->username);
-      $total_operations = l($total_operations, commitlog_get_url($constraints));
+    if (isset($options['constraints']) && module_exists('commitlog')) {
+      if (isset($user_stats->repo_id) && isset($user_stats->username)) {
+        $options['constraints']['repo_ids'] = array($user_stats->repo_id);
+        $options['constraints']['usernames'] = array($user_stats->username);
+      }
+      else {
+        $options['constraints']['uids'] = array($user_stats->uid);
+      }
+      $total_operations = l($total_operations, commitlog_get_url($options['constraints']));
     }
 
     $rows[] = array(
-      theme('versioncontrol_account_username',
-        $user_stats->uid, $user_stats->username,
-        versioncontrol_get_repository($user_stats->repo_id)
-      ),
+      theme('versioncontrol_user_statistics_account', $user_stats),
       $last_operation_date,
       $first_operation_date,
       $total_operations,
     );
   }
   return theme('table', $header, $rows);
+}
+
+/**
+ * Return a condensed item list of contributors for the specified per-user
+ * statistics. An empty string is returned if the given array is empty.
+ *
+ * @param $statistics
+ *   An array of statistics objects as returned by
+ *   versioncontrol_get_operation_statistics(), grouped by at least uid and
+ *   optionally repo_id/username columns.
+ */
+function theme_versioncontrol_user_statistics_item_list($statistics, $more_link = NULL) {
+  $items = array();
+
+  if (empty($statistics)) {
+    return '';
+  }
+  drupal_add_css(drupal_get_path('module', 'versioncontrol') . '/versioncontrol.css');
+
+  foreach ($statistics as $user_stats) {
+    $item = '<div class="versioncontrol-committer-item">';
+    $item .= t('!committer - !commit-count', array(
+      '!committer' => theme('versioncontrol_user_statistics_account', $user_stats),
+      '!commit-count' => '<span class="versioncontrol-commit-count">'
+        . format_plural($user_stats->total_operations, '1 commit', '@count commits')
+        . '</span>',
+    ));
+
+    if (!empty($user_stats->first_operation_date)) { // has committed yet?
+      $item .= '<div class="versioncontrol-commit-times">';
+      $item .= t('last: !last_time ago, first: !first_time ago', array(
+        '!last_time' => format_interval(time() - $user_stats->last_operation_date, 1),
+        '!first_time' => format_interval(time() - $user_stats->first_operation_date, 1),
+      ));
+      $item .= '</div>';
+    }
+    $item .= '</div>';
+    $items[] = $item;
+  }
+
+  $output = theme('item_list', $items);
+  if (!empty($more_link)) {
+    $output .= $more_link;
+  }
+  return $output;
+}
+
+/**
+ * Given a single statistics object (including uid for the Drupal user and
+ * optionally a repo_id/username combination), return a themed version of the
+ * corresponding user.
+ */
+function theme_versioncontrol_user_statistics_account($user_stats) {
+  if (isset($user_stats->repo_id) && isset($user_stats->username)) {
+    $repository = versioncontrol_get_repository($user_stats->repo_id);
+    return theme('versioncontrol_account_username',
+      $user_stats->uid, $user_stats->username, $repository,
+      array('include_repository_name' => TRUE)
+    );
+  }
+  else {
+    $committer = user_load($user_stats->uid);
+    return theme('username', $committer);
+  }
 }
 
 

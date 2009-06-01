@@ -325,7 +325,8 @@ function versioncontrol_account_list_form(&$form_state, $accounts) {
 
       foreach ($usernames as $username) {
         $formatted_username = theme('versioncontrol_account_username',
-          $uid, $username, $repositories[$repo_id], FALSE
+          $uid, $username, $repositories[$repo_id],
+          array('prefer_drupal_username' => FALSE),
         );
         $repo_name = module_exists('commitlog')
           ? theme('commitlog_repository', $repositories[$repo_id])
