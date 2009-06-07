@@ -147,13 +147,6 @@ function versioncontrol_admin_account_list_form(&$form_state) {
     return $form;
   }
 
-  $placeholders = array();
-  $params = array();
-  foreach ($users as $uid => $user) {
-    $placeholders[] = '%d';
-    $params[] = $uid;
-  }
-
   // Retrieve total, first and last commits of each user.
   $statistics = versioncontrol_get_operation_statistics(array(
     'types' => array(VERSIONCONTROL_OPERATION_COMMIT),
@@ -162,21 +155,21 @@ function versioncontrol_admin_account_list_form(&$form_state) {
     'group_by' => array('uid'),
   ));
 
-  $number_commits = array();
-  $first_commits = array();
-  $last_commits = array();
+  $total_operations = array();
+  $first_operation_dates = array();
+  $last_operation_dates = array();
 
-  while ($statistics = db_fetch_object($result)) {
-    $number_commits[$statistics->uid] = $statistics->number_commits;
-    $first_commits[$statistics->uid] = t('!time ago', array(
-      '!time' => format_interval(time() - $statistics->first_commit_date, 1))
+  foreach ($statistics as $user_stats) {
+    $total_operations[$user_stats->uid] = $user_stats->total_operations;
+    $first_operation_dates[$user_stats->uid] = t('!time ago', array(
+      '!time' => format_interval(time() - $user_stats->first_operation_date, 1))
     );
-    $last_commits[$statistics->uid] = t('!time ago', array(
-      '!time' => format_interval(time() - $statistics->last_commit_date, 1))
+    $last_operation_dates[$user_stats->uid] = t('!time ago', array(
+      '!time' => format_interval(time() - $user_stats->last_operation_date, 1))
     );
     if (module_exists('commitlog')) {
-      $number_commits[$statistics->uid] =
-        l($number_commits[$statistics->uid], 'user/'. $statistics->uid .'/track/code');
+      $total_operations[$user_stats->uid] =
+        l($total_operations[$user_stats->uid], 'user/'. $user_stats->uid .'/track/code');
     }
   }
 
@@ -214,9 +207,9 @@ function versioncontrol_admin_account_list_form(&$form_state) {
 
     $rows_by_uid[$uid] = array(
       theme('username', $user), $vcs_usernames,
-      isset($number_commits[$uid]) ? $number_commits[$uid] : 0,
-      isset($first_commits[$uid]) ? $first_commits[$uid] : t('n/a'),
-      isset($last_commits[$uid]) ? $last_commits[$uid] : t('n/a'),
+      isset($total_operations[$uid]) ? $total_operations[$uid] : 0,
+      isset($first_operation_dates[$uid]) ? $first_operation_dates[$uid] : t('n/a'),
+      isset($last_operation_dates[$uid]) ? $last_operation_dates[$uid] : t('n/a'),
     );
   }
 
