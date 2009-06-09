@@ -1736,7 +1736,7 @@ function versioncontrol_table_operation_items_join(&$tables) {
  */
 function versioncontrol_table_item_revisions_join(&$tables) {
   if (!isset($tables['versioncontrol_item_revisions'])) {
-    versioncontrol_table_operation_items_join(&$tables);
+    versioncontrol_table_operation_items_join($tables);
 
     $tables['versioncontrol_item_revisions'] = array(
       'alias' => 'ir',
