@@ -404,7 +404,7 @@ function versioncontrol_account_status_versioncontrol_filter_accounts(&$accounts
  */
 function versioncontrol_account_status_form_alter_repository_settings(&$form) {
   $backends = versioncontrol_get_backends();
-  $vcs_name = $backend[$form['#vcs']]['name'];
+  $vcs_name = $backends[$form['#vcs']]['name'];
   $repository = $form['#repository'];
 
   $form['#versioncontrol_account_status'] = TRUE;
