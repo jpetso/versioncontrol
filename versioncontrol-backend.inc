@@ -100,7 +100,9 @@ function versioncontrol_has_write_access($operation, $operation_items) {
   }
 
   // If the user doesn't have commit access at all, we can't allow this as well.
-  if (!variable_get('versioncontrol_allow_unauthorized_access', 0)) {
+  $repo_data = $operation['repository']['data']['versioncontrol'];
+
+  if (!$repo_data['allow_unauthorized_access']) {
     if (!versioncontrol_is_account_authorized($operation['repository'], $operation['uid'])) {
       _versioncontrol_access_errors(array(t(
         '** ERROR: !user does not have commit access to this repository.',

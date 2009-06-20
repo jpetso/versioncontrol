@@ -405,12 +405,12 @@ function versioncontrol_account_status_versioncontrol_filter_accounts(&$accounts
 function versioncontrol_account_status_form_alter_repository_settings(&$form) {
   $backends = versioncontrol_get_backends();
   $vcs_name = $backends[$form['#vcs']]['name'];
-  $repository = $form['#repository'];
+  $repository = empty($form['#repository']) ? FALSE : $form['#repository'];
 
   $form['#versioncontrol_account_status'] = TRUE;
 
   // Get form and email messages (only the default ones for new repositories).
-  $strings = ($repository['repo_id'] == 0)
+  $strings = (empty($repository) || $repository['repo_id'] == 0)
     ? _versioncontrol_account_status_get_presets()
     : _versioncontrol_account_status_get_strings($repository['repo_id']);
 

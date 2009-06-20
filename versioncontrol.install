@@ -368,6 +368,13 @@ function versioncontrol_schema() {
         'not null' => TRUE,
         'default' => '',
       ),
+      'data' => array(
+        'description' => t('A serialized array of additional per-repository settings, mostly populated by third-party modules.'),
+        'type' => 'text',
+        'size' => 'medium',
+        'not null' => TRUE,
+        'serialize' => TRUE,
+      ),
     ),
     'unique keys' => array(
       'name' => array('name'),
@@ -513,7 +520,6 @@ function versioncontrol_install() {
 function versioncontrol_uninstall() {
   $variables = array(
     'versioncontrol_email_address',
-    'versioncontrol_allow_unauthorized_access',
     'versioncontrol_registration_message_unauthorized',
     'versioncontrol_registration_message_authorized',
     'versioncontrol_admin_account_pager',
@@ -534,7 +540,8 @@ function versioncontrol_uninstall() {
 // versioncontrol_update_9() was the last update on Drupal 5.x (-2.x).
 
 /**
- * Update 6100: Change 5.x pure integer types to 6.x serial types.
+ * Original update from 5.x-2.x to 6.x-2.x:
+ * Change 5.x pure integer types to 6.x serial types.
  */
 function versioncontrol_update_6100() {
   $ret = array();
@@ -569,7 +576,7 @@ function versioncontrol_update_6100() {
 }
 
 /**
- * Update 6101 (from 6.x-1.0-rc1 to rc2):
+ * Update from 6.x-1.0-rc1 to rc2:
  * String deltas for the "active developers" block.
  */
 function versioncontrol_update_6101() {
@@ -577,5 +584,33 @@ function versioncontrol_update_6101() {
   $ret[] = update_sql("
     UPDATE {blocks} SET delta = 'site_active_developers'
     WHERE delta = '0' AND module = 'versioncontrol'");
+  return $ret;
+}
+
+/**
+ * Update from 6.x-1.0-rc2 to 6.x-1.0-rc3:
+ * Add a "data" column for modules to put their per-repository settings,
+ * and migrate the previously global "allow unauthorized commit access" setting
+ * to that column for all repositories.
+ */
+function versioncontrol_update_6102() {
+  $ret = array();
+  $spec = array(
+    'description' => t('A serialized array of additional per-repository settings, mostly populated by third-party modules.'),
+    'type' => 'text',
+    'size' => 'medium',
+    'not null' => TRUE,
+    'serialize' => TRUE,
+  );
+  db_add_field($ret, 'versioncontrol_repositories', 'data', $spec);
+
+  $global_access = (bool) variable_get('versioncontrol_allow_unauthorized_access', 0);
+  $data = array(
+    'versioncontrol' => array('allow_unauthorized_access' => $global_access),
+  );
+  $ret[] = update_sql("UPDATE {versioncontrol_repositories}
+                        SET data = '". serialize($data) ."'");
+
+  variable_del('versioncontrol_allow_unauthorized_access');
   return $ret;
 }

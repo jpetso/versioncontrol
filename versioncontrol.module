@@ -707,6 +707,8 @@ function versioncontrol_get_repositories($constraints = array()) {
       // don't include repositories for which no backend module exists
       continue;
     }
+    $repository['data'] = unserialize($repository['data']);
+
     if (!isset($auth_methods[$repository['authorization_method']])) {
       $repository['authorization_method'] = _versioncontrol_get_fallback_authorization_method();
     }

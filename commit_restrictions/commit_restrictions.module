@@ -20,32 +20,28 @@ function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
     $restrictions = _commit_restrictions_load($repo_id);
 
     if (in_array(VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS, $backend_capabilities)) {
-      $form['directory_restrictions'] = array(
-        '#type' => 'fieldset',
-        '#title' => t('Commit restrictions'),
-        '#collapsible' => TRUE,
-        '#collapsed' => TRUE,
-        '#weight' => 6,
-      );
-      $form['directory_restrictions']['allowed_paths'] = array(
+      $form['commit_restrictions']['allowed_paths'] = array(
         '#type' => 'textfield',
         '#title' => t('Freely accessible paths'),
         '#description' => t('A space-separated list of PHP regular expressions for directories or files that will always be granted commit access to everyone, no matter what other commit restrictions are imposed. Example: "@.*\.(po|pot)$@ @^/contributions/(docs|sandbox|tricks)/@"'),
         '#default_value' => implode(' ', $restrictions['allowed_paths']),
         '#size' => 60,
+        '#weight' => 10,
       );
-      $form['directory_restrictions']['deny_undefined_paths'] = array(
+      $form['commit_restrictions']['deny_undefined_paths'] = array(
         '#type' => 'checkbox',
         '#title' => t('Deny access to all other paths'),
         '#description' => t('If this is enabled, no paths other than the ones given above will be granted commit access, except if there is an exception that specifically allows the commit to happen.'),
         '#default_value' => $restrictions['deny_undefined_paths'],
+        '#weight' => 11,
       );
-      $form['directory_restrictions']['forbidden_paths'] = array(
+      $form['commit_restrictions']['forbidden_paths'] = array(
         '#type' => 'textfield',
         '#title' => t('Forbidden paths'),
         '#description' => t('A space-separated list of PHP regular expressions for directories or files that will be denied access to everyone, except if there is an exception that specifically allows the commit to happen. Example: "@^/contributions/profiles.*(?&lt;!\.profile|\.txt)$@ @^.*\.(gz|tgz|tar|zip)$@"'),
         '#default_value' => implode(' ', $restrictions['forbidden_paths']),
         '#size' => 60,
+        '#weight' => 12,
       );
     }
     if (in_array(VERSIONCONTROL_CAPABILITY_BRANCH_TAG_RESTRICTIONS, $backend_capabilities)) {
