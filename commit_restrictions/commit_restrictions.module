@@ -13,7 +13,7 @@
  * to the add/edit repository form of the Version Control API module.
  */
 function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
-  if ($form_id == 'versioncontrol-repository-form') {
+  if ($form['#id'] == 'versioncontrol-repository-form') {
     $backends = versioncontrol_get_backends();
     $backend_capabilities = $backends[$form['#vcs']]['capabilities'];
     $restrictions = array();
