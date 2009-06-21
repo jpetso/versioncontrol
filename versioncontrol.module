@@ -610,9 +610,12 @@ function _versioncontrol_get_fallback_authorization_method() {
  *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
+ *   - 'data': An array where modules can store additional information about
+ *        the repository, for settings or other data.
  *   - '[xxx]_specific': An array of VCS specific additional repository
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
+ *        (Deprecated, to be replaced by the more general 'data' property.)
  *
  *   If no repository corresponds to the given repository id, NULL is returned.
  */
@@ -663,9 +666,12 @@ function versioncontrol_get_repository($repo_id) {
  *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
+ *   - 'data': An array where modules can store additional information about
+ *        the repository, for settings or other data.
  *   - '[xxx]_specific': An array of VCS specific additional repository
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
+ *        (Deprecated, to be replaced by the more general 'data' property.)
  *
  *   If not a single repository matches these constraints,
  *   an empty array is returned.

@@ -221,36 +221,6 @@ function versioncontrol_account_register_form_submit($form, &$form_state) {
 
 
 /**
- * Retrieve the message that shows up on the repository edit form when a
- * new user wants to register an account.
- *
- * Only call this function from within a form_alter() that modifies the
- * account edit form.
- *
- * Note: I'm not really satisfied with this being a public function,
- * but the Account Status module needs to display this message also for
- * reapplications, which is not included in the original form.
- * At least, it seems to be a better solution than exposing the
- * {versioncontrol_repository_metadata} table or even adding the message
- * to the {versioncontrol_repository} table. For now, at least.
- *
- * @param $repo_id
- *   The repository id where the a new account is registered.
- *
- * @return
- *   The registration message if it has been set, or an empty string otherwise.
- */
-function versioncontrol_get_repository_registration_message($repo_id) {
-  $result = db_query('SELECT registration_message
-                      FROM {versioncontrol_repository_metadata}
-                      WHERE repo_id = %d', $repo_id);
-  while ($row = db_fetch_object($result)) {
-    return $row->registration_message;
-  }
-  return '';
-}
-
-/**
  * Form callback for 'user/%versioncontrol_user_accounts/edit/versioncontrol':
  * Display a list of the given user's VCS accounts, or directly return the form
  * array from versioncontrol_account_edit_form() if only a single account
@@ -399,7 +369,9 @@ function versioncontrol_account_edit_form(&$form_state, $uid, $repository, $vcs_
   $form['#submit'] = array('versioncontrol_account_edit_form_submit');
 
   if ($create_account) {
-    $registration_message = versioncontrol_get_repository_registration_message($repository['repo_id']);
+    $registration_message = isset($repository['data']['versioncontrol']['registration_message'])
+      ? $repository['data']['versioncontrol']['registration_message']
+      : '';
 
     if (!empty($registration_message)) {
       $form['overview'] = array(

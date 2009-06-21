@@ -444,33 +444,6 @@ function versioncontrol_schema() {
     'primary key' => array('repo_id'),
   );
 
-  $schema['versioncontrol_repository_metadata'] = array(
-    'description' => 'This table contains repository settings that are just intended for internal use by the API module itself.',
-    'fields' => array(
-      'repo_id' => array(
-        'description' => 'Foreign key (referring to {versioncontrol_repositories}.repo_id) for the corresponding repository.',
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'weight' => array(
-        'description' => 'Hm... unused? I think I might have used this for sorting the repositories in lists, seems I dropped it again. Bad maintainer, jpetso, bad maintainer. Ts.',
-        'type' => 'int',
-        'size' => 'small',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'registration_message' => array(
-        'description' =>
-          'The message that shows up on the repository edit form when a new user wants to register an account. Grep versioncontrol.module for "versioncontrol_registration_message_repository" to have a look at the default value.',
-        'type' => 'text',
-        'not null' => FALSE,
-      ),
-    ),
-    'primary key' => array('repo_id'),
-  );
-
   $schema['versioncontrol_accounts'] = array(
     'description' =>
       'Association table of VCS account usernames (in a specific repository) to Drupal user ids. A Drupal user can be associated to multiple VCS accounts. Ideally, multiple VCS accounts per repository should be possible too, but clumsy array data structures and assumptions in the admin interface (elsewhere, too? don\'t know) currently make it necessary to restrict the number of VCS accounts to a maximum of 1 per repository and Drupal user.',
@@ -590,8 +563,12 @@ function versioncontrol_update_6101() {
 /**
  * Update from 6.x-1.0-rc2 to 6.x-1.0-rc3:
  * Add a "data" column for modules to put their per-repository settings,
- * and migrate the previously global "allow unauthorized commit access" setting
- * to that column for all repositories.
+ * and migrate the registration texts as well as the previously global option
+ * "allow unauthorized commit access" to the data column for all repositories.
+ *
+ * Per-repository settings of the Commit Restrictions module is also migrated
+ * in this function - for convenience, as otherwise we would need some extra
+ * logic to prevent its updates as long as the data column doesn't yet exist.
  */
 function versioncontrol_update_6102() {
   $ret = array();
@@ -605,12 +582,67 @@ function versioncontrol_update_6102() {
   db_add_field($ret, 'versioncontrol_repositories', 'data', $spec);
 
   $global_access = (bool) variable_get('versioncontrol_allow_unauthorized_access', 0);
-  $data = array(
+  $data_template = array(
     'versioncontrol' => array('allow_unauthorized_access' => $global_access),
   );
-  $ret[] = update_sql("UPDATE {versioncontrol_repositories}
-                        SET data = '". serialize($data) ."'");
 
+  // Get all repository ids. Some of the data arrays might get changed still,
+  // so we don't write them all at once.
+  $result = db_query('
+    SELECT r.repo_id, m.registration_message
+    FROM {versioncontrol_repositories} r
+      LEFT JOIN {versioncontrol_repository_metadata} m
+        ON r.repo_id = m.repo_id'
+  );
+  while ($repository = db_fetch_object($result)) {
+    $repository_data[$repository->repo_id] = $data_template;
+    $repository_data[$repository->repo_id]['versioncontrol']['registration_message'] =
+      $repository->registration_message;
+  }
+
+  // Migrate Commit Restrictions module settings into the $data array,
+  // and delete the module's table after all data has been migrated.
+  if (db_table_exists('commit_restrictions')) {
+    $result = db_query('
+      SELECT repo_id, allowed_paths, forbidden_paths, deny_undefined_paths,
+        valid_branch_tag_paths, valid_branches, valid_tags
+      FROM {commit_restrictions}'
+    );
+
+    while ($restrictions = db_fetch_array($result)) {
+      $repo_id = $restrictions['repo_id'];
+
+      $restrictions = array_filter(array(
+        'allowed_paths'          => array_filter(explode(' ', $restrictions['allowed_paths'])),
+        'forbidden_paths'        => array_filter(explode(' ', $restrictions['forbidden_paths'])),
+        'valid_branch_tag_paths' => array_filter(explode(' ', $restrictions['valid_branch_tag_paths'])),
+        'valid_branches'         => array_filter(explode(' ', $restrictions['valid_branches'])),
+        'valid_tags'             => array_filter(explode(' ', $restrictions['valid_tags'])),
+      ));
+      if (!empty($restrictions['deny_undefined_paths'])) {
+        $restrictions['deny_undefined_paths'] = (bool) $restrictions['deny_undefined_paths'];
+      }
+      if (!empty($restrictions)) {
+        $repository_data[$repo_id]['commit_restrictions'] = $restrictions;
+      }
+    }
+    db_drop_table($ret, 'commit_restrictions');
+  }
+
+  // Write the $data array to the respective repositories.
+  foreach ($repository_data as $repo_id => $data) {
+    $ret[] = update_sql("UPDATE {versioncontrol_repositories}
+                          SET data = '". db_escape_string(serialize($data)) ."'
+                          WHERE repo_id = ". $repo_id);
+  }
+
+  db_drop_table($ret, 'versioncontrol_repository_metadata');
   variable_del('versioncontrol_allow_unauthorized_access');
+
+  $ret[] = array(
+    'success' => TRUE,
+    'query' => 'Deleted the global "versioncontrol_allow_unauthorized_access" variable, and migrated it to be a per-repository setting.',
+  );
+
   return $ret;
 }

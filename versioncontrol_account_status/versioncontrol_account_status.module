@@ -547,37 +547,8 @@ function versioncontrol_account_status_versioncontrol_repository_submit(&$reposi
 
 /**
  * Implementation of hook_versioncontrol_repository():
- * Manage (insert, update or delete) additional repository data in the database.
- *
- * @param $op
- *   Either 'insert' when the repository has just been created, or 'update'
- *   when repository name, root, URL backend or module specific data change,
- *   or 'delete' if it will be deleted after this function has been called.
- *
- * @param $repository
- *   The repository array containing the repository. It's a single
- *   repository array like the one returned by versioncontrol_get_repository(),
- *   so it consists of the following elements:
- *
- *   - 'repo_id': The unique repository id.
- *   - 'name': The user-visible name of the repository.
- *   - 'vcs': The unique string identifier of the version control system
- *        that powers this repository.
- *   - 'root': The root directory of the repository. In most cases,
- *        this will be a local directory (e.g. '/var/repos/drupal'),
- *        but it may also be some specialized string for remote repository
- *        access. How this string may look like depends on the backend.
- *   - 'authorization_method': The string identifier of the repository's
- *        authorization method, that is, how users may register accounts
- *        in this repository. Modules can provide their own methods
- *        by implementing hook_versioncontrol_authorization_methods().
- *   - 'url_backend': The prefix (excluding the trailing underscore)
- *        for URL backend retrieval functions.
- *   - '[xxx]_specific': An array of VCS specific additional repository
- *        information. How this array looks like is defined by the
- *        corresponding backend module (versioncontrol_[xxx]).
- *   - '???': Any other additions that modules added by implementing
- *        hook_versioncontrol_repository_submit().
+ * Act on database changes when VCS repositories are inserted,
+ * updated or deleted.
  */
 function versioncontrol_account_status_versioncontrol_repository($op, $repository) {
   if (!isset($repository['versioncontrol_account_status'])) {
@@ -738,7 +709,10 @@ function versioncontrol_account_status_form_alter_account_edit(&$form, $status_d
     $form['#send_application_mails'] = TRUE;
 
     if (!isset($form['overview'])) {
-      $registration_message = versioncontrol_get_repository_registration_message($status_data['repo_id']);
+      $repository = versioncontrol_get_repository($status_data['repo_id']);
+      $registration_message = isset($repository['data']['versioncontrol']['registration_message'])
+        ? $repository['data']['versioncontrol']['registration_message']
+        : '';
 
       if (!empty($registration_message)) {
         $form['overview'] = array(

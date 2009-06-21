@@ -806,6 +806,8 @@ function versioncontrol_delete_account($repository, $uid, $username) {
  *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
+ *   - 'data': An array where modules can store additional information about
+ *        the repository, for settings or other data.
  *   - '[xxx]_specific': An array of VCS specific additional repository
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
@@ -813,6 +815,7 @@ function versioncontrol_delete_account($repository, $uid, $username) {
  *        VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option, all items of
  *        this array will automatically be inserted into the
  *        {versioncontrol_[xxx]_commits} table.
+ *        (Deprecated, to be replaced by the more general 'data' property.)
  *
  * @param $repository_urls
  *   An array of repository viewer URLs. How this array looks like is
@@ -886,6 +889,8 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
  *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
+ *   - 'data': An array where modules can store additional information about
+ *        the repository, for settings or other data.
  *   - '[xxx]_specific': An array of VCS specific additional repository
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
@@ -893,6 +898,7 @@ function versioncontrol_insert_repository($repository, $repository_urls) {
  *        VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES option, all items of
  *        this array will automatically be inserted into the
  *        {versioncontrol_[xxx]_commits} table.
+ *        (Deprecated, to be replaced by the more general 'data' property.)
  *
  * @param $repository_urls
  *   An array of repository viewer URLs. How this array looks like is
@@ -1013,8 +1019,6 @@ function versioncontrol_delete_repository($repository) {
   db_query('DELETE FROM {versioncontrol_repositories} WHERE repo_id = %d',
            $repository['repo_id']);
   db_query('DELETE FROM {versioncontrol_repository_urls} WHERE repo_id = %d',
-           $repository['repo_id']);
-  db_query('DELETE FROM {versioncontrol_repository_metadata} WHERE repo_id = %d',
            $repository['repo_id']);
 
   watchdog('special',

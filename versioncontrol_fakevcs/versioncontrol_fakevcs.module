@@ -81,6 +81,7 @@ function versioncontrol_fakevcs_versioncontrol_backends() {
         // array elements from $repository['[xxx]_specific'] into
         // {versioncontrol_[xxx]_repositories} and versioncontrol_get_repositories()
         // will automatically fetch it from there.
+        // (Deprecated, to be replaced by $repository['data'][$module].)
         VERSIONCONTROL_FLAG_AUTOADD_REPOSITORIES,
       ),
     ),
@@ -1048,6 +1049,10 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
  * need custom repository data (or you let the Version Control API manage it),
  * just don't implement it.
  *
+ * Mind that you can also use the $repository['data'] array to store repository
+ * settings, see the API docs for hook_versioncontrol_repository_submit()
+ * in hook_versioncontrol.php for more information on that matter.
+ *
  * @param $op
  *   Either 'insert' when the repository has just been created, or 'update'
  *   when repository name, root, URL backend or module specific data change,
@@ -1072,9 +1077,12 @@ function versioncontrol_fakevcs_account($op, $uid, $username, $repository, $addi
  *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
+ *   - 'data': An array where modules can store additional information about
+ *        the repository, for settings or other data.
  *   - '[xxx]_specific': An array of VCS specific additional repository
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
+ *        (Deprecated, to be replaced by the more general 'data' property.)
  */
 function versioncontrol_fakevcs_repository($op, $repository) {
   if ($op == 'delete') {

@@ -5,7 +5,7 @@
  * Commit Restrictions - Restrict commits, branches and tags
  * based on item path or branch/tag name.
  *
- * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 /**
@@ -16,15 +16,20 @@ function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
   if ($form_id == 'versioncontrol-repository-form') {
     $backends = versioncontrol_get_backends();
     $backend_capabilities = $backends[$form['#vcs']]['capabilities'];
-    $repo_id = isset($form['#repository']) ? $form['#repository']['repo_id'] : 0;
-    $restrictions = _commit_restrictions_load($repo_id);
+    $restrictions = array();
+
+    if (isset($form['#repository']) && !empty($form['#repository']['data']['commit_restrictions'])) {
+      $restrictions = $form['#repository']['data']['commit_restrictions'];
+    }
 
     if (in_array(VERSIONCONTROL_CAPABILITY_COMMIT_RESTRICTIONS, $backend_capabilities)) {
       $form['commit_restrictions']['allowed_paths'] = array(
         '#type' => 'textfield',
         '#title' => t('Freely accessible paths'),
         '#description' => t('A space-separated list of PHP regular expressions for directories or files that will always be granted commit access to everyone, no matter what other commit restrictions are imposed. Example: "@.*\.(po|pot)$@ @^/contributions/(docs|sandbox|tricks)/@"'),
-        '#default_value' => implode(' ', $restrictions['allowed_paths']),
+        '#default_value' => isset($restrictions['allowed_paths'])
+          ? implode(' ', $restrictions['allowed_paths'])
+          : '',
         '#size' => 60,
         '#weight' => 10,
       );
@@ -32,14 +37,18 @@ function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
         '#type' => 'checkbox',
         '#title' => t('Deny access to all other paths'),
         '#description' => t('If this is enabled, no paths other than the ones given above will be granted commit access, except if there is an exception that specifically allows the commit to happen.'),
-        '#default_value' => $restrictions['deny_undefined_paths'],
+        '#default_value' => isset($restrictions['deny_undefined_paths'])
+          ? FALSE
+          : $restrictions['deny_undefined_paths'],
         '#weight' => 11,
       );
       $form['commit_restrictions']['forbidden_paths'] = array(
         '#type' => 'textfield',
         '#title' => t('Forbidden paths'),
         '#description' => t('A space-separated list of PHP regular expressions for directories or files that will be denied access to everyone, except if there is an exception that specifically allows the commit to happen. Example: "@^/contributions/profiles.*(?&lt;!\.profile|\.txt)$@ @^.*\.(gz|tgz|tar|zip)$@"'),
-        '#default_value' => implode(' ', $restrictions['forbidden_paths']),
+        '#default_value' => isset($restrictions['forbidden_paths'])
+          ? implode(' ', $restrictions['forbidden_paths'])
+          : '',
         '#size' => 60,
         '#weight' => 12,
       );
@@ -56,21 +65,27 @@ function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
         '#type' => 'textfield',
         '#title' => t('Allowed paths for branches and tags'),
         '#description' => t('A space-separated list of PHP regular expressions for directories or files where it will be possible to create branches and tags. If empty, branches and tags may be created anywhere in the repository. Example: "@^(/[^/]+)?/(modules|themes|theme-engines|docs|translations)/@"'),
-        '#default_value' => implode(' ', $restrictions['valid_branch_tag_paths']),
+        '#default_value' => isset($restrictions['valid_branch_tag_paths'])
+          ? implode(' ', $restrictions['valid_branch_tag_paths'])
+          : '',
         '#size' => 60,
       );
       $form['branch_tag_restrictions']['valid_branches'] = array(
         '#type' => 'textfield',
         '#title' => t('Valid branches'),
         '#description' => t('A space-separated list of PHP regular expressions for allowed branch names. If empty, all branch names will be allowed. Example: "@^HEAD$@ @^DRUPAL-5(--[2-9])?$@ @^DRUPAL-6--[1-9]$@"'),
-        '#default_value' => implode(' ', $restrictions['valid_branches']),
+        '#default_value' => isset($restrictions['valid_branches'])
+          ? implode(' ', $restrictions['valid_branches'])
+          : '',
         '#size' => 60,
       );
       $form['branch_tag_restrictions']['valid_tags'] = array(
         '#type' => 'textfield',
         '#title' => t('Valid tags'),
         '#description' => t('A space-separated list of PHP regular expressions for allowed tag names. If empty, all tag names will be allowed. Example: "@^DRUPAL-[56]--(\d+)-(\d+)(-[A-Z0-9]+)?$@"'),
-        '#default_value' => implode(' ', $restrictions['valid_tags']),
+        '#default_value' => isset($restrictions['valid_tags'])
+          ? implode(' ', $restrictions['valid_tags'])
+          : '',
         '#size' => 60,
       );
     }
@@ -79,134 +94,32 @@ function commit_restrictions_form_alter(&$form, &$form_state, $form_id) {
 
 /**
  * Implementation of hook_versioncontrol_repository_submit():
- * Extract repository data from the repository editing/adding form's
- * submitted values, and add it to the @p $repository array. Later, that array
- * will be passed to hook_versioncontrol_repository() as part of the repository
- * insert/update procedure.
+ * Extract repository data from the repository editing/adding form's submitted
+ * values, and add it to the @p $repository array for automatic storage.
  */
 function commit_restrictions_versioncontrol_repository_submit(&$repository, $form, $form_state) {
-  $repository['commit_restrictions'] = array(
-    'allowed_paths'          => $form_state['values']['allowed_paths'],
-    'forbidden_paths'        => $form_state['values']['forbidden_paths'],
-    'deny_undefined_paths'   => $form_state['values']['deny_undefined_paths'],
-    'valid_branch_tag_paths' => $form_state['values']['valid_branch_tag_paths'],
-    'valid_branches'         => $form_state['values']['valid_branches'],
-    'valid_tags'             => $form_state['values']['valid_tags'],
+  $keys = array(
+    'allowed_paths', 'forbidden_paths',
+    'valid_branches', 'valid_tags', 'valid_branch_tag_paths',
   );
-}
+  $restrictions = array();
 
-/**
- * Implementation of hook_versioncontrol_repository():
- * Manage (insert, update or delete) additional repository data in the database.
- *
- * @param $op
- *   Either 'insert' when the repository has just been created, or 'update'
- *   when repository name, root, URL backend or module specific data change,
- *   or 'delete' if it will be deleted after this function has been called.
- *
- * @param $repository
- *   The repository array containing the repository. It's a single
- *   repository array like the one returned by versioncontrol_get_repository(),
- *   so it consists of the following elements:
- *
- *   - 'repo_id': The unique repository id.
- *   - 'name': The user-visible name of the repository.
- *   - 'vcs': The unique string identifier of the version control system
- *        that powers this repository.
- *   - 'root': The root directory of the repository. In most cases,
- *        this will be a local directory (e.g. '/var/repos/drupal'),
- *        but it may also be some specialized string for remote repository
- *        access. How this string may look like depends on the backend.
- *   - 'authorization_method': The string identifier of the repository's
- *        authorization method, that is, how users may register accounts
- *        in this repository. Modules can provide their own methods
- *        by implementing hook_versioncontrol_authorization_methods().
- *   - 'url_backend': The prefix (excluding the trailing underscore)
- *        for URL backend retrieval functions.
- *   - '[xxx]_specific': An array of VCS specific additional repository
- *        information. How this array looks like is defined by the
- *        corresponding backend module (versioncontrol_[xxx]).
- *   - '???': Any other additions that modules added by implementing
- *        hook_versioncontrol_repository_submit().
- */
-function commit_restrictions_versioncontrol_repository($op, $repository) {
-  $restrictions = $repository['commit_restrictions'];
-
-  switch ($op) {
-    case 'update':
-      db_query('DELETE FROM {commit_restrictions} WHERE repo_id = %d',
-                $repository['repo_id']);
-      // fall through
-
-    case 'insert':
-      if (isset($restrictions)) {
-        db_query("INSERT INTO {commit_restrictions}
-                  (repo_id, allowed_paths, forbidden_paths,
-                   deny_undefined_paths, valid_branch_tag_paths,
-                   valid_branches, valid_tags)
-                  VALUES (%d, '%s', '%s', %d, '%s', '%s', '%s')",
-                  $repository['repo_id'], $restrictions['allowed_paths'],
-                  $restrictions['forbidden_paths'], $restrictions['deny_undefined_paths'],
-                  $restrictions['valid_branch_tag_paths'],
-                  $restrictions['valid_branches'], $restrictions['valid_tags']);
-      }
-      break;
-
-    case 'delete':
-      db_query('DELETE FROM {commit_restrictions} WHERE repo_id = %d',
-                $repository['repo_id']);
-      break;
-  }
-}
-
-/**
- * Retrieve a structured array with the database values of the
- * {commit_restrictions} table as array elements. The allowed/forbidden lists
- * already appear as arrays, not as space-separated strings.
- *
- * @param $repo_id
- *   A valid repository id of the repository for which the restrictions
- *   should be retrieved, or 0 if a default array should be returned instead.
- *
- * @return
- *   The mentioned restrictions array, or a default array if no restrictions
- *   could be found for the given repository.
- */
-function _commit_restrictions_load($repo_id) {
-  if ($repo_id) {
-    $result = db_query('SELECT allowed_paths, forbidden_paths,
-                               deny_undefined_paths, valid_branch_tag_paths,
-                               valid_branches, valid_tags
-                        FROM {commit_restrictions}
-                        WHERE repo_id = %d', $repo_id);
-
-    while ($restrictions = db_fetch_object($result)) {
-      return array(
-        'allowed_paths'          => empty($restrictions->allowed_paths)
-                                    ? array() : explode(' ', $restrictions->allowed_paths),
-        'forbidden_paths'        => empty($restrictions->forbidden_paths)
-                                    ? array() : explode(' ', $restrictions->forbidden_paths),
-        'valid_branch_tag_paths' => empty($restrictions->valid_branch_tag_paths)
-                                    ? array() : explode(' ', $restrictions->valid_branch_tag_paths),
-        'valid_branches'         => empty($restrictions->valid_branches)
-                                    ? array() : explode(' ', $restrictions->valid_branches),
-        'valid_tags'             => empty($restrictions->valid_tags)
-                                    ? array() : explode(' ', $restrictions->valid_tags),
-        'deny_undefined_paths'   => ($restrictions->deny_undefined_paths > 0)
-                                    ? TRUE : FALSE,
-      );
+  // Only fill in those values that are actually set.
+  foreach ($keys as $key) {
+    if (!empty($form_state['values'][$key])) {
+      $restrictions[$key] = array_filter(explode(' ', $form_state['values'][$key]));
     }
   }
-  // If $repo_id == 0 or the query didn't return any results,
-  // return a default array.
-  return array(
-    'allowed_paths' => array(),
-    'forbidden_paths' => array(),
-    'deny_undefined_paths' => FALSE,
-    'valid_branch_tag_paths' => array(),
-    'valid_branches' => array(),
-    'valid_tags' => array(),
-  );
+  if (!empty($form_state['values']['deny_undefined_paths'])) {
+    $restrictions['deny_undefined_paths'] = (bool) $form_state['values']['deny_undefined_paths'];
+  }
+
+  if (empty($restrictions)) {
+    unset($repository['data']['commit_restrictions']);
+  }
+  else {
+    $repository['data']['commit_restrictions'] = $restrictions;
+  }
 }
 
 /**
@@ -222,13 +135,17 @@ function _commit_restrictions_load($repo_id) {
  *   write access callbacks say.
  */
 function commit_restrictions_versioncontrol_write_access($operation, $operation_items) {
+  // If no commit restrictions are defined, don't deny access.
+  if (empty($operation['repository']['data']['commit_restrictions'])) {
+    return array();
+  }
   // Allow the committer to delete branches and labels (also invalid ones),
   // provided that nothing else is done in this operation.
-  if (_commit_restrictions_contains_only_delete_labels($operation)) {
+  if (_commit_restrictions_contains_only_deleted_labels($operation)) {
     return array();
   }
 
-  $restrictions = _commit_restrictions_load($operation['repository']['repo_id']);
+  $restrictions = $operation['repository']['data']['commit_restrictions'];
   $error_messages = _commit_restrictions_label_access($operation, $restrictions);
 
   if (!empty($error_messages)) {
@@ -246,9 +163,9 @@ function commit_restrictions_versioncontrol_write_access($operation, $operation_
   }
 }
 
-function _commit_restrictions_contains_only_delete_labels($operation) {
+function _commit_restrictions_contains_only_deleted_labels($operation) {
   if (empty($operation['labels'])) {
-    return FALSE; // "only delete labels" != "no delete labels"
+    return FALSE; // "only deleted labels" != "no deleted labels"
   }
   foreach ($operation['labels'] as $label) {
     if ($label['action'] != VERSIONCONTROL_ACTION_DELETED) {
@@ -294,13 +211,13 @@ function _commit_restrictions_commit_item_access($operation_items, $restrictions
       return TRUE;
     }
   }
-  // The repository admin can choose to disallow everything that is not
+  // The repository admin can choose to deny everything that is not
   // explicitely allowed.
-  if ($restrictions['deny_undefined_paths']) {
+  if (!empty($restrictions['deny_undefined_paths'])) {
     return $error_messages;
   }
 
-  // Reset error messages, we only disallow explicitely forbidden paths.
+  // Reset error messages, we only deny explicitely forbidden paths.
   $error_messages = array();
 
   // Paths where it is explicitely forbidden to commit.
@@ -327,19 +244,22 @@ function _commit_restrictions_commit_item_access($operation_items, $restrictions
 function _commit_restrictions_label_access($operation, $restrictions) {
   $error_messages = array();
 
+  $valid_branches = empty($restrictions['valid_branches']) ? array() : $restrictions['valid_branches'];
+  $valid_tags = empty($restrictions['valid_tags']) ? array() : $restrictions['valid_tags'];
+
   // This code will work for both branches and tags, given some preset values.
   $labelinfos = array(
     VERSIONCONTROL_OPERATION_BRANCH => array(
-      'valid_restrictions' => $restrictions['valid_branches'],
-      'other_restrictions' => $restrictions['valid_tags'],
+      'valid_restrictions' => $valid_branches,
+      'other_restrictions' => $valid_tags,
       'simple_error' => t('** ERROR: the !labelname branch is not allowed in this repository.'),
       'confusion_error' => t(
 '** ERROR: "!labelname" is a valid name for a tag, but not for a branch.
 ** You must either create a tag with this name, or choose a valid branch name.'),
     ),
     VERSIONCONTROL_OPERATION_TAG => array(
-      'valid_restrictions' => $restrictions['valid_tags'],
-      'other_restrictions' => $restrictions['valid_branches'],
+      'valid_restrictions' => $valid_tags,
+      'other_restrictions' => $valid_branches,
       'simple_error' => '** ERROR: the !labelname tag is not allowed in this repository.',
       'confusion_error' => t(
 '** ERROR: "!labelname" is a valid name for a branch, but not for a tag.
@@ -379,7 +299,7 @@ function _commit_restrictions_label_access($operation, $restrictions) {
         }
         $error_messages[] = $error;
       } // end of if (!$allowed)
-    } // end of if (!empty($restrictions[$valid_restriction]))
+    } // end of if (!empty($restrictions['valid_restrictions']))
   } // end of foreach ($operation['labels'])
 
   return $error_messages;

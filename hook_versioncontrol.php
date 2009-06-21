@@ -10,7 +10,7 @@
  * Hooks that are intended for VCS backends are not to be found in this file
  * as they are already documented in versioncontrol_fakevcs.module.
  *
- * Copyright 2007, 2008 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
+ * Copyright 2007, 2008, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
 
@@ -331,6 +331,13 @@ function hook_versioncontrol_write_access($operation, $operation_items) {
  * passed to hook_versioncontrol_repository() as part of the repository
  * insert/update procedure.
  *
+ * Elements written to $repository['data'][$module] will be automatically
+ * serialized and stored with the repository, you can write to that array
+ * in order to store module-specific repository settings. If there are settings
+ * that require a lot of memory or need to be accessible for SQL queries, you
+ * might be better off storing these in your own module's table with
+ * hook_versioncontrol_repository().
+ *
  * @param $repository
  *   The repository array which is being passed by reference so that it can be
  *   written to.
@@ -382,9 +389,12 @@ function hook_versioncontrol_repository_submit(&$repository, $form, $form_state)
  *        by implementing hook_versioncontrol_authorization_methods().
  *   - 'url_backend': The prefix (excluding the trailing underscore)
  *        for URL backend retrieval functions.
+ *   - 'data': An array where modules can store additional information about
+ *        the repository, for settings or other data.
  *   - '[xxx]_specific': An array of VCS specific additional repository
  *        information. How this array looks like is defined by the
  *        corresponding backend module (versioncontrol_[xxx]).
+ *        (Deprecated, to be replaced by the more general 'data' property.)
  *   - '???': Any other additions that modules added by implementing
  *        hook_versioncontrol_repository_submit().
  *

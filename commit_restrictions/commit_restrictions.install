@@ -8,73 +8,38 @@
  * Copyright 2007, 2009 by Jakob Petsovits ("jpetso", http://drupal.org/user/56020)
  */
 
-/**
- * Implementation of hook_schema().
- */
-function commit_restrictions_schema() {
-  $schema = array();
-
-  $schema['commit_restrictions'] = array(
-    'description' => 'A table storing the various commit restriction settings for each repository.',
-    'fields' => array(
-      'repo_id' => array(
-        'description' => 'The repository identifier referring to {versioncontrol_repositories}.repo_id.',
-        'type' => 'int',
-        'unsigned' => TRUE,
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'allowed_paths' => array(
-        'description' => 'A space-separated list of PHP regular expressions for directories or files that will always be granted commit access to everyone, no matter what other commit restrictions are imposed.',
-        'type' => 'text',
-        'not null' => FALSE,
-      ),
-      'forbidden_paths' => array(
-        'description' => 'A space-separated list of PHP regular expressions for directories or files that will be denied access to everyone, except if there is an exception that specifically allows the commit to happen.',
-        'type' => 'text',
-        'not null' => FALSE,
-      ),
-      'deny_undefined_paths' => array(
-        'description' => 'An integer emulating a boolean (1 for enabled, 0 for disabled). If this is enabled, no paths other than the ones in {commit_restrictions}.allowed_paths will be granted commit access, except if there is an exception that specifically allows the commit to happen.',
-        'type' => 'int',
-        'size' => 'tiny',
-        'not null' => TRUE,
-        'default' => 0,
-      ),
-      'valid_branch_tag_paths' => array(
-        'description' => 'A space-separated list of PHP regular expressions for directories or files where it will be possible to create branches and tags. If empty, branches and tags may be created anywhere in the repository.',
-        'type' => 'text',
-        'not null' => FALSE,
-      ),
-      'valid_branches' => array(
-        'description' => 'A space-separated list of PHP regular expressions for allowed branch names. If empty, all branch names will be allowed.',
-        'type' => 'text',
-        'not null' => FALSE,
-      ),
-      'valid_tags' => array(
-        'description' => 'A space-separated list of PHP regular expressions for allowed tag names. If empty, all tag names will be allowed.',
-        'type' => 'text',
-        'not null' => FALSE,
-      ),
-    ),
-    'primary key' => array('repo_id'),
-  );
-
-  return $schema;
-}
-
-/**
- * Implementation of hook_install().
- */
-function commit_restrictions_install() {
-  // Create tables.
-  drupal_install_schema('commit_restrictions');
-}
-
-/**
- * Implementation of hook_uninstall().
- */
 function commit_restrictions_uninstall() {
-  // Remove tables.
-  drupal_uninstall_schema('commit_restrictions');
+  $result = db_query('SELECT repo_id, data FROM {versioncontrol_repositories}');
+
+  while ($repository = db_fetch_object($result)) {
+    $data = unserialize($repository->data);
+
+    if (isset($data['commit_restrictions'])) {
+      unset($data['commit_restrictions']);
+      $data = serialize($data);
+      db_query("UPDATE {versioncontrol_repositories}
+                SET data = '%s' WHERE repo_id = %d",
+                $data, $repository->repo_id);
+    }
+  }
+}
+
+// Update functions. To be named commit_restrictions_update_xyzz(), where x is
+// the major version of Drupal core, y is the major version of Commit Restrictions
+// for this version of Drupal core, and zz is a consecutive number.
+
+/**
+ * Update from 6.x-1.0-rc2 to 6.x-1.0-rc3:
+ * Increment the consecutive schema version because versioncontrol.install
+ * deletes our table in favor of $repository['data']['commit_restrictions']
+ * in update 6102. This function exists just for the schema version, and
+ * apart from that is a no-op (obviously).
+ */
+function commit_restrictions_update_6100() {
+  $ret = array();
+  $ret[] = array(
+    'success' => TRUE,
+    'query' => 'Replacing the {commit_restrictions} table in favor of the new {versioncontrol_repositories}.data column where the restrictions are stored. These changes are done as a part of Version Control API update #6102 which should be executing right now (see below for the exact queries.',
+  );
+  return $ret;
 }
